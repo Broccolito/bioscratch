@@ -3,35 +3,64 @@
    ====================================================== */
 
 :root {
-  --bg-app: #f0f0f0;
-  --bg-toolbar: #ffffff;
-  --bg-editor: #ffffff;
-  --bg-statusbar: #f5f5f5;
-  --text-primary: #1a1a1a;
-  --text-secondary: #6b7280;
-  --text-muted: #9ca3af;
-  --border-color: #e5e7eb;
-  --accent: #2563eb;
-  --accent-hover: #1d4ed8;
-  --toolbar-btn-hover: #f3f4f6;
-  --toolbar-btn-active: #e5e7eb;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  /* Paper palette */
+  --bg-app:           #e8e2d8;
+  --bg-toolbar:       #f2ede5;
+  --bg-editor:        #faf8f3;
+  --bg-statusbar:     #e8e2d8;
+
+  /* Ink tones */
+  --text-primary:     #2b2620;
+  --text-secondary:   #6e645a;
+  --text-muted:       #a09588;
+
+  /* Structure */
+  --border-color:     #d4ccc0;
+  --border-subtle:    #e0d9cf;
+
+  /* Accent – muted steel blue, ink-like */
+  --accent:           #4a6580;
+  --accent-hover:     #324a60;
+  --accent-bg:        rgba(74, 101, 128, 0.08);
+
+  /* Interactive states */
+  --toolbar-btn-hover:  #e8e2d8;
+  --toolbar-btn-active: #d9d1c6;
+
+  /* Shadow – warm, soft */
+  --shadow-sm:  0 1px 2px rgba(40, 30, 20, 0.06);
+  --shadow-md:  0 2px 8px rgba(40, 30, 20, 0.10);
+
+  /* Code */
+  --code-bg:          #ede8df;
+  --code-inline-bg:   rgba(60, 50, 35, 0.07);
 }
 
 [data-theme="dark"] {
-  --bg-app: #1a1a1a;
-  --bg-toolbar: #242424;
-  --bg-editor: #1e1e1e;
-  --bg-statusbar: #1c1c1c;
-  --text-primary: #e5e7eb;
-  --text-secondary: #9ca3af;
-  --text-muted: #6b7280;
-  --border-color: #374151;
-  --accent: #3b82f6;
-  --accent-hover: #60a5fa;
-  --toolbar-btn-hover: #2d2d2d;
-  --toolbar-btn-active: #374151;
-  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  --bg-app:           #1c1916;
+  --bg-toolbar:       #231f1b;
+  --bg-editor:        #201d19;
+  --bg-statusbar:     #181512;
+
+  --text-primary:     #e6dfd4;
+  --text-secondary:   #9c9080;
+  --text-muted:       #6b6058;
+
+  --border-color:     #332e27;
+  --border-subtle:    #2a2520;
+
+  --accent:           #7a9db8;
+  --accent-hover:     #9cb8d0;
+  --accent-bg:        rgba(122, 157, 184, 0.10);
+
+  --toolbar-btn-hover:  #2a2520;
+  --toolbar-btn-active: #332e27;
+
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md:  0 2px 8px rgba(0, 0, 0, 0.45);
+
+  --code-bg:          #17140f;
+  --code-inline-bg:   rgba(255, 255, 255, 0.08);
 }
 
 *, *::before, *::after {
@@ -45,11 +74,12 @@ html, body, #root {
 }
 
 body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 15px;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  font-size: 14px;
   background: var(--bg-app);
   color: var(--text-primary);
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
 }
 
 .app-container {
@@ -63,23 +93,22 @@ body {
 .toolbar {
   display: flex;
   align-items: center;
-  gap: 2px;
-  padding: 4px 8px;
+  gap: 1px;
+  padding: 4px 10px;
   background: var(--bg-toolbar);
   border-bottom: 1px solid var(--border-color);
-  box-shadow: var(--shadow);
   flex-shrink: 0;
   flex-wrap: wrap;
-  min-height: 40px;
+  min-height: 38px;
   user-select: none;
   -webkit-user-select: none;
 }
 
 .toolbar-separator {
   width: 1px;
-  height: 22px;
+  height: 18px;
   background: var(--border-color);
-  margin: 0 4px;
+  margin: 0 5px;
   flex-shrink: 0;
 }
 
@@ -88,66 +117,71 @@ body {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  padding: 4px 8px;
+  padding: 3px 7px;
   background: transparent;
   border: none;
-  border-radius: 5px;
+  border-radius: 4px;
   cursor: pointer;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: inherit;
-  transition: background 0.1s;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  transition: background 0.12s, color 0.12s;
   white-space: nowrap;
-  min-width: 28px;
-  height: 28px;
+  min-width: 26px;
+  height: 26px;
+  letter-spacing: 0.01em;
 }
 
 .toolbar-btn:hover {
   background: var(--toolbar-btn-hover);
+  color: var(--text-primary);
 }
 
 .toolbar-btn:active, .toolbar-btn.active {
   background: var(--toolbar-btn-active);
+  color: var(--text-primary);
 }
 
 .toolbar-btn svg {
-  width: 16px;
-  height: 16px;
+  width: 15px;
+  height: 15px;
   flex-shrink: 0;
 }
 
 .toolbar-btn.icon-only {
-  padding: 4px;
+  padding: 3px;
 }
 
 .toolbar-select {
-  height: 28px;
-  padding: 0 8px;
-  background: var(--bg-toolbar);
+  height: 26px;
+  padding: 0 7px;
+  background: transparent;
   border: 1px solid var(--border-color);
-  border-radius: 5px;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: inherit;
+  border-radius: 4px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
   cursor: pointer;
   outline: none;
+  transition: border-color 0.12s;
 }
 
-.toolbar-select:hover {
+.toolbar-select:hover,
+.toolbar-select:focus {
   border-color: var(--accent);
+  color: var(--text-primary);
 }
 
 /* ---- Tab bar ---- */
 .tab-bar {
   display: flex;
   align-items: stretch;
-  gap: 0;
   background: var(--bg-toolbar);
   border-bottom: 1px solid var(--border-color);
   flex-shrink: 0;
   overflow-x: auto;
   scrollbar-width: none;
-  min-height: 34px;
+  min-height: 32px;
   user-select: none;
   -webkit-user-select: none;
 }
@@ -159,28 +193,27 @@ body {
 .tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 10px 0 14px;
-  min-width: 100px;
-  max-width: 200px;
+  gap: 5px;
+  padding: 0 8px 0 12px;
+  min-width: 90px;
+  max-width: 180px;
   cursor: pointer;
-  font-size: 13px;
-  color: var(--text-secondary);
-  border-right: 1px solid var(--border-color);
+  font-size: 12px;
+  color: var(--text-muted);
+  border-right: 1px solid var(--border-subtle);
   flex-shrink: 0;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.12s, color 0.12s;
   position: relative;
 }
 
 .tab:hover {
   background: var(--toolbar-btn-hover);
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 .tab-active {
   background: var(--bg-editor);
   color: var(--text-primary);
-  /* bottom border matching the editor bg removes the bar-bottom border visually */
   border-bottom: 2px solid var(--accent);
 }
 
@@ -189,7 +222,7 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 34px;
+  line-height: 32px;
 }
 
 .tab-label.tab-dirty {
@@ -198,21 +231,21 @@ body {
 
 .tab-close {
   flex-shrink: 0;
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   display: flex;
   align-items: center;
   justify-content: center;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 16px;
+  font-size: 14px;
   line-height: 1;
   padding: 0;
   opacity: 0;
-  transition: opacity 0.1s, background 0.1s;
+  transition: opacity 0.12s, background 0.12s;
 }
 
 .tab:hover .tab-close,
@@ -227,8 +260,8 @@ body {
 
 .tab-new {
   flex-shrink: 0;
-  width: 34px;
-  height: 34px;
+  width: 32px;
+  height: 32px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -236,15 +269,15 @@ body {
   border: none;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 20px;
+  font-size: 18px;
   line-height: 1;
   padding: 0;
-  transition: background 0.1s, color 0.1s;
+  transition: background 0.12s, color 0.12s;
 }
 
 .tab-new:hover {
   background: var(--toolbar-btn-hover);
-  color: var(--text-primary);
+  color: var(--text-secondary);
 }
 
 /* ---- Editor scroll area ---- */
@@ -254,21 +287,26 @@ body {
   background: var(--bg-app);
   display: flex;
   justify-content: center;
+  /* Subtle paper grain feel via layered background */
+  background-image:
+    radial-gradient(ellipse at 20% 50%, rgba(210, 190, 160, 0.08) 0%, transparent 60%),
+    radial-gradient(ellipse at 80% 20%, rgba(180, 165, 140, 0.06) 0%, transparent 50%);
 }
 
 /* ---- Status bar ---- */
 .status-bar {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 3px 16px;
+  gap: 14px;
+  padding: 3px 14px;
   background: var(--bg-statusbar);
   border-top: 1px solid var(--border-color);
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   flex-shrink: 0;
   user-select: none;
   -webkit-user-select: none;
+  letter-spacing: 0.015em;
 }
 
 .status-bar .filepath {
@@ -280,36 +318,36 @@ body {
 
 .status-bar .dirty-indicator {
   color: var(--accent);
-  font-weight: bold;
 }
 
 /* ---- Search bar overlay ---- */
 .search-bar {
   position: fixed;
-  top: 48px;
-  right: 24px;
+  top: 44px;
+  right: 20px;
   background: var(--bg-toolbar);
   border: 1px solid var(--border-color);
-  border-radius: 8px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-  padding: 8px 12px;
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
+  padding: 7px 10px;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   z-index: 1000;
-  min-width: 320px;
+  min-width: 300px;
 }
 
 .search-bar input {
   flex: 1;
   border: 1px solid var(--border-color);
-  border-radius: 5px;
+  border-radius: 4px;
   padding: 4px 8px;
-  font-size: 13px;
+  font-size: 12px;
   background: var(--bg-editor);
   color: var(--text-primary);
   outline: none;
-  font-family: inherit;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  transition: border-color 0.12s;
 }
 
 .search-bar input:focus {
@@ -318,7 +356,7 @@ body {
 
 .search-bar .match-count {
   color: var(--text-muted);
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
@@ -326,11 +364,12 @@ body {
   padding: 3px 6px;
   background: transparent;
   border: 1px solid var(--border-color);
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   color: var(--text-secondary);
-  font-size: 13px;
-  font-family: inherit;
+  font-size: 12px;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  transition: background 0.12s;
 }
 
 .search-bar .search-btn:hover {
@@ -341,12 +380,13 @@ body {
   padding: 3px 6px;
   background: transparent;
   border: none;
-  border-radius: 4px;
+  border-radius: 3px;
   cursor: pointer;
   color: var(--text-muted);
-  font-size: 16px;
-  font-family: inherit;
+  font-size: 15px;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
   line-height: 1;
+  transition: color 0.12s;
 }
 
 .search-bar .close-btn:hover {
@@ -357,7 +397,7 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.4);
+  background: rgba(20, 15, 10, 0.45);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -366,53 +406,65 @@ body {
 
 .modal-dialog {
   background: var(--bg-editor);
-  border-radius: 10px;
-  box-shadow: 0 8px 30px rgba(0,0,0,0.2);
-  padding: 28px 32px;
-  max-width: 440px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  box-shadow: 0 12px 40px rgba(20, 15, 10, 0.22);
+  padding: 26px 28px;
+  max-width: 420px;
   width: 100%;
   margin: 0 16px;
 }
 
 .modal-dialog h2 {
-  margin: 0 0 12px;
-  font-size: 18px;
-  font-weight: 600;
+  margin: 0 0 10px;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
 }
 
 .modal-dialog p {
-  margin: 0 0 20px;
+  margin: 0 0 18px;
   color: var(--text-secondary);
-  line-height: 1.6;
+  line-height: 1.55;
+  font-size: 13px;
 }
 
 .modal-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   justify-content: flex-end;
 }
 
 .modal-btn {
-  padding: 8px 18px;
-  border-radius: 6px;
-  border: none;
+  padding: 6px 16px;
+  border-radius: 4px;
+  border: 1px solid transparent;
   cursor: pointer;
-  font-size: 14px;
-  font-family: inherit;
-  font-weight: 500;
-  transition: opacity 0.1s;
-}
-
-.modal-btn:hover {
-  opacity: 0.85;
+  font-size: 13px;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  font-weight: 600;
+  transition: opacity 0.12s, background 0.12s;
+  letter-spacing: 0.01em;
 }
 
 .modal-btn.primary {
   background: var(--accent);
   color: #fff;
+  border-color: var(--accent);
+}
+
+.modal-btn.primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .modal-btn.secondary {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: var(--border-color);
+}
+
+.modal-btn.secondary:hover {
   background: var(--toolbar-btn-hover);
   color: var(--text-primary);
 }

@@ -1,12 +1,13 @@
 /* ======================================================
    Bioscratch – Markdown / Document Typography Styles
+   GitHub README-grade rendering · Arial · Paper palette
    ====================================================== */
 
 .ProseMirror {
-  color: var(--text-primary, #1a1a1a);
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  font-size: 16px;
-  line-height: 1.75;
+  color: var(--text-primary, #2b2620);
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  font-size: 15px;
+  line-height: 1.65;
 }
 
 /* ---- Headings ---- */
@@ -16,47 +17,68 @@
 .ProseMirror h4,
 .ProseMirror h5,
 .ProseMirror h6 {
-  font-weight: 600;
-  line-height: 1.3;
-  margin: 1.4em 0 0.5em;
-  color: var(--text-primary, #1a1a1a);
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  font-weight: 700;
+  line-height: 1.28;
+  color: var(--text-primary, #2b2620);
+  margin: 1.3em 0 0.45em;
+  letter-spacing: -0.01em;
 }
 
 .ProseMirror h1 {
-  font-size: 2em;
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
-  padding-bottom: 0.3em;
-  margin-top: 0.8em;
+  font-size: 1.75em;
+  border-bottom: 1px solid var(--border-color, #d4ccc0);
+  padding-bottom: 0.28em;
+  margin-top: 0.7em;
 }
 
 .ProseMirror h2 {
-  font-size: 1.5em;
-  border-bottom: 1px solid var(--border-color, #e5e7eb);
+  font-size: 1.38em;
+  border-bottom: 1px solid var(--border-subtle, #e0d9cf);
   padding-bottom: 0.2em;
 }
 
-.ProseMirror h3 { font-size: 1.25em; }
-.ProseMirror h4 { font-size: 1.1em; }
-.ProseMirror h5 { font-size: 1em; }
-.ProseMirror h6 { font-size: 0.9em; color: var(--text-secondary, #6b7280); }
+.ProseMirror h3 {
+  font-size: 1.18em;
+}
+
+.ProseMirror h4 {
+  font-size: 1.04em;
+}
+
+.ProseMirror h5 {
+  font-size: 0.96em;
+  color: var(--text-secondary, #6e645a);
+}
+
+.ProseMirror h6 {
+  font-size: 0.88em;
+  color: var(--text-secondary, #6e645a);
+}
+
+/* First element: reduce top margin */
+.ProseMirror > h1:first-child,
+.ProseMirror > h2:first-child,
+.ProseMirror > h3:first-child {
+  margin-top: 0.3em;
+}
 
 /* ---- Paragraphs ---- */
 .ProseMirror p {
-  margin: 0 0 0.8em;
+  margin: 0 0 0.7em;
 }
 
 /* ---- Blockquote ---- */
 .ProseMirror blockquote {
-  margin: 1em 0;
-  padding: 4px 16px;
-  border-left: 4px solid var(--border-color, #d1d5db);
-  color: var(--text-secondary, #6b7280);
-  background: rgba(0, 0, 0, 0.02);
-  border-radius: 0 4px 4px 0;
+  margin: 0.8em 0;
+  padding: 3px 14px;
+  border-left: 3px solid var(--border-color, #d4ccc0);
+  color: var(--text-secondary, #6e645a);
+  background: transparent;
 }
 
 [data-theme="dark"] .ProseMirror blockquote {
-  background: rgba(255, 255, 255, 0.02);
+  border-left-color: #3d3830;
 }
 
 .ProseMirror blockquote > p:last-child {
@@ -66,56 +88,75 @@
 /* ---- Lists ---- */
 .ProseMirror ul,
 .ProseMirror ol {
-  margin: 0.5em 0 0.8em;
-  padding-left: 1.8em;
+  margin: 0.35em 0 0.7em;
+  padding-left: 1.7em;
 }
 
 .ProseMirror li {
-  margin: 0.2em 0;
+  margin: 0.15em 0;
+  line-height: 1.6;
 }
 
 .ProseMirror li > p {
   margin: 0;
 }
 
+/* nested lists */
+.ProseMirror li > ul,
+.ProseMirror li > ol {
+  margin: 0.1em 0 0.15em;
+}
+
 /* ---- Inline code ---- */
 .ProseMirror code {
   font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
-  font-size: 0.875em;
-  background: var(--code-inline-bg, rgba(0, 0, 0, 0.06));
-  border-radius: 4px;
-  padding: 0.1em 0.4em;
-  color: var(--text-primary, #1a1a1a);
+  font-size: 0.855em;
+  background: var(--code-inline-bg, rgba(60, 50, 35, 0.07));
+  border-radius: 3px;
+  padding: 0.12em 0.38em;
+  color: var(--text-primary, #2b2620);
+  border: 1px solid var(--border-subtle, #e0d9cf);
 }
 
 [data-theme="dark"] .ProseMirror code {
-  background: rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.08);
+  border-color: #332e27;
 }
 
 /* ---- Links ---- */
 .ProseMirror a {
-  color: var(--accent, #2563eb);
+  color: var(--accent, #4a6580);
   text-decoration: underline;
-  text-decoration-color: rgba(37, 99, 235, 0.4);
+  text-decoration-color: rgba(74, 101, 128, 0.38);
   text-underline-offset: 2px;
-  transition: color 0.1s;
+  transition: color 0.12s;
 }
 
 .ProseMirror a:hover {
-  color: var(--accent-hover, #1d4ed8);
-  text-decoration-color: var(--accent-hover, #1d4ed8);
+  color: var(--accent-hover, #324a60);
+  text-decoration-color: var(--accent-hover, #324a60);
 }
 
-/* ---- Strong / Em ---- */
-.ProseMirror strong { font-weight: 600; }
-.ProseMirror em { font-style: italic; }
-.ProseMirror s { text-decoration: line-through; color: var(--text-secondary, #6b7280); }
+/* ---- Strong / Em / Strikethrough ---- */
+.ProseMirror strong {
+  font-weight: 700;
+  color: var(--text-primary, #2b2620);
+}
+
+.ProseMirror em {
+  font-style: italic;
+}
+
+.ProseMirror s {
+  text-decoration: line-through;
+  color: var(--text-secondary, #6e645a);
+}
 
 /* ---- Horizontal rule ---- */
 .ProseMirror hr {
   border: none;
-  border-top: 1px solid var(--border-color, #e5e7eb);
-  margin: 2em 0;
+  border-top: 1px solid var(--border-color, #d4ccc0);
+  margin: 1.6em 0;
 }
 
 /* ---- Images ---- */
@@ -124,40 +165,49 @@
   height: auto;
   border-radius: 4px;
   display: block;
-  margin: 0 auto;
+  margin: 0.5em auto;
 }
 
-/* ---- Tables ---- */
+/* ---- Tables – GitHub README style ---- */
 .ProseMirror table {
   border-collapse: collapse;
   width: 100%;
-  margin: 1em 0;
+  margin: 0.8em 0;
+  font-size: 0.94em;
   overflow: hidden;
-  border-radius: 6px;
 }
 
 .ProseMirror th,
 .ProseMirror td {
-  border: 1px solid var(--border-color, #d1d5db);
-  padding: 6px 12px;
+  border: 1px solid var(--border-color, #d4ccc0);
+  padding: 5px 12px;
   text-align: left;
   vertical-align: top;
+  line-height: 1.5;
 }
 
 .ProseMirror th {
-  background: var(--toolbar-btn-hover, #f3f4f6);
-  font-weight: 600;
+  background: var(--code-bg, #ede8df);
+  font-weight: 700;
+  font-size: 0.92em;
+  letter-spacing: 0.01em;
+}
+
+/* Zebra rows — subtle warmth */
+.ProseMirror tr:nth-child(even) td {
+  background: rgba(60, 50, 35, 0.022);
+}
+
+[data-theme="dark"] .ProseMirror tr:nth-child(even) td {
+  background: rgba(255, 255, 255, 0.025);
 }
 
 .ProseMirror .selectedCell:after {
   z-index: 2;
   position: absolute;
   content: "";
-  left: 0;
-  right: 0;
-  top: 0;
-  bottom: 0;
-  background: rgba(37, 99, 235, 0.12);
+  left: 0; right: 0; top: 0; bottom: 0;
+  background: rgba(74, 101, 128, 0.11);
   pointer-events: none;
 }
 
@@ -173,14 +223,15 @@
 }
 
 .ProseMirror .katex {
-  font-size: 1.05em;
+  font-size: 1.04em;
 }
 
 /* ---- Placeholder text ---- */
 .ProseMirror p.is-empty:first-child::before {
   content: attr(data-placeholder);
   float: left;
-  color: var(--text-muted, #9ca3af);
+  color: var(--text-muted, #a09588);
   pointer-events: none;
   height: 0;
+  font-style: italic;
 }
