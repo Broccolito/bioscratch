@@ -228,67 +228,81 @@ const App: React.FC = () => {
     "sql","graphql","gql","proto","thrift","avsc","log","diff","patch",
   ]);
 
-  const openFileByPath = useCallback(
-    async (path: string) => {
-      try {
-        // Check tabsRef (always current even mid-sequence) for duplicates
-        const existingTab = tabsRef.current.find((t) => t.filePath === path);
-        if (existingTab) {
-          handleSelectTabRef.current(existingTab.id);
-          return;
-        }
-        const fileContent = await invoke<string>("read_file", { path });
-        addRecentFile(path);
+  // ---- Open multiple files atomically (drag-drop) ----
+  // All file reads happen in parallel first; then ALL tab state is applied in a
+  // single synchronous pass with no React re-renders in between.  This eliminates
+  // every stale-closure / stale-ref timing issue for 2, 3, 4, N files.
+  const openDroppedFiles = useCallback(
+    (files: { path: string; content: string }[]) => {
+      if (files.length === 0) return;
 
-        // Stash the currently active tab using refs — correct even during sequential
-        // multi-file drops before React has re-rendered with updated state.
-        const view = viewRef.current;
-        const curId = activeTabIdRef.current;
-        if (curId) {
-          storedTabsRef.current.set(curId, {
-            id: curId,
-            filePath: filePathRef.current,
-            dirty: dirtyRef.current,
-            content: contentRef.current,
-            editorState: view ? view.state : null,
-          });
-        }
+      // Skip files already open in a tab (check current tabsRef snapshot)
+      const newFiles = files.filter(
+        ({ path }) => !tabsRef.current.some((t) => t.filePath === path)
+      );
+      if (newFiles.length === 0) return;
 
-        const id = makeTabId();
+      const view = viewRef.current;
+      const plugins = view?.state.plugins ?? [];
 
-        // Update imperative refs synchronously so the NEXT sequential call in the
-        // same for-await loop sees the correct "current tab" immediately.
-        activeTabIdRef.current = id;
-        filePathRef.current = path;
-        dirtyRef.current = false;
-        contentRef.current = fileContent;
-
-        // Schedule React state updates (will batch and re-render after the loop)
-        setTabs((prev) => [...prev, { id, filePath: path, dirty: false }]);
-        setActiveTabId(id);
-        setFilePath(path);
-        setContent(fileContent);
-        setDirty(false);
-
-        if (view) {
-          const state = makeEditorStateFromMarkdown(fileContent, view.state.plugins);
-          view.updateState(state);
-        }
-        const stats = getDocStats(markdownToDoc(fileContent, schema));
-        setWordCount(stats.words);
-        setCharCount(stats.chars);
-      } catch (e) {
-        console.error("Failed to open dropped file:", e);
+      // Stash the currently active tab before adding any new ones
+      const curId = activeTabIdRef.current;
+      if (curId) {
+        storedTabsRef.current.set(curId, {
+          id: curId,
+          filePath: filePathRef.current,
+          dirty: dirtyRef.current,
+          content: contentRef.current,
+          editorState: view ? view.state : null,
+        });
       }
-    },
-    // All state is accessed via refs; only addRecentFile is a true dep here.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [addRecentFile]
-  );
 
-  // Keep a ref so drag-drop listeners (registered once) always call the latest callback.
-  const openFileByPathRef = useRef(openFileByPath);
-  useEffect(() => { openFileByPathRef.current = openFileByPath; }, [openFileByPath]);
+      const newTabMeta: TabData[] = [];
+
+      // All files except the last are stored directly — they never need to be the
+      // active tab, so we build their EditorState now and put them in storedTabsRef.
+      for (let i = 0; i < newFiles.length - 1; i++) {
+        const { path, content } = newFiles[i];
+        const id = makeTabId();
+        newTabMeta.push({ id, filePath: path, dirty: false });
+        storedTabsRef.current.set(id, {
+          id,
+          filePath: path,
+          dirty: false,
+          content,
+          editorState: makeEditorStateFromMarkdown(content, plugins),
+        });
+      }
+
+      // The last file becomes the active tab
+      const { path: activePath, content: activeContent } = newFiles[newFiles.length - 1];
+      const activeId = makeTabId();
+      newTabMeta.push({ id: activeId, filePath: activePath, dirty: false });
+
+      // Update imperative refs so polling / save handlers see the right active tab
+      activeTabIdRef.current = activeId;
+      filePathRef.current = activePath;
+      dirtyRef.current = false;
+      contentRef.current = activeContent;
+
+      // Single React state batch — one render covers all new tabs
+      setTabs((prev) => [...prev, ...newTabMeta]);
+      setActiveTabId(activeId);
+      setFilePath(activePath);
+      setContent(activeContent);
+      setDirty(false);
+
+      if (view) {
+        view.updateState(makeEditorStateFromMarkdown(activeContent, plugins));
+      }
+      const stats = getDocStats(markdownToDoc(activeContent, schema));
+      setWordCount(stats.words);
+      setCharCount(stats.chars);
+    },
+    [] // only uses refs + stable setters
+  );
+  const openDroppedFilesRef = useRef(openDroppedFiles);
+  useEffect(() => { openDroppedFilesRef.current = openDroppedFiles; }, [openDroppedFiles]);
 
   useEffect(() => {
     const TEXT_EXT = TEXT_EXTENSIONS;
@@ -297,18 +311,29 @@ const App: React.FC = () => {
     const unlistenLeave = listen("tauri://drag-leave", () => setIsDragging(false));
     const unlistenDrop  = listen<{ paths: string[] }>("tauri://drag-drop", async (event) => {
       setIsDragging(false);
-      const paths = (event.payload?.paths ?? [])
-        .filter((p) => TEXT_EXT.has(p.split(".").pop()?.toLowerCase() ?? ""));
-      // Deduplicate within this batch (same file dropped twice)
-      const seen = new Set<string>();
-      // Serialize: open each file only after the previous one finishes.
-      // openFileByPath updates imperative refs synchronously so each iteration
-      // stashes the correct preceding tab even before React re-renders.
-      for (const p of paths) {
-        if (seen.has(p)) continue;
-        seen.add(p);
-        await openFileByPathRef.current(p);
-      }
+
+      // Deduplicate paths within this batch, then read all in parallel
+      const uniquePaths = [...new Set(
+        (event.payload?.paths ?? [])
+          .filter((p) => TEXT_EXT.has(p.split(".").pop()?.toLowerCase() ?? ""))
+      )];
+      if (uniquePaths.length === 0) return;
+
+      const results = await Promise.allSettled(
+        uniquePaths.map(async (p) => ({
+          path: p,
+          content: await invoke<string>("read_file", { path: p }),
+        }))
+      );
+      const files = results
+        .filter((r): r is PromiseFulfilledResult<{ path: string; content: string }> =>
+          r.status === "fulfilled"
+        )
+        .map((r) => r.value);
+
+      files.forEach(({ path }) => addRecentFile(path));
+      // Apply all tabs atomically in one synchronous pass
+      openDroppedFilesRef.current(files);
     });
     return () => {
       unlistenEnter.then((f) => f());
@@ -316,7 +341,7 @@ const App: React.FC = () => {
       unlistenLeave.then((f) => f());
       unlistenDrop.then((f) => f());
     };
-  }, []); // register once on mount — openFileByPath is forwarded via ref above
+  }, []); // registered once — callbacks forwarded via refs
 
   // ---- Switch to a stored tab ----
   const restoreTab = useCallback(
