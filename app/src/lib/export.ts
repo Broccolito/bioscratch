@@ -3,7 +3,7 @@ import DOMPurify from "dompurify";
 
 export async function exportToHtml(
   _doc: unknown,
-  title: string = "Bioscrach Document"
+  title: string = "Bioscratch Document"
 ): Promise<void> {
   const path = await invoke<string | null>("show_html_save_dialog");
   if (!path) return;

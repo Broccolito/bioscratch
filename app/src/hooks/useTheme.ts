@@ -4,7 +4,7 @@ export type Theme = "light" | "dark";
 
 export function useTheme() {
   const [theme, setTheme] = useState<Theme>(() => {
-    const stored = localStorage.getItem("bioscrach-theme");
+    const stored = localStorage.getItem("bioscratch-theme");
     if (stored === "light" || stored === "dark") return stored;
     // Use system preference
     if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
@@ -15,7 +15,7 @@ export function useTheme() {
 
   useEffect(() => {
     document.documentElement.setAttribute("data-theme", theme);
-    localStorage.setItem("bioscrach-theme", theme);
+    localStorage.setItem("bioscratch-theme", theme);
   }, [theme]);
 
   const toggleTheme = () => {

@@ -399,7 +399,7 @@ const App: React.FC = () => {
     if (!view) return;
     await exportToHtml(
       view.state.doc,
-      filePath?.split("/").pop() || "Bioscrach Document"
+      filePath?.split("/").pop() || "Bioscratch Document"
     );
   }, [filePath]);
 
