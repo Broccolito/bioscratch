@@ -17,6 +17,8 @@
     "fs:scope-document-recursive",
     "fs:scope-download-recursive",
     "fs:scope-appdata-recursive",
+    "fs:allow-watch",
+    "fs:allow-unwatch",
     "opener:default"
   ]
 }
