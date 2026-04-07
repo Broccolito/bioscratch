@@ -171,6 +171,44 @@ async fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     app.opener().open_url(&url, None::<&str>).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn open_new_window(app: tauri::AppHandle, file_path: Option<String>) -> Result<(), String> {
+    use tauri::{WebviewUrl, WebviewWindowBuilder};
+    let label = format!("bioscratch-{}", std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_millis());
+    let url_str = match &file_path {
+        Some(p) => format!("/?file={}", urlencoding_simple(p)),
+        None => "/".to_string(),
+    };
+    let title = match &file_path {
+        Some(p) => format!("Bioscratch – {}", std::path::Path::new(p)
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("untitled")),
+        None => "Bioscratch".to_string(),
+    };
+    WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url_str.into()))
+        .title(title)
+        .inner_size(900.0, 680.0)
+        .center()
+        .resizable(true)
+        .build()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+fn urlencoding_simple(s: &str) -> String {
+    s.chars().flat_map(|c| {
+        if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/' {
+            vec![c]
+        } else {
+            format!("%{:02X}", c as u32).chars().collect()
+        }
+    }).collect()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -191,6 +229,7 @@ pub fn run() {
             export_html,
             show_html_save_dialog,
             open_url,
+            open_new_window,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

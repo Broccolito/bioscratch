@@ -261,12 +261,15 @@ const App: React.FC = () => {
     const unlistenEnter = listen("tauri://drag-enter", () => { if (!draggingTabIdRef.current) setIsDragging(true); });
     const unlistenOver  = listen("tauri://drag-over",  () => { if (!draggingTabIdRef.current) setIsDragging(true); });
     const unlistenLeave = listen("tauri://drag-leave", () => setIsDragging(false));
-    const unlistenDrop  = listen<{ paths: string[] }>("tauri://drag-drop", (event) => {
+    const unlistenDrop  = listen<{ paths: string[] }>("tauri://drag-drop", async (event) => {
       setIsDragging(false);
-      const paths = event.payload?.paths ?? [];
-      paths
-        .filter((p) => TEXT_EXT.has(p.split(".").pop()?.toLowerCase() ?? ""))
-        .forEach((p) => openFileByPathRef.current(p));
+      const paths = (event.payload?.paths ?? [])
+        .filter((p) => TEXT_EXT.has(p.split(".").pop()?.toLowerCase() ?? ""));
+      // Serialize: open each file only after the previous one finishes so
+      // stashActiveTab() always captures the correct state
+      for (const p of paths) {
+        await openFileByPathRef.current(p);
+      }
     });
     return () => {
       unlistenEnter.then((f) => f());
@@ -339,24 +342,6 @@ const App: React.FC = () => {
     setWordCount(0);
     setCharCount(0);
   }, [stashActiveTab]);
-
-  // ---- New window (Cmd+N) ----
-  const handleNewWindow = useCallback(async () => {
-    try {
-      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-      const label = `bioscratch-${Date.now()}`;
-      new WebviewWindow(label, {
-        url: window.location.origin + "/",
-        title: "Bioscratch",
-        width: 900,
-        height: 680,
-        resizable: true,
-        center: true,
-      });
-    } catch (e) {
-      console.error("Failed to open new window:", e);
-    }
-  }, []);
 
   // ---- Close tab ----
   const handleCloseTab = useCallback(
@@ -565,8 +550,8 @@ const App: React.FC = () => {
 
   // ---- Detach tab into new window ----
   const handleDetachTab = useCallback(async (tabId: string) => {
-    if (tabs.length <= 1) return; // never detach the only tab
-    const tab = tabs.find((t) => t.id === tabId);
+    if (tabsRef.current.length <= 1) return; // never detach the only tab
+    const tab = tabsRef.current.find((t) => t.id === tabId);
     if (!tab) return;
 
     const stored = storedTabsRef.current.get(tabId);
@@ -587,22 +572,8 @@ const App: React.FC = () => {
       }
     }
 
-    const fileName = tabFilePath?.split("/").pop() ?? "blank.md";
-    const label = `bioscratch-${Date.now()}`;
-    const url = tabFilePath
-      ? `${window.location.origin}/?file=${encodeURIComponent(tabFilePath)}`
-      : window.location.origin + "/";
-
     try {
-      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
-      new WebviewWindow(label, {
-        url,
-        title: `Bioscratch – ${fileName}`,
-        width: 900,
-        height: 680,
-        resizable: true,
-        center: true,
-      });
+      await invoke("open_new_window", { filePath: tabFilePath });
     } catch (e) {
       console.error("Failed to spawn window:", e);
       return;
@@ -610,7 +581,16 @@ const App: React.FC = () => {
 
     setDraggingTabId(null);
     handleCloseTab(tabId, true);
-  }, [tabs, activeTabId, filePath, content, dirty, handleCloseTab]);
+  }, [activeTabId, filePath, content, dirty, handleCloseTab]);
+
+  // ---- New window (Cmd+N) ----
+  const handleNewWindow = useCallback(async () => {
+    try {
+      await invoke("open_new_window", { filePath: null });
+    } catch (e) {
+      console.error("Failed to open new window:", e);
+    }
+  }, []);
 
   // ---- File polling: detect external modifications and deletions ----
   // Polls every 1.5 s; guaranteed to work without any native watch permissions.
@@ -770,6 +750,7 @@ const App: React.FC = () => {
         onClose={handleCloseTab}
         onNew={handleNew}
         onReorder={handleReorderTabs}
+        onDetach={handleDetachTab}
         onDragTabStart={(id) => setDraggingTabId(id)}
         onDragTabEnd={() => setDraggingTabId(null)}
       />
@@ -785,24 +766,6 @@ const App: React.FC = () => {
               <span><kbd>⌘N</kbd> New window</span>
             </div>
           </div>
-        </div>
-      )}
-
-      {draggingTabId && tabs.length > 1 && (
-        <div
-          className="tab-detach-zone"
-          onDragOver={(e) => e.preventDefault()}
-          onDrop={(e) => {
-            e.preventDefault();
-            const tabId = e.dataTransfer.getData("tab-id");
-            if (tabId) handleDetachTab(tabId);
-          }}
-        >
-          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
-            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-          </svg>
-          <span>Drop here to open in new window</span>
         </div>
       )}
 

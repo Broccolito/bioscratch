@@ -308,10 +308,15 @@ body {
   background: var(--bg-app);
   display: flex;
   justify-content: center;
+  /* Elastic (bouncy) overscroll like macOS native */
+  overscroll-behavior-y: auto;
+  -webkit-overflow-scrolling: touch;
   /* Subtle paper grain feel via layered background */
   background-image:
     radial-gradient(ellipse at 20% 50%, rgba(210, 190, 160, 0.08) 0%, transparent 60%),
     radial-gradient(ellipse at 80% 20%, rgba(180, 165, 140, 0.06) 0%, transparent 50%);
+  /* Ensure the content area is always taller than the viewport so scroll is possible */
+  min-height: 100%;
 }
 
 /* ---- Status bar ---- */
@@ -331,10 +336,12 @@ body {
 }
 
 .status-bar .filepath {
-  flex: 1;
+  flex: 0 1 auto;
+  max-width: 50%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  margin-right: auto;
 }
 
 .status-bar .dirty-indicator {
@@ -412,31 +419,6 @@ body {
 
 .search-bar .close-btn:hover {
   color: var(--text-primary);
-}
-
-/* ---- Tab detach drop zone ---- */
-.tab-detach-zone {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 48px; /* above status bar */
-  height: 72px;
-  z-index: 1500;
-  background: var(--accent-bg);
-  border: 2px dashed var(--accent);
-  border-radius: 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  color: var(--accent);
-  font-size: 13px;
-  pointer-events: all;
-  transition: background 0.15s;
-}
-.tab-detach-zone:hover,
-.tab-detach-zone[data-active] {
-  background: rgba(74, 101, 128, 0.15);
 }
 
 /* ---- File watch banners ---- */
