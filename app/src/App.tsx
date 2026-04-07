@@ -82,6 +82,7 @@ const App: React.FC = () => {
   const [searchVisible, setSearchVisible] = useState(false);
   const [recovery, setRecovery] = useState<RecoveryData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   // External file watch states (keyed by file path so tab-switching preserves them)
   const [externalChange, setExternalChange] = useState<string | null>(null);
   const [deletedPaths, setDeletedPaths] = useState<Set<string>>(new Set());
@@ -104,6 +105,29 @@ const App: React.FC = () => {
   const handleMount = useCallback(
     (view: EditorView) => {
       viewRef.current = view;
+
+      // If this window was spawned from a detached tab, open the file from URL params
+      const params = new URLSearchParams(window.location.search);
+      const initialFile = params.get("file");
+      if (initialFile) {
+        invoke<string>("read_file", { path: initialFile })
+          .then((fileContent) => {
+            const state = makeEditorStateFromMarkdown(fileContent, view.state.plugins);
+            view.updateState(state);
+            setFilePath(initialFile);
+            setContent(fileContent);
+            setDirty(false);
+            lastDiskContentRef.current = fileContent;
+            setTabs((prev) =>
+              prev.map((t, i) => (i === 0 ? { ...t, filePath: initialFile } : t))
+            );
+            const stats = getDocStats(markdownToDoc(fileContent, schema));
+            setWordCount(stats.words);
+            setCharCount(stats.chars);
+          })
+          .catch(console.error);
+        return; // skip autosave check for spawned windows
+      }
 
       // Check for autosave on the initial untitled tab
       loadAutosave("__untitled__")
@@ -514,6 +538,69 @@ const App: React.FC = () => {
     }
   }, [activeTabId, addRecentFile, syncTabMeta]);
 
+  // ---- Tab reorder ----
+  const handleReorderTabs = useCallback((draggedId: string, targetId: string, before: boolean) => {
+    setTabs((prev) => {
+      const result = [...prev];
+      const fromIdx = result.findIndex((t) => t.id === draggedId);
+      if (fromIdx === -1) return prev;
+      const [moved] = result.splice(fromIdx, 1);
+      const toIdx = result.findIndex((t) => t.id === targetId);
+      if (toIdx === -1) return prev;
+      result.splice(before ? toIdx : toIdx + 1, 0, moved);
+      return result;
+    });
+  }, []);
+
+  // ---- Detach tab into new window ----
+  const handleDetachTab = useCallback(async (tabId: string) => {
+    if (tabs.length <= 1) return; // never detach the only tab
+    const tab = tabs.find((t) => t.id === tabId);
+    if (!tab) return;
+
+    const stored = storedTabsRef.current.get(tabId);
+    const tabFilePath = tabId === activeTabId ? filePath : (stored?.filePath ?? null);
+    const tabContent = tabId === activeTabId
+      ? (viewRef.current ? docToMarkdown(viewRef.current.state.doc) : content)
+      : (stored?.content ?? "");
+    const tabDirty = tabId === activeTabId ? dirty : (stored?.dirty ?? false);
+
+    // Save dirty content to disk so the new window can read it
+    if (tabDirty && tabFilePath) {
+      try {
+        suppressWatchUntilRef.current = Date.now() + 2000;
+        await invoke("write_file", { path: tabFilePath, content: tabContent });
+        lastDiskContentRef.current = tabContent;
+      } catch (e) {
+        console.error("Failed to save before detach:", e);
+      }
+    }
+
+    const fileName = tabFilePath?.split("/").pop() ?? "blank.md";
+    const label = `bioscratch-${Date.now()}`;
+    const url = tabFilePath
+      ? `${window.location.origin}/?file=${encodeURIComponent(tabFilePath)}`
+      : window.location.origin + "/";
+
+    try {
+      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      new WebviewWindow(label, {
+        url,
+        title: `Bioscratch – ${fileName}`,
+        width: 900,
+        height: 680,
+        resizable: true,
+        center: true,
+      });
+    } catch (e) {
+      console.error("Failed to spawn window:", e);
+      return;
+    }
+
+    setDraggingTabId(null);
+    handleCloseTab(tabId, true);
+  }, [tabs, activeTabId, filePath, content, dirty, handleCloseTab]);
+
   // ---- File polling: detect external modifications and deletions ----
   // Polls every 1.5 s; guaranteed to work without any native watch permissions.
   useEffect(() => {
@@ -617,6 +704,18 @@ const App: React.FC = () => {
       } else if (mod && e.key === "f") {
         e.preventDefault();
         setSearchVisible(true);
+      } else if (e.key === "Tab" && e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        setTabs((prevTabs) => {
+          const idx = prevTabs.findIndex((t) => t.id === activeTabId);
+          const nextIdx = e.shiftKey
+            ? (idx - 1 + prevTabs.length) % prevTabs.length
+            : (idx + 1) % prevTabs.length;
+          const nextId = prevTabs[nextIdx].id;
+          // Switch tab via stash+restore (needs to run outside setTabs)
+          setTimeout(() => handleSelectTab(nextId), 0);
+          return prevTabs;
+        });
       } else if (e.key === "Escape" && searchVisible) {
         setSearchVisible(false);
       }
@@ -624,7 +723,7 @@ const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, handleOpen, handleNew, handleCloseTab, activeTabId, searchVisible]);
+  }, [handleSave, handleOpen, handleNew, handleCloseTab, handleSelectTab, activeTabId, searchVisible]);
 
   return (
     <div className="app-container">
@@ -658,7 +757,28 @@ const App: React.FC = () => {
         onSelect={handleSelectTab}
         onClose={handleCloseTab}
         onNew={handleNew}
+        onReorder={handleReorderTabs}
+        onDragTabStart={(id) => setDraggingTabId(id)}
+        onDragTabEnd={() => setDraggingTabId(null)}
       />
+
+      {draggingTabId && tabs.length > 1 && (
+        <div
+          className="tab-detach-zone"
+          onDragOver={(e) => e.preventDefault()}
+          onDrop={(e) => {
+            e.preventDefault();
+            const tabId = e.dataTransfer.getData("tab-id");
+            if (tabId) handleDetachTab(tabId);
+          }}
+        >
+          <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+            <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+          </svg>
+          <span>Drop here to open in new window</span>
+        </div>
+      )}
 
       {fileDeleted && (
         <div className="file-watch-banner file-watch-deleted">
