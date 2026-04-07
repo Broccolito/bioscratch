@@ -229,6 +229,11 @@ body {
   font-style: italic;
 }
 
+.tab-label.tab-deleted {
+  text-decoration: line-through;
+  color: var(--text-muted);
+}
+
 .tab-close {
   flex-shrink: 0;
   width: 16px;
@@ -391,6 +396,59 @@ body {
 
 .search-bar .close-btn:hover {
   color: var(--text-primary);
+}
+
+/* ---- File watch banners ---- */
+.file-watch-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.file-watch-deleted {
+  background: #f8f0ee;
+  color: #7a3a2a;
+}
+
+.file-watch-changed {
+  background: #f5f3e8;
+  color: #5a4e20;
+}
+
+[data-theme="dark"] .file-watch-deleted {
+  background: #2a1a16;
+  color: #d4856a;
+}
+
+[data-theme="dark"] .file-watch-changed {
+  background: #211e0e;
+  color: #c4b46a;
+}
+
+.file-watch-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.file-watch-actions button {
+  padding: 2px 10px;
+  font-size: 11px;
+  font-family: inherit;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.8;
+}
+
+.file-watch-actions button:hover {
+  opacity: 1;
 }
 
 /* ---- Drag-and-drop file overlay ---- */

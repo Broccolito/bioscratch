@@ -12,6 +12,7 @@ import { useAutosave } from "./hooks/useAutosave";
 import { loadAutosave, deleteAutosave } from "./hooks/useAutosave";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { watch } from "@tauri-apps/plugin-fs";
 
 import Toolbar from "./components/Toolbar";
 import TabBar, { TabData } from "./components/TabBar";
@@ -82,6 +83,9 @@ const App: React.FC = () => {
   const [searchVisible, setSearchVisible] = useState(false);
   const [recovery, setRecovery] = useState<RecoveryData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  // External file watch states
+  const [externalChange, setExternalChange] = useState<string | null>(null);
+  const [fileDeleted, setFileDeleted] = useState(false);
 
   // Autosave current tab
   useAutosave(content, filePath, dirty);
@@ -150,6 +154,16 @@ const App: React.FC = () => {
     [activeTabId, syncTabMeta]
   );
 
+  // Refs kept current so async watcher callbacks never see stale closures
+  const dirtyRef = useRef(dirty);
+  useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+  const loadDocContentRef = useRef(loadDocContent);
+  useEffect(() => { loadDocContentRef.current = loadDocContent; }, [loadDocContent]);
+  // Epoch ms: ignore watch events triggered by our own save until this time passes
+  const suppressWatchUntilRef = useRef(0);
+  // Forward ref so handleCloseTab can call handleSave before it's declared
+  const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
+
   // ---- Save current tab's EditorState into storage ----
   const stashActiveTab = useCallback(() => {
     const view = viewRef.current;
@@ -194,27 +208,22 @@ const App: React.FC = () => {
         }
         const fileContent = await invoke<string>("read_file", { path });
         addRecentFile(path);
-        const isCleanUntitled = !filePath && !dirty;
-        if (isCleanUntitled) {
-          loadDocContent(fileContent, path);
-          syncTabMeta(activeTabId, { filePath: path, dirty: false });
-        } else {
-          stashActiveTab();
-          const id = makeTabId();
-          setTabs((prev) => [...prev, { id, filePath: path, dirty: false }]);
-          setActiveTabId(id);
-          const view = viewRef.current;
-          if (view) {
-            const state = makeEditorStateFromMarkdown(fileContent, view.state.plugins);
-            view.updateState(state);
-          }
-          setFilePath(path);
-          setContent(fileContent);
-          setDirty(false);
-          const stats = getDocStats(markdownToDoc(fileContent, schema));
-          setWordCount(stats.words);
-          setCharCount(stats.chars);
+        // Always open in a new tab — never replace the current tab on drag-and-drop
+        stashActiveTab();
+        const id = makeTabId();
+        setTabs((prev) => [...prev, { id, filePath: path, dirty: false }]);
+        setActiveTabId(id);
+        const view = viewRef.current;
+        if (view) {
+          const state = makeEditorStateFromMarkdown(fileContent, view.state.plugins);
+          view.updateState(state);
         }
+        setFilePath(path);
+        setContent(fileContent);
+        setDirty(false);
+        const stats = getDocStats(markdownToDoc(fileContent, schema));
+        setWordCount(stats.words);
+        setCharCount(stats.chars);
       } catch (e) {
         console.error("Failed to open dropped file:", e);
       }
@@ -312,16 +321,28 @@ const App: React.FC = () => {
 
   // ---- Close tab ----
   const handleCloseTab = useCallback(
-    (id: string) => {
+    (id: string, skipDirtyCheck = false) => {
       const tabMeta = tabs.find((t) => t.id === id);
       const stored = storedTabsRef.current.get(id);
       const isDirty = id === activeTabId ? dirty : stored?.dirty ?? false;
 
-      if (isDirty) {
+      if (isDirty && !skipDirtyCheck) {
         const label = tabMeta?.filePath
           ? tabMeta.filePath.split("/").pop()
           : "Untitled";
-        if (!confirm(`"${label}" has unsaved changes. Close anyway?`)) return;
+        if (id === activeTabId) {
+          // Active tab: offer to save first
+          const saveFirst = window.confirm(
+            `"${label}" has unsaved changes.\n\nOK to save and close — Cancel to discard and close.`
+          );
+          if (saveFirst) {
+            handleSaveRef.current().then(() => handleCloseTab(id, true));
+            return;
+          }
+        } else {
+          // Background tab: just confirm discard
+          if (!window.confirm(`"${label}" has unsaved changes. Discard and close?`)) return;
+        }
       }
 
       storedTabsRef.current.delete(id);
@@ -446,10 +467,13 @@ const App: React.FC = () => {
     }
 
     try {
+      suppressWatchUntilRef.current = Date.now() + 2000;
       await invoke("write_file", { path: savePath, content: markdown });
       setFilePath(savePath);
       setDirty(false);
       setContent(markdown);
+      setFileDeleted(false);
+      setExternalChange(null);
       syncTabMeta(activeTabId, { filePath: savePath, dirty: false });
       addRecentFile(savePath);
       await deleteAutosave(savePath).catch(() => {});
@@ -458,6 +482,8 @@ const App: React.FC = () => {
       console.error("Failed to save:", e);
     }
   }, [filePath, activeTabId, addRecentFile, syncTabMeta]);
+  // Keep ref current so handleCloseTab (declared before handleSave) can call it
+  useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
 
   // ---- Save As ----
   const handleSaveAs = useCallback(async () => {
@@ -469,16 +495,66 @@ const App: React.FC = () => {
     if (!path) return;
 
     try {
+      suppressWatchUntilRef.current = Date.now() + 2000;
       await invoke("write_file", { path, content: markdown });
       setFilePath(path);
       setDirty(false);
       setContent(markdown);
+      setFileDeleted(false);
+      setExternalChange(null);
       syncTabMeta(activeTabId, { filePath: path, dirty: false });
       addRecentFile(path);
     } catch (e) {
       console.error("Failed to save:", e);
     }
   }, [activeTabId, addRecentFile, syncTabMeta]);
+
+  // ---- File watcher: detect external modifications and deletions ----
+  useEffect(() => {
+    if (!filePath) return;
+    setExternalChange(null);
+    setFileDeleted(false);
+
+    let unwatch: (() => void) | null = null;
+    let cancelled = false;
+
+    watch(
+      filePath,
+      async (event) => {
+        if (cancelled || Date.now() < suppressWatchUntilRef.current) return;
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const type = (event as any).type;
+        if (typeof type === "object" && type !== null) {
+          if ("remove" in type) { setFileDeleted(true); return; }
+          if ("access" in type) return; // ignore read-access pings
+        }
+
+        // modify / create / any — re-read and reload if content changed
+        try {
+          const newContent = await invoke<string>("read_file", { path: filePath });
+          if (cancelled) return;
+          if (dirtyRef.current) {
+            setExternalChange(newContent);
+          } else {
+            loadDocContentRef.current(newContent, filePath);
+          }
+        } catch {
+          // file transiently unavailable (e.g. mid-write by another process)
+        }
+      },
+      { recursive: false, delayMs: 300 }
+    )
+      .then((fn) => { if (cancelled) fn(); else unwatch = fn; })
+      .catch(console.error);
+
+    return () => {
+      cancelled = true;
+      unwatch?.();
+      setExternalChange(null);
+      setFileDeleted(false);
+    };
+  }, [filePath]); // re-register only when the active file changes
 
   // ---- Export ----
   const handleExportHtml = useCallback(async () => {
@@ -564,10 +640,30 @@ const App: React.FC = () => {
       <TabBar
         tabs={tabs}
         activeId={activeTabId}
+        deletedTabId={fileDeleted ? activeTabId : null}
         onSelect={handleSelectTab}
         onClose={handleCloseTab}
         onNew={handleNew}
       />
+
+      {fileDeleted && (
+        <div className="file-watch-banner file-watch-deleted">
+          <span>File deleted from disk</span>
+          <div className="file-watch-actions">
+            <button onClick={handleSave}>Save anyway</button>
+            <button onClick={() => handleCloseTab(activeTabId)}>Close tab</button>
+          </div>
+        </div>
+      )}
+      {externalChange !== null && !fileDeleted && (
+        <div className="file-watch-banner file-watch-changed">
+          <span>File changed on disk — you have unsaved edits</span>
+          <div className="file-watch-actions">
+            <button onClick={() => { loadDocContent(externalChange, filePath!); setExternalChange(null); }}>Reload</button>
+            <button onClick={() => setExternalChange(null)}>Dismiss</button>
+          </div>
+        </div>
+      )}
 
       {searchVisible && (
         <SearchBar
