@@ -19,6 +19,7 @@
     "fs:scope-appdata-recursive",
     "fs:allow-watch",
     "fs:allow-unwatch",
-    "opener:default"
+    "opener:default",
+    "core:webview:allow-create-webview-window"
   ]
 }
