@@ -115,7 +115,7 @@ const TabBar: React.FC<TabBarProps> = ({
           </div>
         );
       })}
-      <button className="tab-new" onClick={onNew} title="New tab (⌘N)">
+      <button className="tab-new" onClick={onNew} title="New tab (⌘T)">
         +
       </button>
     </div>
