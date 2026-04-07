@@ -223,6 +223,10 @@ const App: React.FC = () => {
     [tabs, filePath, dirty, activeTabId, addRecentFile, loadDocContent, syncTabMeta, stashActiveTab]
   );
 
+  // Keep a ref so drag-drop listeners (registered once) always call the latest callback.
+  const openFileByPathRef = useRef(openFileByPath);
+  useEffect(() => { openFileByPathRef.current = openFileByPath; }, [openFileByPath]);
+
   useEffect(() => {
     const TEXT_EXT = TEXT_EXTENSIONS;
     const unlistenEnter = listen("tauri://drag-enter", () => setIsDragging(true));
@@ -233,7 +237,7 @@ const App: React.FC = () => {
       const paths = event.payload?.paths ?? [];
       paths
         .filter((p) => TEXT_EXT.has(p.split(".").pop()?.toLowerCase() ?? ""))
-        .forEach((p) => openFileByPath(p));
+        .forEach((p) => openFileByPathRef.current(p));
     });
     return () => {
       unlistenEnter.then((f) => f());
@@ -241,8 +245,7 @@ const App: React.FC = () => {
       unlistenLeave.then((f) => f());
       unlistenDrop.then((f) => f());
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [openFileByPath]);
+  }, []); // register once on mount — openFileByPath is forwarded via ref above
 
   // ---- Switch to a stored tab ----
   const restoreTab = useCallback(
