@@ -152,6 +152,12 @@ async fn show_html_save_dialog(app: tauri::AppHandle) -> Result<Option<String>, 
     Ok(path.map(|p| p.to_string()))
 }
 
+#[tauri::command]
+async fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    use tauri_plugin_shell::ShellExt;
+    app.shell().open(&url, None).map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -171,6 +177,7 @@ pub fn run() {
             delete_autosave,
             export_html,
             show_html_save_dialog,
+            open_url,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -95,10 +95,7 @@ li.task-list-item .task-list-content {
   flex: 1;
 }
 
-li.task-list-item.checked .task-list-content p {
-  text-decoration: line-through;
-  color: var(--text-muted, #9ca3af);
-}
+/* checked task items: text unchanged, only the checkbox is ticked */
 
 /* ---- Math NodeView ---- */
 .math-inline-view {
@@ -181,6 +178,7 @@ li.task-list-item.checked .task-list-content p {
   background: var(--code-bg, #f6f8fa);
   border-radius: 8px;
   overflow-x: auto;
+  overflow-y: visible;
   border: 1px solid var(--border-color, #e5e7eb);
 }
 
@@ -196,6 +194,9 @@ li.task-list-item.checked .task-list-content p {
   background: none;
   padding: 0;
   border-radius: 0;
+  /* Ensure caret is the same size as the code font */
+  display: block;
+  min-height: 1.6em;
 }
 
 /* ---- Image NodeView ---- */
@@ -225,4 +226,39 @@ li.task-list-item.checked .task-list-content p {
   border-radius: 6px;
   color: var(--text-muted, #9ca3af);
   font-size: 0.875em;
+}
+
+/* ---- Link tooltip ---- */
+.link-tooltip {
+  z-index: 1000;
+  background: var(--bg-editor, #fff);
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 6px;
+  padding: 6px 10px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  font-size: 13px;
+  max-width: 400px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .link-tooltip {
+  background: #1e2029;
+  border-color: #374151;
+}
+
+.link-tooltip-url {
+  color: var(--accent, #2563eb);
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.link-tooltip-url:hover {
+  text-decoration: underline;
+}
+
+/* ---- Link cursor in editor ---- */
+.ProseMirror a {
+  cursor: pointer;
 }

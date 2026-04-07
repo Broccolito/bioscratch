@@ -14,7 +14,6 @@ import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
 import { tableEditing, columnResizing } from "prosemirror-tables";
 import { renderMathInline, renderMathBlock } from "../lib/math";
-import hljs from "highlight.js";
 import "../styles/editor.css";
 import "../styles/markdown.css";
 
@@ -271,12 +270,9 @@ class CodeBlockView implements NodeView {
       this.contentDOM.className = "";
     }
 
-    // Re-highlight after update
-    requestAnimationFrame(() => {
-      if (lang && hljs.getLanguage(lang)) {
-        hljs.highlightElement(this.contentDOM as HTMLElement);
-      }
-    });
+    // NOTE: do NOT call hljs.highlightElement on contentDOM — it replaces
+    // innerHTML which corrupts ProseMirror's view tracking (causes reversed text).
+    // Syntax coloring is achieved purely via the language-* CSS class.
 
     return true;
   }
@@ -471,10 +467,72 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Handle link clicks: show tooltip with URL, click URL to open
+  const handleEditorClick = (e: React.MouseEvent) => {
+    const target = e.target as HTMLElement;
+    const anchor = target.closest("a[href]") as HTMLAnchorElement | null;
+    if (!anchor) {
+      // Remove any existing link tooltip
+      const existing = document.querySelector(".link-tooltip");
+      if (existing) existing.remove();
+      return;
+    }
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Remove any existing tooltip
+    const existing = document.querySelector(".link-tooltip");
+    if (existing) existing.remove();
+
+    const href = anchor.getAttribute("href") || "";
+    const tooltip = document.createElement("div");
+    tooltip.className = "link-tooltip";
+
+    const urlSpan = document.createElement("a");
+    urlSpan.className = "link-tooltip-url";
+    urlSpan.textContent = href;
+    urlSpan.href = href;
+    urlSpan.target = "_blank";
+    urlSpan.rel = "noopener noreferrer";
+    urlSpan.addEventListener("click", async (ev) => {
+      ev.preventDefault();
+      try {
+        const { invoke } = await import("@tauri-apps/api/core");
+        await invoke("open_url", { url: href });
+      } catch {
+        window.open(href, "_blank");
+      }
+      tooltip.remove();
+    });
+
+    tooltip.appendChild(urlSpan);
+
+    const rect = anchor.getBoundingClientRect();
+    tooltip.style.position = "fixed";
+    tooltip.style.top = `${rect.bottom + 6}px`;
+    tooltip.style.left = `${rect.left}px`;
+    document.body.appendChild(tooltip);
+
+    // Close on click outside
+    const dismiss = (ev: MouseEvent) => {
+      if (!tooltip.contains(ev.target as Node)) {
+        tooltip.remove();
+        document.removeEventListener("mousedown", dismiss);
+      }
+    };
+    setTimeout(() => document.addEventListener("mousedown", dismiss), 0);
+  };
+
   return (
     <div className="editor-scroll-area">
       <div className="editor-surface">
-        <div ref={containerRef} />
+        <div
+          ref={containerRef}
+          spellCheck={false}
+          autoCorrect="off"
+          autoCapitalize="off"
+          onClick={handleEditorClick}
+        />
       </div>
     </div>
   );

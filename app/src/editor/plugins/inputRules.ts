@@ -67,17 +67,8 @@ const hrRule = new InputRule(/^---\s$/, (state, _match, start, end) => {
   return tr;
 });
 
-// Inline math: $content$ — triggers when the closing $ is typed
-// Matches $...$ where content is non-empty and doesn't contain newlines or $
-const inlineMathRule = new InputRule(
-  /\$([^$\n]+)\$$/,
-  (state, match, start, end) => {
-    const mathContent = match[1];
-    if (!mathContent.trim()) return null;
-    const mathNode = schema.nodes.math_inline.create({ math: mathContent });
-    return state.tr.replaceWith(start, end, mathNode);
-  }
-);
+// Inline math is handled by the Enter key (see keymap.ts).
+// No immediate conversion on closing $, letting the user complete the expression first.
 
 export function buildInputRules() {
   return inputRules({
@@ -94,7 +85,6 @@ export function buildInputRules() {
       codeBlockRule,
       taskListRule,
       hrRule,
-      inlineMathRule,
     ],
   });
 }
