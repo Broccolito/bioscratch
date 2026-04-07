@@ -413,11 +413,13 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
-  // Refs so keymap plugin always calls the latest callbacks without rebuilding
+  // Refs so the once-built ProseMirror view always calls the latest callbacks
   const onSaveRef = useRef(onSave);
   const onSearchRef = useRef(onSearch);
+  const onChangeRef = useRef(onChange);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
   useEffect(() => { onSearchRef.current = onSearch; }, [onSearch]);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -458,7 +460,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
         const newState = view.state.apply(tr);
         view.updateState(newState);
         if (tr.docChanged) {
-          onChange();
+          onChangeRef.current();
         }
       },
     });
