@@ -12,7 +12,6 @@ import { useAutosave } from "./hooks/useAutosave";
 import { loadAutosave, deleteAutosave } from "./hooks/useAutosave";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { watchImmediate } from "@tauri-apps/plugin-fs";
 
 import Toolbar from "./components/Toolbar";
 import TabBar, { TabData } from "./components/TabBar";
@@ -147,6 +146,7 @@ const App: React.FC = () => {
       setFilePath(path);
       setContent(markdown);
       setDirty(false);
+      lastDiskContentRef.current = markdown;
       syncTabMeta(activeTabId, { filePath: path, dirty: false });
       const stats = getDocStats(newState.doc);
       setWordCount(stats.words);
@@ -155,13 +155,15 @@ const App: React.FC = () => {
     [activeTabId, syncTabMeta]
   );
 
-  // Refs kept current so async watcher callbacks never see stale closures
+  // Refs kept current so async poll callbacks never see stale closures
   const dirtyRef = useRef(dirty);
   useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
   const loadDocContentRef = useRef(loadDocContent);
   useEffect(() => { loadDocContentRef.current = loadDocContent; }, [loadDocContent]);
-  // Epoch ms: ignore watch events triggered by our own save until this time passes
+  // Epoch ms: ignore poll results triggered by our own save until this time passes
   const suppressWatchUntilRef = useRef(0);
+  // Last content we read from disk — used to detect external changes
+  const lastDiskContentRef = useRef<string>("");
   // Forward ref so handleCloseTab can call handleSave before it's declared
   const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
 
@@ -470,6 +472,7 @@ const App: React.FC = () => {
     try {
       suppressWatchUntilRef.current = Date.now() + 2000;
       await invoke("write_file", { path: savePath, content: markdown });
+      lastDiskContentRef.current = markdown;
       setFilePath(savePath);
       setDirty(false);
       setContent(markdown);
@@ -498,6 +501,7 @@ const App: React.FC = () => {
     try {
       suppressWatchUntilRef.current = Date.now() + 2000;
       await invoke("write_file", { path, content: markdown });
+      lastDiskContentRef.current = markdown;
       setFilePath(path);
       setDirty(false);
       setContent(markdown);
@@ -510,10 +514,10 @@ const App: React.FC = () => {
     }
   }, [activeTabId, addRecentFile, syncTabMeta]);
 
-  // ---- File watcher: detect external modifications and deletions ----
+  // ---- File polling: detect external modifications and deletions ----
+  // Polls every 1.5 s; guaranteed to work without any native watch permissions.
   useEffect(() => {
     if (!filePath) return;
-    // Clear any stale state for this file when we (re-)open it
     setExternalChange(null);
     setDeletedPaths((prev) => {
       if (!prev.has(filePath)) return prev;
@@ -522,51 +526,49 @@ const App: React.FC = () => {
       return next;
     });
 
-    let unwatch: (() => void) | null = null;
+    const polledPath = filePath;
     let cancelled = false;
-    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    const watchedPath = filePath;
 
-    watchImmediate(
-      watchedPath,
-      () => {
+    const poll = async () => {
+      if (cancelled || Date.now() < suppressWatchUntilRef.current) return;
+      try {
+        const diskContent = await invoke<string>("read_file", { path: polledPath });
         if (cancelled) return;
-        // Debounce rapid events (e.g. editors that write in two passes)
-        if (debounceTimer) clearTimeout(debounceTimer);
-        debounceTimer = setTimeout(async () => {
-          if (cancelled || Date.now() < suppressWatchUntilRef.current) return;
-          try {
-            const newContent = await invoke<string>("read_file", { path: watchedPath });
-            if (cancelled) return;
-            if (dirtyRef.current) {
-              setExternalChange(newContent);
-            } else {
-              loadDocContentRef.current(newContent, watchedPath);
-            }
-          } catch {
-            // Read failed → file was deleted
-            if (!cancelled) {
-              setDeletedPaths((prev) => {
-                const next = new Set(prev);
-                next.add(watchedPath);
-                return next;
-              });
-            }
+        if (diskContent !== lastDiskContentRef.current) {
+          lastDiskContentRef.current = diskContent;
+          if (dirtyRef.current) {
+            setExternalChange(diskContent);
+          } else {
+            loadDocContentRef.current(diskContent, polledPath);
           }
-        }, 300);
-      },
-      { recursive: false }
-    )
-      .then((fn) => { if (cancelled) fn(); else unwatch = fn; })
-      .catch(console.error);
+        }
+        // File exists — clear any deleted flag
+        setDeletedPaths((prev) => {
+          if (!prev.has(polledPath)) return prev;
+          const next = new Set(prev);
+          next.delete(polledPath);
+          return next;
+        });
+      } catch {
+        // Read failed → file deleted
+        if (!cancelled) {
+          setDeletedPaths((prev) => {
+            if (prev.has(polledPath)) return prev;
+            const next = new Set(prev);
+            next.add(polledPath);
+            return next;
+          });
+        }
+      }
+    };
 
+    const intervalId = setInterval(poll, 1500);
     return () => {
       cancelled = true;
-      if (debounceTimer) clearTimeout(debounceTimer);
-      unwatch?.();
+      clearInterval(intervalId);
       setExternalChange(null);
     };
-  }, [filePath]); // re-register only when the active file changes
+  }, [filePath]);
 
   // ---- Export ----
   const handleExportHtml = useCallback(async () => {
