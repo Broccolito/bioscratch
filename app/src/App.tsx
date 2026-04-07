@@ -12,7 +12,7 @@ import { useAutosave } from "./hooks/useAutosave";
 import { loadAutosave, deleteAutosave } from "./hooks/useAutosave";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { watch } from "@tauri-apps/plugin-fs";
+import { watchImmediate } from "@tauri-apps/plugin-fs";
 
 import Toolbar from "./components/Toolbar";
 import TabBar, { TabData } from "./components/TabBar";
@@ -83,9 +83,10 @@ const App: React.FC = () => {
   const [searchVisible, setSearchVisible] = useState(false);
   const [recovery, setRecovery] = useState<RecoveryData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
-  // External file watch states
+  // External file watch states (keyed by file path so tab-switching preserves them)
   const [externalChange, setExternalChange] = useState<string | null>(null);
-  const [fileDeleted, setFileDeleted] = useState(false);
+  const [deletedPaths, setDeletedPaths] = useState<Set<string>>(new Set());
+  const fileDeleted = !!(filePath && deletedPaths.has(filePath));
 
   // Autosave current tab
   useAutosave(content, filePath, dirty);
@@ -472,7 +473,7 @@ const App: React.FC = () => {
       setFilePath(savePath);
       setDirty(false);
       setContent(markdown);
-      setFileDeleted(false);
+      setDeletedPaths((prev) => { const n = new Set(prev); n.delete(savePath); return n; });
       setExternalChange(null);
       syncTabMeta(activeTabId, { filePath: savePath, dirty: false });
       addRecentFile(savePath);
@@ -500,7 +501,7 @@ const App: React.FC = () => {
       setFilePath(path);
       setDirty(false);
       setContent(markdown);
-      setFileDeleted(false);
+      setDeletedPaths((prev) => { const n = new Set(prev); n.delete(path); return n; });
       setExternalChange(null);
       syncTabMeta(activeTabId, { filePath: path, dirty: false });
       addRecentFile(path);
@@ -512,47 +513,58 @@ const App: React.FC = () => {
   // ---- File watcher: detect external modifications and deletions ----
   useEffect(() => {
     if (!filePath) return;
+    // Clear any stale state for this file when we (re-)open it
     setExternalChange(null);
-    setFileDeleted(false);
+    setDeletedPaths((prev) => {
+      if (!prev.has(filePath)) return prev;
+      const next = new Set(prev);
+      next.delete(filePath);
+      return next;
+    });
 
     let unwatch: (() => void) | null = null;
     let cancelled = false;
+    let debounceTimer: ReturnType<typeof setTimeout> | null = null;
+    const watchedPath = filePath;
 
-    watch(
-      filePath,
-      async (event) => {
-        if (cancelled || Date.now() < suppressWatchUntilRef.current) return;
-
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const type = (event as any).type;
-        if (typeof type === "object" && type !== null) {
-          if ("remove" in type) { setFileDeleted(true); return; }
-          if ("access" in type) return; // ignore read-access pings
-        }
-
-        // modify / create / any — re-read and reload if content changed
-        try {
-          const newContent = await invoke<string>("read_file", { path: filePath });
-          if (cancelled) return;
-          if (dirtyRef.current) {
-            setExternalChange(newContent);
-          } else {
-            loadDocContentRef.current(newContent, filePath);
+    watchImmediate(
+      watchedPath,
+      () => {
+        if (cancelled) return;
+        // Debounce rapid events (e.g. editors that write in two passes)
+        if (debounceTimer) clearTimeout(debounceTimer);
+        debounceTimer = setTimeout(async () => {
+          if (cancelled || Date.now() < suppressWatchUntilRef.current) return;
+          try {
+            const newContent = await invoke<string>("read_file", { path: watchedPath });
+            if (cancelled) return;
+            if (dirtyRef.current) {
+              setExternalChange(newContent);
+            } else {
+              loadDocContentRef.current(newContent, watchedPath);
+            }
+          } catch {
+            // Read failed → file was deleted
+            if (!cancelled) {
+              setDeletedPaths((prev) => {
+                const next = new Set(prev);
+                next.add(watchedPath);
+                return next;
+              });
+            }
           }
-        } catch {
-          // file transiently unavailable (e.g. mid-write by another process)
-        }
+        }, 300);
       },
-      { recursive: false, delayMs: 300 }
+      { recursive: false }
     )
       .then((fn) => { if (cancelled) fn(); else unwatch = fn; })
       .catch(console.error);
 
     return () => {
       cancelled = true;
+      if (debounceTimer) clearTimeout(debounceTimer);
       unwatch?.();
       setExternalChange(null);
-      setFileDeleted(false);
     };
   }, [filePath]); // re-register only when the active file changes
 
@@ -640,7 +652,7 @@ const App: React.FC = () => {
       <TabBar
         tabs={tabs}
         activeId={activeTabId}
-        deletedTabId={fileDeleted ? activeTabId : null}
+        deletedPaths={deletedPaths}
         onSelect={handleSelectTab}
         onClose={handleCloseTab}
         onNew={handleNew}

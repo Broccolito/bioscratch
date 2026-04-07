@@ -9,7 +9,7 @@ export interface TabData {
 interface TabBarProps {
   tabs: TabData[];
   activeId: string;
-  deletedTabId?: string | null;
+  deletedPaths?: Set<string>;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onNew: () => void;
@@ -21,12 +21,12 @@ function tabLabel(tab: TabData): string {
   return parts[parts.length - 1];
 }
 
-const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, deletedTabId, onSelect, onClose, onNew }) => {
+const TabBar: React.FC<TabBarProps> = ({ tabs, activeId, deletedPaths, onSelect, onClose, onNew }) => {
   return (
     <div className="tab-bar">
       {tabs.map((tab) => {
         const isActive = tab.id === activeId;
-        const isDeleted = tab.id === deletedTabId;
+        const isDeleted = !!(tab.filePath && deletedPaths?.has(tab.filePath));
         return (
           <div
             key={tab.id}
