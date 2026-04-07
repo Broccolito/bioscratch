@@ -11,6 +11,7 @@ import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useAutosave } from "./hooks/useAutosave";
 import { loadAutosave, deleteAutosave } from "./hooks/useAutosave";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 import Toolbar from "./components/Toolbar";
 import TabBar, { TabData } from "./components/TabBar";
@@ -80,6 +81,7 @@ const App: React.FC = () => {
 
   const [searchVisible, setSearchVisible] = useState(false);
   const [recovery, setRecovery] = useState<RecoveryData | null>(null);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Autosave current tab
   useAutosave(content, filePath, dirty);
@@ -159,6 +161,72 @@ const App: React.FC = () => {
       editorState: view ? view.state : null,
     });
   }, [activeTabId, filePath, dirty, content]);
+
+  // ---- Drag-and-drop file open ----
+  const TEXT_EXTENSIONS = new Set([
+    "md","markdown","txt","json","yaml","yml","toml","csv","xml",
+    "html","css","js","ts","py","rs","go","java","c","cpp","h","sh","log",
+  ]);
+
+  const openFileByPath = useCallback(
+    async (path: string) => {
+      try {
+        const existingTab = tabs.find((t) => t.filePath === path);
+        if (existingTab) {
+          handleSelectTab(existingTab.id);
+          return;
+        }
+        const fileContent = await invoke<string>("read_file", { path });
+        addRecentFile(path);
+        const isCleanUntitled = !filePath && !dirty;
+        if (isCleanUntitled) {
+          loadDocContent(fileContent, path);
+          syncTabMeta(activeTabId, { filePath: path, dirty: false });
+        } else {
+          stashActiveTab();
+          const id = makeTabId();
+          setTabs((prev) => [...prev, { id, filePath: path, dirty: false }]);
+          setActiveTabId(id);
+          const view = viewRef.current;
+          if (view) {
+            const state = makeEditorStateFromMarkdown(fileContent, view.state.plugins);
+            view.updateState(state);
+          }
+          setFilePath(path);
+          setContent(fileContent);
+          setDirty(false);
+          const stats = getDocStats(markdownToDoc(fileContent, schema));
+          setWordCount(stats.words);
+          setCharCount(stats.chars);
+        }
+      } catch (e) {
+        console.error("Failed to open dropped file:", e);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [tabs, filePath, dirty, activeTabId, addRecentFile, loadDocContent, syncTabMeta, stashActiveTab]
+  );
+
+  useEffect(() => {
+    const TEXT_EXT = TEXT_EXTENSIONS;
+    const unlistenEnter = listen("tauri://drag-enter", () => setIsDragging(true));
+    const unlistenOver  = listen("tauri://drag-over",  () => setIsDragging(true));
+    const unlistenLeave = listen("tauri://drag-leave", () => setIsDragging(false));
+    const unlistenDrop  = listen<{ paths: string[] }>("tauri://drag-drop", (event) => {
+      setIsDragging(false);
+      const paths = event.payload?.paths ?? [];
+      paths
+        .filter((p) => TEXT_EXT.has(p.split(".").pop()?.toLowerCase() ?? ""))
+        .forEach((p) => openFileByPath(p));
+    });
+    return () => {
+      unlistenEnter.then((f) => f());
+      unlistenOver.then((f) => f());
+      unlistenLeave.then((f) => f());
+      unlistenDrop.then((f) => f());
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openFileByPath]);
 
   // ---- Switch to a stored tab ----
   const restoreTab = useCallback(
@@ -451,6 +519,17 @@ const App: React.FC = () => {
 
   return (
     <div className="app-container">
+      {isDragging && (
+        <div className="drop-overlay">
+          <div className="drop-overlay-inner">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+            </svg>
+            <span>Drop to open</span>
+          </div>
+        </div>
+      )}
       <Toolbar
         view={viewRef.current}
         onNew={handleNew}
