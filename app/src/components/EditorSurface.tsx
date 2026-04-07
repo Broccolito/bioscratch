@@ -463,6 +463,14 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       },
     });
 
+    // Set attributes on ProseMirror's own contenteditable div.
+    // autocorrect="off" disables macOS text replacements (e.g. pi= → 3.14).
+    // autocapitalize="sentences" lets macOS capitalize the first letter of sentences.
+    // spellcheck="false" keeps the red underlines off.
+    view.dom.setAttribute("autocorrect", "off");
+    view.dom.setAttribute("autocapitalize", "sentences");
+    view.dom.setAttribute("spellcheck", "false");
+
     viewRef.current = view;
     onMount(view);
 
@@ -534,9 +542,6 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       <div className="editor-surface">
         <div
           ref={containerRef}
-          spellCheck={false}
-          autoCorrect="off"
-          autoCapitalize="off"
           onClick={handleEditorClick}
         />
       </div>
