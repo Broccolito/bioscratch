@@ -413,13 +413,19 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
 
+  // Refs so keymap plugin always calls the latest callbacks without rebuilding
+  const onSaveRef = useRef(onSave);
+  const onSearchRef = useRef(onSearch);
+  useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
+  useEffect(() => { onSearchRef.current = onSearch; }, [onSearch]);
+
   useEffect(() => {
     if (!containerRef.current) return;
 
     const plugins = [
       buildHistory(),
       buildInputRules(),
-      buildKeymap(onSave, onSearch),
+      buildKeymap(() => onSaveRef.current(), () => onSearchRef.current()),
       keymap(baseKeymap),
       dropCursor(),
       gapCursor(),
