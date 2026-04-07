@@ -150,6 +150,7 @@ async fn show_html_save_dialog(app: tauri::AppHandle) -> Result<Option<String>, 
         .dialog()
         .file()
         .add_filter("HTML", &["html"])
+        .set_file_name("blank.html")
         .blocking_save_file();
     Ok(path.map(|p| p.to_string()))
 }
