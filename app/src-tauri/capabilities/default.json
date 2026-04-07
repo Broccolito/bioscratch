@@ -17,6 +17,6 @@
     "fs:scope-document-recursive",
     "fs:scope-download-recursive",
     "fs:scope-appdata-recursive",
-    "shell:default"
+    "opener:default"
   ]
 }
