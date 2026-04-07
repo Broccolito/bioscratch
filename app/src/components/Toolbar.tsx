@@ -123,7 +123,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
   return (
     <div className="toolbar">
       {/* File operations */}
-      <button className="toolbar-btn" onClick={onNew} title="New (Ctrl+N)">
+      <button className="toolbar-btn" onClick={onNew} title="New Tab (⌘T)">
         <svg viewBox="0 0 16 16" fill="currentColor">
           <path d="M9.5 1H3.5A1.5 1.5 0 0 0 2 2.5v11A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V5.5L9.5 1zm0 1.5 3 3H9.5V2.5zM8.75 9.75H9.5v.75A2 2 0 0 1 7.5 12.5h-.5v-.75h.5a1.25 1.25 0 0 0 1.25-1.25v-.75zm-2.5 0H7v.75A2 2 0 0 1 5 12.5h-.5v-.75H5a1.25 1.25 0 0 0 1.25-1.25v-.75z"/>
         </svg>

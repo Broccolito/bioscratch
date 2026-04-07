@@ -65,12 +65,10 @@ const App: React.FC = () => {
   const storedTabsRef = useRef<Map<string, StoredTab>>(new Map());
 
   // Active tab id
-  const [activeTabId, setActiveTabId] = useState<string>(() => makeTabId());
+  const [activeTabId, setActiveTabId] = useState<string>("");
 
   // Tab bar metadata (derived from stored tabs + active tab)
-  const [tabs, setTabs] = useState<TabData[]>(() => [
-    { id: `tab-${nextTabId - 1}`, filePath: null, dirty: false },
-  ]);
+  const [tabs, setTabs] = useState<TabData[]>([]);
 
   // Active tab live state
   const [filePath, setFilePath] = useState<string | null>(null);
@@ -83,6 +81,8 @@ const App: React.FC = () => {
   const [recovery, setRecovery] = useState<RecoveryData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
+  const draggingTabIdRef = useRef<string | null>(null);
+  useEffect(() => { draggingTabIdRef.current = draggingTabId; }, [draggingTabId]);
   // External file watch states (keyed by file path so tab-switching preserves them)
   const [externalChange, setExternalChange] = useState<string | null>(null);
   const [deletedPaths, setDeletedPaths] = useState<Set<string>>(new Set());
@@ -129,19 +129,7 @@ const App: React.FC = () => {
         return; // skip autosave check for spawned windows
       }
 
-      // Check for autosave on the initial untitled tab
-      loadAutosave("__untitled__")
-        .then((saved) => {
-          if (saved) {
-            setRecovery({
-              key: "__untitled__",
-              content: saved,
-              filePath: null,
-              tabId: activeTabId,
-            });
-          }
-        })
-        .catch(console.error);
+      // No autosave recovery on startup — user must explicitly open or create a file
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
@@ -190,6 +178,11 @@ const App: React.FC = () => {
   const lastDiskContentRef = useRef<string>("");
   // Forward ref so handleCloseTab can call handleSave before it's declared
   const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
+
+  // Stable refs so keyboard handler always gets latest callbacks
+  const tabsRef = useRef(tabs);
+  useEffect(() => { tabsRef.current = tabs; }, [tabs]);
+  const handleSelectTabRef = useRef<(id: string) => void>(() => {});
 
   // ---- Save current tab's EditorState into storage ----
   const stashActiveTab = useCallback(() => {
@@ -265,8 +258,8 @@ const App: React.FC = () => {
 
   useEffect(() => {
     const TEXT_EXT = TEXT_EXTENSIONS;
-    const unlistenEnter = listen("tauri://drag-enter", () => setIsDragging(true));
-    const unlistenOver  = listen("tauri://drag-over",  () => setIsDragging(true));
+    const unlistenEnter = listen("tauri://drag-enter", () => { if (!draggingTabIdRef.current) setIsDragging(true); });
+    const unlistenOver  = listen("tauri://drag-over",  () => { if (!draggingTabIdRef.current) setIsDragging(true); });
     const unlistenLeave = listen("tauri://drag-leave", () => setIsDragging(false));
     const unlistenDrop  = listen<{ paths: string[] }>("tauri://drag-drop", (event) => {
       setIsDragging(false);
@@ -325,6 +318,7 @@ const App: React.FC = () => {
     },
     [activeTabId, stashActiveTab, restoreTab]
   );
+  useEffect(() => { handleSelectTabRef.current = handleSelectTab; }, [handleSelectTab]);
 
   // ---- New tab ----
   const handleNew = useCallback(() => {
@@ -345,6 +339,24 @@ const App: React.FC = () => {
     setWordCount(0);
     setCharCount(0);
   }, [stashActiveTab]);
+
+  // ---- New window (Cmd+N) ----
+  const handleNewWindow = useCallback(async () => {
+    try {
+      const { WebviewWindow } = await import("@tauri-apps/api/webviewWindow");
+      const label = `bioscratch-${Date.now()}`;
+      new WebviewWindow(label, {
+        url: window.location.origin + "/",
+        title: "Bioscratch",
+        width: 900,
+        height: 680,
+        resizable: true,
+        center: true,
+      });
+    } catch (e) {
+      console.error("Failed to open new window:", e);
+    }
+  }, []);
 
   // ---- Close tab ----
   const handleCloseTab = useCallback(
@@ -377,11 +389,9 @@ const App: React.FC = () => {
       setTabs((prev) => {
         const remaining = prev.filter((t) => t.id !== id);
         if (remaining.length === 0) {
-          // Always keep at least one tab
-          const newId = makeTabId();
-          const newTab: TabData = { id: newId, filePath: null, dirty: false };
-          setTimeout(() => {
-            setActiveTabId(newId);
+          // Hide the window instead of keeping a blank tab
+          setTimeout(async () => {
+            setActiveTabId("");
             const view = viewRef.current;
             if (view) {
               view.updateState(makeEmptyEditorState(view.state.plugins));
@@ -391,8 +401,12 @@ const App: React.FC = () => {
             setDirty(false);
             setWordCount(0);
             setCharCount(0);
+            try {
+              const { Window } = await import("@tauri-apps/api/window");
+              await Window.getCurrent().hide();
+            } catch {}
           }, 0);
-          return [newTab];
+          return [];
         }
 
         if (id === activeTabId) {
@@ -427,11 +441,8 @@ const App: React.FC = () => {
       const fileContent = await invoke<string>("read_file", { path });
       addRecentFile(path);
 
-      // Open in current tab if it's a clean untitled tab, else new tab
-      const isCleanUntitled = !filePath && !dirty;
-      if (isCleanUntitled) {
-        loadDocContent(fileContent, path);
-        syncTabMeta(activeTabId, { filePath: path, dirty: false });
+      if (false) {
+        // never reuse blank tab
       } else {
         stashActiveTab();
         const id = makeTabId();
@@ -695,27 +706,28 @@ const App: React.FC = () => {
       } else if (mod && e.key === "o") {
         e.preventDefault();
         handleOpen();
-      } else if (mod && e.key === "n") {
+      } else if (mod && e.key === "t") {
         e.preventDefault();
         handleNew();
+      } else if (mod && e.key === "n") {
+        e.preventDefault();
+        handleNewWindow();
       } else if (mod && e.key === "w") {
         e.preventDefault();
-        handleCloseTab(activeTabId);
+        if (activeTabId) handleCloseTab(activeTabId);
       } else if (mod && e.key === "f") {
         e.preventDefault();
         setSearchVisible(true);
       } else if (e.key === "Tab" && e.ctrlKey && !e.metaKey) {
         e.preventDefault();
-        setTabs((prevTabs) => {
-          const idx = prevTabs.findIndex((t) => t.id === activeTabId);
-          const nextIdx = e.shiftKey
-            ? (idx - 1 + prevTabs.length) % prevTabs.length
-            : (idx + 1) % prevTabs.length;
-          const nextId = prevTabs[nextIdx].id;
-          // Switch tab via stash+restore (needs to run outside setTabs)
-          setTimeout(() => handleSelectTab(nextId), 0);
-          return prevTabs;
-        });
+        const currentTabs = tabsRef.current;
+        if (currentTabs.length < 2) return;
+        const idx = currentTabs.findIndex((t) => t.id === activeTabId);
+        if (idx === -1) return;
+        const nextIdx = e.shiftKey
+          ? (idx - 1 + currentTabs.length) % currentTabs.length
+          : (idx + 1) % currentTabs.length;
+        handleSelectTabRef.current(currentTabs[nextIdx].id);
       } else if (e.key === "Escape" && searchVisible) {
         setSearchVisible(false);
       }
@@ -723,7 +735,7 @@ const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, handleOpen, handleNew, handleCloseTab, handleSelectTab, activeTabId, searchVisible]);
+  }, [handleSave, handleOpen, handleNew, handleNewWindow, handleCloseTab, handleSelectTab, activeTabId, searchVisible]);
 
   return (
     <div className="app-container">
@@ -761,6 +773,20 @@ const App: React.FC = () => {
         onDragTabStart={(id) => setDraggingTabId(id)}
         onDragTabEnd={() => setDraggingTabId(null)}
       />
+
+      {tabs.length === 0 && (
+        <div className="welcome-screen">
+          <div className="welcome-inner">
+            <div className="welcome-logo">Bioscratch</div>
+            <div className="welcome-tagline">A minimal markdown editor</div>
+            <div className="welcome-hints">
+              <span><kbd>⌘T</kbd> New document</span>
+              <span><kbd>⌘O</kbd> Open file</span>
+              <span><kbd>⌘N</kbd> New window</span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {draggingTabId && tabs.length > 1 && (
         <div
@@ -806,19 +832,23 @@ const App: React.FC = () => {
         />
       )}
 
-      <EditorSurface
-        onMount={handleMount}
-        onChange={handleChange}
-        onSave={handleSave}
-        onSearch={handleToggleSearch}
-      />
+      <div style={tabs.length === 0 ? { display: "none" } : undefined}>
+        <EditorSurface
+          onMount={handleMount}
+          onChange={handleChange}
+          onSave={handleSave}
+          onSearch={handleToggleSearch}
+        />
+      </div>
 
-      <StatusBar
-        filePath={filePath}
-        dirty={dirty}
-        wordCount={wordCount}
-        charCount={charCount}
-      />
+      {tabs.length > 0 && (
+        <StatusBar
+          filePath={filePath}
+          dirty={dirty}
+          wordCount={wordCount}
+          charCount={charCount}
+        />
+      )}
 
       {recovery && (
         <RecoveryDialog
