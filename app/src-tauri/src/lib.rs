@@ -24,7 +24,17 @@ async fn show_open_dialog(app: tauri::AppHandle) -> Result<Option<String>, Strin
     let path = app
         .dialog()
         .file()
-        .add_filter("Text files", &["md", "markdown", "txt", "json", "yaml", "yml", "toml", "csv", "xml", "html", "css", "js", "ts", "py", "rs", "go", "java", "c", "cpp", "h", "sh", "log"])
+        .add_filter("Text files", &[
+            "md","markdown","txt","text","csv","tsv","xml","json","json5","yaml","yml","toml","ini","env","cfg","conf","config",
+            "html","htm","css","scss","sass","less","js","jsx","ts","tsx","mjs","cjs","vue","svelte","astro",
+            "c","h","cpp","cc","cxx","hpp","hxx","cs","java","kt","kts","scala","swift","m","mm","zig","v",
+            "py","pyw","rb","rbw","lua","pl","pm","php","sh","bash","zsh","fish","ps1","psm1","bat","cmd",
+            "r","rmd","jl","f","f90","f95","for",
+            "rs","go","ex","exs","erl","hrl","hs","lhs","ml","mli","fs","fsx","fsi","clj","cljs","cljc","lisp","el","vim",
+            "dockerfile","makefile","cmake","gradle","properties","plist","tf","tfvars","hcl","nix","cabal",
+            "tex","rst","adoc","org","wiki",
+            "sql","graphql","gql","proto","thrift","log","diff","patch",
+        ])
         .blocking_pick_file();
     Ok(path.map(|p| p.to_string()))
 }
