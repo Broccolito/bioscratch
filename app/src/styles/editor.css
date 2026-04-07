@@ -6,8 +6,9 @@
   width: 100%;
   max-width: 740px;
   margin: 0 auto;
-  padding: 44px 56px 110px;
-  min-height: 100%;
+  padding: 44px 56px 200px; /* extra bottom padding so short docs are still scrollable */
+  min-height: calc(100% + 1px); /* +1px forces the scroll container to be scrollable */
+  box-sizing: border-box;
 }
 
 @media (max-width: 820px) {
