@@ -15,11 +15,11 @@ const StatusBar: React.FC<StatusBarProps> = ({
 }) => {
   const displayPath = filePath
     ? filePath.split("/").slice(-2).join("/")
-    : "blank.md";
+    : "Untitled";
 
   return (
     <div className="status-bar">
-      <span className="filepath" title={filePath || "blank.md"}>
+      <span className="filepath" title={filePath || "Untitled"}>
         {displayPath}
       </span>
       {dirty && <span className="dirty-indicator">•</span>}

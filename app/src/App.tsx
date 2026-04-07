@@ -110,6 +110,10 @@ const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const initialFile = params.get("file");
       if (initialFile) {
+        // Create a tab immediately so the editor wrapper becomes visible
+        const id = makeTabId();
+        setTabs([{ id, filePath: initialFile, dirty: false }]);
+        setActiveTabId(id);
         invoke<string>("read_file", { path: initialFile })
           .then((fileContent) => {
             const state = makeEditorStateFromMarkdown(fileContent, view.state.plugins);
@@ -118,9 +122,6 @@ const App: React.FC = () => {
             setContent(fileContent);
             setDirty(false);
             lastDiskContentRef.current = fileContent;
-            setTabs((prev) =>
-              prev.map((t, i) => (i === 0 ? { ...t, filePath: initialFile } : t))
-            );
             const stats = getDocStats(markdownToDoc(fileContent, schema));
             setWordCount(stats.words);
             setCharCount(stats.chars);
@@ -795,7 +796,7 @@ const App: React.FC = () => {
         />
       )}
 
-      <div style={tabs.length === 0 ? { display: "none" } : undefined}>
+      <div style={tabs.length === 0 ? { display: "none" } : { flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <EditorSurface
           onMount={handleMount}
           onChange={handleChange}
