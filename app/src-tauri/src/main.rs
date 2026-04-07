@@ -2,5 +2,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 fn main() {
-    jottingdown_lib::run()
+    bioscrach_lib::run()
 }

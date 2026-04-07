@@ -1,12 +1,12 @@
 [package]
-name = "jottingdown"
+name = "bioscrach"
 version = "0.1.0"
-description = "Jottingdown - WYSIWYG Markdown Editor"
-authors = ["Jottingdown"]
+description = "Bioscrach - WYSIWYG Markdown Editor"
+authors = ["Bioscrach"]
 edition = "2021"
 
 [lib]
-name = "jottingdown_lib"
+name = "bioscrach_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

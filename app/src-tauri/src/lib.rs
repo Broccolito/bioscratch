@@ -24,7 +24,7 @@ async fn show_open_dialog(app: tauri::AppHandle) -> Result<Option<String>, Strin
     let path = app
         .dialog()
         .file()
-        .add_filter("Markdown", &["md", "markdown"])
+        .add_filter("Text files", &["md", "markdown", "txt", "json", "yaml", "yml", "toml", "csv", "xml", "html", "css", "js", "ts", "py", "rs", "go", "java", "c", "cpp", "h", "sh", "log"])
         .blocking_pick_file();
     Ok(path.map(|p| p.to_string()))
 }
@@ -36,6 +36,8 @@ async fn show_save_dialog(app: tauri::AppHandle) -> Result<Option<String>, Strin
         .dialog()
         .file()
         .add_filter("Markdown", &["md", "markdown"])
+        .add_filter("Plain text", &["txt"])
+        .add_filter("All files", &["*"])
         .blocking_save_file();
     Ok(path.map(|p| p.to_string()))
 }

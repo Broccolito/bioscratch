@@ -9,13 +9,11 @@ import { exportToHtml } from "./lib/export";
 import { useTheme } from "./hooks/useTheme";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useAutosave } from "./hooks/useAutosave";
-import {
-  loadAutosave,
-  deleteAutosave,
-} from "./hooks/useAutosave";
+import { loadAutosave, deleteAutosave } from "./hooks/useAutosave";
 import { invoke } from "@tauri-apps/api/core";
 
 import Toolbar from "./components/Toolbar";
+import TabBar, { TabData } from "./components/TabBar";
 import EditorSurface from "./components/EditorSurface";
 import StatusBar from "./components/StatusBar";
 import SearchBar from "./components/SearchBar";
@@ -27,15 +25,53 @@ interface RecoveryData {
   key: string;
   content: string;
   filePath: string | null;
+  tabId: string;
 }
 
-const UNTITLED_KEY = "__untitled__";
+// Stored per-tab data when a tab is not active
+interface StoredTab {
+  id: string;
+  filePath: string | null;
+  dirty: boolean;
+  content: string;
+  editorState: EditorState | null;
+}
+
+let nextTabId = 1;
+function makeTabId() {
+  return `tab-${nextTabId++}`;
+}
+
+function makeEmptyEditorState(plugins: EditorState["plugins"]): EditorState {
+  const doc = markdownToDoc("", schema);
+  return EditorState.create({ doc, plugins });
+}
+
+function makeEditorStateFromMarkdown(
+  markdown: string,
+  plugins: EditorState["plugins"]
+): EditorState {
+  const doc = markdownToDoc(markdown, schema);
+  return EditorState.create({ doc, plugins });
+}
 
 const App: React.FC = () => {
   const viewRef = useRef<EditorView | null>(null);
   const { theme, toggleTheme } = useTheme();
   const { addRecentFile } = useRecentFiles();
 
+  // Per-tab storage (inactive tabs)
+  const storedTabsRef = useRef<Map<string, StoredTab>>(new Map());
+
+  // Active tab id
+  const [activeTabId, setActiveTabId] = useState<string>(() => makeTabId());
+
+  // Tab bar metadata (derived from stored tabs + active tab)
+  const [tabs, setTabs] = useState<TabData[]>(() => [
+    { id: `tab-${nextTabId - 1}`, filePath: null, dirty: false },
+  ]);
+
+  // Active tab live state
   const [filePath, setFilePath] = useState<string | null>(null);
   const [dirty, setDirty] = useState(false);
   const [wordCount, setWordCount] = useState(0);
@@ -45,101 +81,277 @@ const App: React.FC = () => {
   const [searchVisible, setSearchVisible] = useState(false);
   const [recovery, setRecovery] = useState<RecoveryData | null>(null);
 
-  // Force re-render when view changes
-  const [, forceUpdate] = useState(0);
-
-  // Autosave hook
+  // Autosave current tab
   useAutosave(content, filePath, dirty);
 
-  // ---- Editor mount ----
-  const handleMount = useCallback((view: EditorView) => {
-    viewRef.current = view;
-    forceUpdate(n => n + 1);
-    updateStats(view);
+  // Keep tab bar in sync with active tab metadata
+  const syncTabMeta = useCallback(
+    (id: string, updates: Partial<Pick<TabData, "filePath" | "dirty">>) => {
+      setTabs((prev) =>
+        prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
+      );
+    },
+    []
+  );
 
-    // Check for autosave recovery on startup
-    const key = UNTITLED_KEY;
-    loadAutosave(key).then((saved) => {
-      if (saved) {
-        setRecovery({ key, content: saved, filePath: null });
-      }
-    }).catch(console.error);
-  }, []);
+  // ---- Editor mount ----
+  const handleMount = useCallback(
+    (view: EditorView) => {
+      viewRef.current = view;
+
+      // Check for autosave on the initial untitled tab
+      loadAutosave("__untitled__")
+        .then((saved) => {
+          if (saved) {
+            setRecovery({
+              key: "__untitled__",
+              content: saved,
+              filePath: null,
+              tabId: activeTabId,
+            });
+          }
+        })
+        .catch(console.error);
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
 
   // ---- Change handler ----
   const handleChange = useCallback(() => {
     setDirty(true);
+    syncTabMeta(activeTabId, { dirty: true });
     const view = viewRef.current;
     if (view) {
-      updateStats(view);
-      const md = docToMarkdown(view.state.doc);
-      setContent(md);
+      const stats = getDocStats(view.state.doc);
+      setWordCount(stats.words);
+      setCharCount(stats.chars);
+      setContent(docToMarkdown(view.state.doc));
     }
-  }, []);
+  }, [activeTabId, syncTabMeta]);
 
-  function updateStats(view: EditorView) {
-    const stats = getDocStats(view.state.doc);
-    setWordCount(stats.words);
-    setCharCount(stats.chars);
-  }
+  // ---- Load content into the active editor ----
+  const loadDocContent = useCallback(
+    (markdown: string, path: string | null) => {
+      const view = viewRef.current;
+      if (!view) return;
+      const newState = makeEditorStateFromMarkdown(markdown, view.state.plugins);
+      view.updateState(newState);
+      setFilePath(path);
+      setContent(markdown);
+      setDirty(false);
+      syncTabMeta(activeTabId, { filePath: path, dirty: false });
+      const stats = getDocStats(newState.doc);
+      setWordCount(stats.words);
+      setCharCount(stats.chars);
+    },
+    [activeTabId, syncTabMeta]
+  );
 
-  // ---- File operations ----
-  const loadDocContent = useCallback((markdown: string, path: string | null) => {
+  // ---- Save current tab's EditorState into storage ----
+  const stashActiveTab = useCallback(() => {
     const view = viewRef.current;
-    if (!view) return;
-
-    const doc = markdownToDoc(markdown, schema);
-    const newState = EditorState.create({
-      doc,
-      plugins: view.state.plugins,
+    storedTabsRef.current.set(activeTabId, {
+      id: activeTabId,
+      filePath,
+      dirty,
+      content,
+      editorState: view ? view.state : null,
     });
-    view.updateState(newState);
-    setFilePath(path);
-    setContent(markdown);
-    setDirty(false);
-    updateStats(view);
-  }, []);
+  }, [activeTabId, filePath, dirty, content]);
 
+  // ---- Switch to a stored tab ----
+  const restoreTab = useCallback(
+    (tabId: string) => {
+      const view = viewRef.current;
+      if (!view) return;
+
+      const stored = storedTabsRef.current.get(tabId);
+      if (stored) {
+        const state =
+          stored.editorState ??
+          makeEditorStateFromMarkdown(stored.content, view.state.plugins);
+        view.updateState(state);
+        setFilePath(stored.filePath);
+        setContent(stored.content);
+        setDirty(stored.dirty);
+        const stats = getDocStats(state.doc);
+        setWordCount(stats.words);
+        setCharCount(stats.chars);
+      } else {
+        // Brand new tab — empty document
+        const emptyState = makeEmptyEditorState(view.state.plugins);
+        view.updateState(emptyState);
+        setFilePath(null);
+        setContent("");
+        setDirty(false);
+        setWordCount(0);
+        setCharCount(0);
+      }
+    },
+    []
+  );
+
+  // ---- Select tab ----
+  const handleSelectTab = useCallback(
+    (id: string) => {
+      if (id === activeTabId) return;
+      stashActiveTab();
+      setActiveTabId(id);
+      restoreTab(id);
+    },
+    [activeTabId, stashActiveTab, restoreTab]
+  );
+
+  // ---- New tab ----
   const handleNew = useCallback(() => {
-    if (dirty) {
-      if (!confirm("You have unsaved changes. Create new document?")) return;
+    stashActiveTab();
+    const id = makeTabId();
+    const newTab: TabData = { id, filePath: null, dirty: false };
+    setTabs((prev) => [...prev, newTab]);
+    setActiveTabId(id);
+    // restoreTab will find nothing for this id and create an empty doc
+    const view = viewRef.current;
+    if (view) {
+      const emptyState = makeEmptyEditorState(view.state.plugins);
+      view.updateState(emptyState);
     }
-    loadDocContent("", null);
-  }, [dirty, loadDocContent]);
+    setFilePath(null);
+    setContent("");
+    setDirty(false);
+    setWordCount(0);
+    setCharCount(0);
+  }, [stashActiveTab]);
 
+  // ---- Close tab ----
+  const handleCloseTab = useCallback(
+    (id: string) => {
+      const tabMeta = tabs.find((t) => t.id === id);
+      const stored = storedTabsRef.current.get(id);
+      const isDirty = id === activeTabId ? dirty : stored?.dirty ?? false;
+
+      if (isDirty) {
+        const label = tabMeta?.filePath
+          ? tabMeta.filePath.split("/").pop()
+          : "Untitled";
+        if (!confirm(`"${label}" has unsaved changes. Close anyway?`)) return;
+      }
+
+      storedTabsRef.current.delete(id);
+
+      setTabs((prev) => {
+        const remaining = prev.filter((t) => t.id !== id);
+        if (remaining.length === 0) {
+          // Always keep at least one tab
+          const newId = makeTabId();
+          const newTab: TabData = { id: newId, filePath: null, dirty: false };
+          setTimeout(() => {
+            setActiveTabId(newId);
+            const view = viewRef.current;
+            if (view) {
+              view.updateState(makeEmptyEditorState(view.state.plugins));
+            }
+            setFilePath(null);
+            setContent("");
+            setDirty(false);
+            setWordCount(0);
+            setCharCount(0);
+          }, 0);
+          return [newTab];
+        }
+
+        if (id === activeTabId) {
+          // Switch to adjacent tab
+          const idx = prev.findIndex((t) => t.id === id);
+          const nextTab = remaining[Math.min(idx, remaining.length - 1)];
+          setTimeout(() => {
+            setActiveTabId(nextTab.id);
+            restoreTab(nextTab.id);
+          }, 0);
+        }
+
+        return remaining;
+      });
+    },
+    [tabs, activeTabId, dirty, restoreTab]
+  );
+
+  // ---- Open file ----
   const handleOpen = useCallback(async () => {
-    if (dirty) {
-      if (!confirm("You have unsaved changes. Open another file?")) return;
-    }
     try {
       const path = await invoke<string | null>("show_open_dialog");
       if (!path) return;
 
-      const fileContent = await invoke<string>("read_file", { path });
-
-      // Check for autosave recovery
-      const saved = await loadAutosave(path).catch(() => null);
-      if (saved && saved !== fileContent) {
-        loadDocContent(fileContent, path);
-        setRecovery({ key: path, content: saved, filePath: path });
-      } else {
-        loadDocContent(fileContent, path);
+      // Check if already open in a tab
+      const existingTab = tabs.find((t) => t.filePath === path);
+      if (existingTab) {
+        handleSelectTab(existingTab.id);
+        return;
       }
 
-      setFilePath(path);
+      const fileContent = await invoke<string>("read_file", { path });
       addRecentFile(path);
+
+      // Open in current tab if it's a clean untitled tab, else new tab
+      const isCleanUntitled = !filePath && !dirty;
+      if (isCleanUntitled) {
+        loadDocContent(fileContent, path);
+        syncTabMeta(activeTabId, { filePath: path, dirty: false });
+      } else {
+        stashActiveTab();
+        const id = makeTabId();
+        setTabs((prev) => [
+          ...prev,
+          { id, filePath: path, dirty: false },
+        ]);
+        setActiveTabId(id);
+        // Load into view
+        const view = viewRef.current;
+        if (view) {
+          const state = makeEditorStateFromMarkdown(
+            fileContent,
+            view.state.plugins
+          );
+          view.updateState(state);
+        }
+        setFilePath(path);
+        setContent(fileContent);
+        setDirty(false);
+        const stats = getDocStats(
+          markdownToDoc(fileContent, schema)
+        );
+        setWordCount(stats.words);
+        setCharCount(stats.chars);
+      }
+
+      // Check autosave
+      const saved = await loadAutosave(path).catch(() => null);
+      if (saved && saved !== fileContent) {
+        setRecovery({ key: path, content: saved, filePath: path, tabId: activeTabId });
+      }
     } catch (e) {
       console.error("Failed to open file:", e);
     }
-  }, [dirty, loadDocContent, addRecentFile]);
+  }, [
+    tabs,
+    filePath,
+    dirty,
+    activeTabId,
+    loadDocContent,
+    addRecentFile,
+    syncTabMeta,
+    stashActiveTab,
+    handleSelectTab,
+  ]);
 
+  // ---- Save ----
   const handleSave = useCallback(async () => {
     const view = viewRef.current;
     if (!view) return;
 
     const markdown = docToMarkdown(view.state.doc);
-
     let savePath = filePath;
+
     if (!savePath) {
       const path = await invoke<string | null>("show_save_dialog");
       if (!path) return;
@@ -151,15 +363,16 @@ const App: React.FC = () => {
       setFilePath(savePath);
       setDirty(false);
       setContent(markdown);
+      syncTabMeta(activeTabId, { filePath: savePath, dirty: false });
       addRecentFile(savePath);
-      // Clear autosave after successful save
       await deleteAutosave(savePath).catch(() => {});
-      await deleteAutosave(UNTITLED_KEY).catch(() => {});
+      await deleteAutosave("__untitled__").catch(() => {});
     } catch (e) {
       console.error("Failed to save:", e);
     }
-  }, [filePath, addRecentFile]);
+  }, [filePath, activeTabId, addRecentFile, syncTabMeta]);
 
+  // ---- Save As ----
   const handleSaveAs = useCallback(async () => {
     const view = viewRef.current;
     if (!view) return;
@@ -173,16 +386,21 @@ const App: React.FC = () => {
       setFilePath(path);
       setDirty(false);
       setContent(markdown);
+      syncTabMeta(activeTabId, { filePath: path, dirty: false });
       addRecentFile(path);
     } catch (e) {
       console.error("Failed to save:", e);
     }
-  }, [addRecentFile]);
+  }, [activeTabId, addRecentFile, syncTabMeta]);
 
+  // ---- Export ----
   const handleExportHtml = useCallback(async () => {
     const view = viewRef.current;
     if (!view) return;
-    await exportToHtml(view.state.doc, filePath?.split("/").pop() || "Jottingdown Document");
+    await exportToHtml(
+      view.state.doc,
+      filePath?.split("/").pop() || "Bioscrach Document"
+    );
   }, [filePath]);
 
   // ---- Recovery ----
@@ -216,6 +434,9 @@ const App: React.FC = () => {
       } else if (mod && e.key === "n") {
         e.preventDefault();
         handleNew();
+      } else if (mod && e.key === "w") {
+        e.preventDefault();
+        handleCloseTab(activeTabId);
       } else if (mod && e.key === "f") {
         e.preventDefault();
         setSearchVisible(true);
@@ -226,7 +447,7 @@ const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, handleOpen, handleNew, searchVisible]);
+  }, [handleSave, handleOpen, handleNew, handleCloseTab, activeTabId, searchVisible]);
 
   return (
     <div className="app-container">
@@ -240,6 +461,14 @@ const App: React.FC = () => {
         onToggleSearch={handleToggleSearch}
         onToggleTheme={toggleTheme}
         theme={theme}
+      />
+
+      <TabBar
+        tabs={tabs}
+        activeId={activeTabId}
+        onSelect={handleSelectTab}
+        onClose={handleCloseTab}
+        onNew={handleNew}
       />
 
       {searchVisible && (

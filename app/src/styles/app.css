@@ -1,5 +1,5 @@
 /* ======================================================
-   Jottingdown – App Layout
+   Bioscrach – App Layout
    ====================================================== */
 
 :root {
@@ -135,6 +135,116 @@ body {
 
 .toolbar-select:hover {
   border-color: var(--accent);
+}
+
+/* ---- Tab bar ---- */
+.tab-bar {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: var(--bg-toolbar);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-height: 34px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.tab-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px 0 14px;
+  min-width: 100px;
+  max-width: 200px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+  border-right: 1px solid var(--border-color);
+  flex-shrink: 0;
+  transition: background 0.1s, color 0.1s;
+  position: relative;
+}
+
+.tab:hover {
+  background: var(--toolbar-btn-hover);
+  color: var(--text-primary);
+}
+
+.tab-active {
+  background: var(--bg-editor);
+  color: var(--text-primary);
+  /* bottom border matching the editor bg removes the bar-bottom border visually */
+  border-bottom: 2px solid var(--accent);
+}
+
+.tab-label {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 34px;
+}
+
+.tab-label.tab-dirty {
+  font-style: italic;
+}
+
+.tab-close {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 16px;
+  line-height: 1;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.1s, background 0.1s;
+}
+
+.tab:hover .tab-close,
+.tab-active .tab-close {
+  opacity: 1;
+}
+
+.tab-close:hover {
+  background: var(--toolbar-btn-active);
+  color: var(--text-primary);
+}
+
+.tab-new {
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 0;
+  transition: background 0.1s, color 0.1s;
+}
+
+.tab-new:hover {
+  background: var(--toolbar-btn-hover);
+  color: var(--text-primary);
 }
 
 /* ---- Editor scroll area ---- */
