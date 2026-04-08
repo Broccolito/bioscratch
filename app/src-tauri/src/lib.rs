@@ -48,6 +48,7 @@ async fn show_save_dialog(app: tauri::AppHandle) -> Result<Option<String>, Strin
         .add_filter("Markdown", &["md", "markdown"])
         .add_filter("Plain text", &["txt"])
         .add_filter("All files", &["*"])
+        .set_file_name("blank.md")
         .blocking_save_file();
     Ok(path.map(|p| p.to_string()))
 }
@@ -211,10 +212,15 @@ fn urlencoding_simple(s: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
-        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_opener::init());
+
+    #[cfg(feature = "debug-bridge")]
+    let builder = builder.plugin(tauri_plugin_debug_bridge::init());
+
+    builder
         .invoke_handler(tauri::generate_handler![
             read_file,
             write_file,
