@@ -822,7 +822,7 @@ const App: React.FC = () => {
       {tabs.length === 0 && (
         <div className="welcome-screen">
           <div className="welcome-inner">
-            <div className="welcome-logo">Bioscratch</div>
+            <img src="/logo.png" className="welcome-logo" alt="Bioscratch" />
             <div className="welcome-tagline">A minimal markdown editor</div>
             <div className="welcome-hints">
               <span><kbd>⌘T</kbd> New document</span>

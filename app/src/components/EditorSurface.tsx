@@ -475,12 +475,15 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
     view.dom.setAttribute("autocapitalize", "sentences");
     view.dom.setAttribute("spellcheck", "false");
 
-    // Block browser/WebKit focus-navigation on Tab. Attach to document in
-    // capture phase (the only phase that reliably fires before the browser's
-    // default focus-move action). Only act when focus is inside the editor.
+    // Block browser/WebKit focus-navigation on Tab and insert \t directly.
+    // Must run in capture phase before the browser moves focus, and must
+    // stopPropagation so ProseMirror's own keydown handler doesn't double-fire.
     const trapTab = (e: KeyboardEvent) => {
-      if (e.key === "Tab" && view.dom.contains(document.activeElement)) {
+      if (e.key === "Tab" && view.hasFocus()) {
         e.preventDefault();
+        e.stopPropagation();
+        const { state } = view;
+        view.dispatch(state.tr.insertText("\t").scrollIntoView());
       }
     };
     document.addEventListener("keydown", trapTab, true);

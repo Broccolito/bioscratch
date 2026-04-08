@@ -652,12 +652,10 @@ body {
 }
 
 .welcome-logo {
-  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
-  font-size: 28px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--text-primary);
-  opacity: 0.18;
+  width: 80px;
+  height: 80px;
+  border-radius: 18px;
+  opacity: 0.85;
 }
 
 .welcome-tagline {
