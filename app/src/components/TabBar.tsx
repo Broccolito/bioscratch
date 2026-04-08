@@ -39,106 +39,114 @@ const TabBar: React.FC<TabBarProps> = ({
 }) => {
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dropBefore, setDropBefore] = useState(true);
-  const dragSourceId = useRef<string | null>(null);
-  const droppedInBarRef = useRef(false);
-  // Whether the drag went far enough outside the bar to warrant detaching
-  const leftBarRef = useRef(false);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
   const tabBarRef = useRef<HTMLDivElement>(null);
-  // document-level dragover listener attached during a tab drag
-  const docDragOverRef = useRef<((e: DragEvent) => void) | null>(null);
+
+  const startTabDrag = (e: React.MouseEvent, tabId: string) => {
+    if (e.button !== 0) return;
+    // Don't start drag when clicking the close button
+    if ((e.target as HTMLElement).closest(".tab-close")) return;
+    e.preventDefault();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let isDragging = false;
+
+    const handleMove = (ev: MouseEvent) => {
+      if (!isDragging) {
+        const dist = Math.hypot(ev.clientX - startX, ev.clientY - startY);
+        if (dist < 6) return;
+        isDragging = true;
+        setDraggingId(tabId);
+        onDragTabStart(tabId);
+      }
+
+      // Update drop-target indicator
+      const bar = tabBarRef.current;
+      if (!bar) return;
+      const tabEls = Array.from(bar.querySelectorAll<HTMLElement>("[data-tab-id]"));
+      let found = false;
+      for (const el of tabEls) {
+        if (el.dataset.tabId === tabId) continue;
+        const rect = el.getBoundingClientRect();
+        if (ev.clientX >= rect.left && ev.clientX <= rect.right) {
+          setDropTargetId(el.dataset.tabId!);
+          setDropBefore(ev.clientX < rect.left + rect.width / 2);
+          found = true;
+          break;
+        }
+      }
+      if (!found) setDropTargetId(null);
+    };
+
+    const handleUp = (ev: MouseEvent) => {
+      document.removeEventListener("mousemove", handleMove);
+      document.removeEventListener("mouseup", handleUp);
+      setDropTargetId(null);
+      setDraggingId(null);
+
+      if (!isDragging) {
+        // Small movement — treat as a click
+        onSelect(tabId);
+        return;
+      }
+
+      onDragTabEnd();
+
+      const bar = tabBarRef.current;
+      const barRect = bar?.getBoundingClientRect();
+
+      // Detach if dropped clearly below or above the tab bar
+      if (barRect && (ev.clientY > barRect.bottom + 30 || ev.clientY < barRect.top - 30)) {
+        if (tabs.length > 1) onDetach(tabId);
+        return;
+      }
+
+      // Reorder if dropped on another tab
+      if (bar) {
+        const tabEls = Array.from(bar.querySelectorAll<HTMLElement>("[data-tab-id]"));
+        for (const el of tabEls) {
+          if (el.dataset.tabId === tabId) continue;
+          const rect = el.getBoundingClientRect();
+          if (
+            ev.clientX >= rect.left &&
+            ev.clientX <= rect.right &&
+            ev.clientY >= rect.top - 10 &&
+            ev.clientY <= rect.bottom + 10
+          ) {
+            onReorder(tabId, el.dataset.tabId!, ev.clientX < rect.left + rect.width / 2);
+            return;
+          }
+        }
+      }
+    };
+
+    document.addEventListener("mousemove", handleMove);
+    document.addEventListener("mouseup", handleUp);
+  };
 
   return (
-    <div
-      ref={tabBarRef}
-      className="tab-bar"
-      onDragOver={(e) => {
-        if (dragSourceId.current) e.preventDefault();
-      }}
-    >
+    <div ref={tabBarRef} className="tab-bar">
       {tabs.map((tab) => {
         const isActive = tab.id === activeId;
         const isDeleted = !!(tab.filePath && deletedPaths?.has(tab.filePath));
         const isDropTarget = dropTargetId === tab.id;
+        const isDragging = draggingId === tab.id;
 
         return (
           <div
             key={tab.id}
+            data-tab-id={tab.id}
             className={[
               "tab",
               isActive ? "tab-active" : "",
+              isDragging ? "tab-dragging" : "",
               isDropTarget && dropBefore ? "tab-insert-before" : "",
               isDropTarget && !dropBefore ? "tab-insert-after" : "",
             ]
               .filter(Boolean)
               .join(" ")}
-            draggable
-            onDragStart={(e) => {
-              dragSourceId.current = tab.id;
-              droppedInBarRef.current = false;
-              leftBarRef.current = false;
-              e.dataTransfer.setData("tab-id", tab.id);
-              e.dataTransfer.effectAllowed = "move";
-              setTimeout(() => onDragTabStart(tab.id), 0);
-
-              // Track position during drag via document dragover (has correct coords)
-              const listener = (ev: DragEvent) => {
-                const bar = tabBarRef.current;
-                if (!bar) return;
-                const rect = bar.getBoundingClientRect();
-                if (
-                  ev.clientY < rect.top - 30 ||
-                  ev.clientY > rect.bottom + 30
-                ) {
-                  leftBarRef.current = true;
-                }
-              };
-              docDragOverRef.current = listener;
-              document.addEventListener("dragover", listener);
-            }}
-            onDragOver={(e) => {
-              if (dragSourceId.current === tab.id) return;
-              e.preventDefault();
-              e.stopPropagation();
-              e.dataTransfer.dropEffect = "move";
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              setDropTargetId(tab.id);
-              setDropBefore(e.clientX < rect.left + rect.width / 2);
-            }}
-            onDragLeave={() => {
-              setDropTargetId(null);
-            }}
-            onDrop={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              droppedInBarRef.current = true;
-              const draggedId = e.dataTransfer.getData("tab-id");
-              if (draggedId && draggedId !== tab.id) {
-                const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                onReorder(draggedId, tab.id, e.clientX < rect.left + rect.width / 2);
-              }
-              setDropTargetId(null);
-            }}
-            onDragEnd={() => {
-              // Tear down position tracker
-              if (docDragOverRef.current) {
-                document.removeEventListener("dragover", docDragOverRef.current);
-                docDragOverRef.current = null;
-              }
-
-              const wasDroppedInBar = droppedInBarRef.current;
-              const didLeaveBar = leftBarRef.current;
-
-              dragSourceId.current = null;
-              droppedInBarRef.current = false;
-              leftBarRef.current = false;
-              setDropTargetId(null);
-              onDragTabEnd();
-              // Detach only if the drag clearly left the bar area
-              if (!wasDroppedInBar && didLeaveBar && tabs.length > 1) {
-                onDetach(tab.id);
-              }
-            }}
-            onClick={() => onSelect(tab.id)}
+            onMouseDown={(e) => startTabDrag(e, tab.id)}
             title={tab.filePath || "Untitled"}
           >
             <span
