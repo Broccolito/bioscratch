@@ -40,39 +40,19 @@ const TabBar: React.FC<TabBarProps> = ({
   const [dropTargetId, setDropTargetId] = useState<string | null>(null);
   const [dropBefore, setDropBefore] = useState(true);
   const dragSourceId = useRef<string | null>(null);
-  // Track whether the drag ended on a valid in-bar drop target
   const droppedInBarRef = useRef(false);
-  // Track whether the drag actually left the tab bar area
+  // Whether the drag went far enough outside the bar to warrant detaching
   const leftBarRef = useRef(false);
   const tabBarRef = useRef<HTMLDivElement>(null);
+  // document-level dragover listener attached during a tab drag
+  const docDragOverRef = useRef<((e: DragEvent) => void) | null>(null);
 
   return (
     <div
       ref={tabBarRef}
       className="tab-bar"
       onDragOver={(e) => {
-        // Allow drop on the bar's empty space (after last tab) for reordering
         if (dragSourceId.current) e.preventDefault();
-      }}
-      onDrop={(e) => {
-        // Dropping on empty space in the bar counts as an in-bar drop (no detach)
-        if (dragSourceId.current) {
-          e.preventDefault();
-          droppedInBarRef.current = true;
-        }
-      }}
-      onDragEnter={() => {
-        // Drag came back into the bar — cancel any pending detach
-        if (dragSourceId.current) leftBarRef.current = false;
-      }}
-      onDragLeave={(e) => {
-        // Only mark as left if the drag moved to something outside the bar
-        if (
-          dragSourceId.current &&
-          !tabBarRef.current?.contains(e.relatedTarget as Node)
-        ) {
-          leftBarRef.current = true;
-        }
       }}
     >
       {tabs.map((tab) => {
@@ -99,6 +79,21 @@ const TabBar: React.FC<TabBarProps> = ({
               e.dataTransfer.setData("tab-id", tab.id);
               e.dataTransfer.effectAllowed = "move";
               setTimeout(() => onDragTabStart(tab.id), 0);
+
+              // Track position during drag via document dragover (has correct coords)
+              const listener = (ev: DragEvent) => {
+                const bar = tabBarRef.current;
+                if (!bar) return;
+                const rect = bar.getBoundingClientRect();
+                if (
+                  ev.clientY < rect.top - 30 ||
+                  ev.clientY > rect.bottom + 30
+                ) {
+                  leftBarRef.current = true;
+                }
+              };
+              docDragOverRef.current = listener;
+              document.addEventListener("dragover", listener);
             }}
             onDragOver={(e) => {
               if (dragSourceId.current === tab.id) return;
@@ -124,6 +119,12 @@ const TabBar: React.FC<TabBarProps> = ({
               setDropTargetId(null);
             }}
             onDragEnd={() => {
+              // Tear down position tracker
+              if (docDragOverRef.current) {
+                document.removeEventListener("dragover", docDragOverRef.current);
+                docDragOverRef.current = null;
+              }
+
               const wasDroppedInBar = droppedInBarRef.current;
               const didLeaveBar = leftBarRef.current;
 
@@ -132,7 +133,7 @@ const TabBar: React.FC<TabBarProps> = ({
               leftBarRef.current = false;
               setDropTargetId(null);
               onDragTabEnd();
-              // Only detach if the drag actually left the tab bar
+              // Detach only if the drag clearly left the bar area
               if (!wasDroppedInBar && didLeaveBar && tabs.length > 1) {
                 onDetach(tab.id);
               }
