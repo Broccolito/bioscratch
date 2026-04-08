@@ -8,6 +8,7 @@ import { buildInputRules } from "../editor/plugins/inputRules";
 import { buildHistory } from "../editor/plugins/history";
 import { buildDropImagePlugin } from "../editor/plugins/dropImage";
 import { buildSearchPlugin } from "../editor/plugins/search";
+import { buildHighlightPlugin } from "../editor/plugins/highlight";
 import { baseKeymap } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
 import { dropCursor } from "prosemirror-dropcursor";
@@ -435,6 +436,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       buildSearchPlugin(),
       columnResizing(),
       tableEditing(),
+      buildHighlightPlugin(),
     ];
 
     const state = EditorState.create({
@@ -473,10 +475,21 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
     view.dom.setAttribute("autocapitalize", "sentences");
     view.dom.setAttribute("spellcheck", "false");
 
+    // Block browser/WebKit focus-navigation on Tab. Attach to document in
+    // capture phase (the only phase that reliably fires before the browser's
+    // default focus-move action). Only act when focus is inside the editor.
+    const trapTab = (e: KeyboardEvent) => {
+      if (e.key === "Tab" && view.dom.contains(document.activeElement)) {
+        e.preventDefault();
+      }
+    };
+    document.addEventListener("keydown", trapTab, true);
+
     viewRef.current = view;
     onMount(view);
 
     return () => {
+      document.removeEventListener("keydown", trapTab, true);
       view.destroy();
       viewRef.current = null;
     };

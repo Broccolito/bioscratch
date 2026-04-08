@@ -2,6 +2,8 @@
 
 ## Simple Table
 
+happy 
+
 | Name    | Age | City        |
 | ------- | --- | ----------- |
 | Alice   | 30  | New York    |
@@ -10,17 +12,21 @@
 
 ## Feature Comparison
 
-| Feature        | Basic | Pro   | Enterprise |
-| -------------- | ----- | ----- | ---------- |
-| Storage        | 5 GB  | 50 GB | Unlimited  |
-| Users          | 1     | 10    | Unlimited  |
-| Support        | Email | Phone | Dedicated  |
-| Custom Domain  | No    | Yes   | Yes        |
+| Feature       | Basic | Pro   | Enterprise |
+| ------------- | ----- | ----- | ---------- |
+| Storage       | 5 GB  | 50 GB | Unlimited  |
+| Users         | 1     | 10    | Unlimited  |
+| Support       | Email | Phone | Dedicated  |
+| Custom Domain | No    | Yes   | Yes        |
 
 ## Task List
 
 - [x] Write the schema
+
 - [x] Implement markdown import
+
 - [x] Implement markdown export
+
 - [ ] Add math support
+
 - [ ] Write tests

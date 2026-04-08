@@ -178,12 +178,10 @@ li.task-list-item .task-list-content {
   border-radius: 5px;
   overflow-x: auto;
   overflow-y: visible;
-  border: 1px solid var(--border-color, #d4ccc0);
 }
 
 [data-theme="dark"] .code-block-view pre {
   background: #17140f;
-  border-color: #332e27;
 }
 
 .code-block-view pre code {
@@ -192,6 +190,7 @@ li.task-list-item .task-list-content {
   line-height: 1.58;
   background: none;
   padding: 0;
+  border: none;
   border-radius: 0;
   display: block;
   min-height: 1.6em;
