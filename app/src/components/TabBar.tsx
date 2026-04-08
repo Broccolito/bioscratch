@@ -20,7 +20,7 @@ interface TabBarProps {
 }
 
 function tabLabel(tab: TabData): string {
-  if (!tab.filePath) return "Untitled";
+  if (!tab.filePath) return "Blank";
   const parts = tab.filePath.replace(/\\/g, "/").split("/");
   return parts[parts.length - 1];
 }
@@ -167,7 +167,7 @@ const TabBar: React.FC<TabBarProps> = ({
                 .filter(Boolean)
                 .join(" ")}
               onMouseDown={(e) => startTabDrag(e, tab.id)}
-              title={tab.filePath || "Untitled"}
+              title={tab.filePath || "Blank"}
             >
               <span
                 className={[

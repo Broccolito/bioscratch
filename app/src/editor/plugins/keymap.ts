@@ -210,11 +210,11 @@ export function buildKeymap(
     splitListItem(schema.nodes.task_list_item)
   );
 
-  // Always insert a literal tab character.
   keys["Tab"] = (state, dispatch) => {
     if (dispatch) dispatch(state.tr.insertText("\t").scrollIntoView());
     return true;
   };
+
   keys["Shift-Tab"] = chainCommands(
     liftListItem(schema.nodes.list_item),
     goToNextCell(-1)

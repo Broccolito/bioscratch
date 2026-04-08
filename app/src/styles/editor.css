@@ -21,6 +21,8 @@
   outline: none;
   min-height: 300px;
   caret-color: var(--text-primary, #2b2620);
+  white-space: pre-wrap;
+  tab-size: 4;
 }
 
 .ProseMirror > * + * {

@@ -417,7 +417,7 @@ const App: React.FC = () => {
       if (isDirty && !skipDirtyCheck) {
         const label = tabMeta?.filePath
           ? tabMeta.filePath.split("/").pop()
-          : "Untitled";
+          : "Blank";
         if (id === activeTabId) {
           // Active tab: offer to save first
           const saveFirst = window.confirm(

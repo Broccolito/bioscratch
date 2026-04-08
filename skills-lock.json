@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "tauri-browser": {
+      "source": "thrashr888/tauri-browser",
+      "sourceType": "github",
+      "computedHash": "390f32b8ffc004b07e69e91f4c4830ffac8793b5a5b56887d0e64b2dee162b34"
+    }
+  }
+}
