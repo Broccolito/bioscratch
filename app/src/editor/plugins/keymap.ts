@@ -211,10 +211,20 @@ export function buildKeymap(
     splitListItem(schema.nodes.task_list_item)
   );
 
+  // Insert a tab character inside code blocks, two spaces elsewhere.
+  const insertTabFallback: Command = (state, dispatch) => {
+    const { $head, empty } = state.selection;
+    if (!empty) return false;
+    const ch = $head.parent.type === schema.nodes.code_block ? "\t" : "  ";
+    if (dispatch) dispatch(state.tr.insertText(ch).scrollIntoView());
+    return true;
+  };
+
   // Tab
   keys["Tab"] = chainCommands(
     sinkListItem(schema.nodes.list_item),
-    goToNextCell(1)
+    goToNextCell(1),
+    insertTabFallback
   );
   keys["Shift-Tab"] = chainCommands(
     liftListItem(schema.nodes.list_item),
