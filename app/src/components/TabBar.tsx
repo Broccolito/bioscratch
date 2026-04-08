@@ -42,13 +42,22 @@ const TabBar: React.FC<TabBarProps> = ({
   const dragSourceId = useRef<string | null>(null);
   // Track whether the drag ended on a valid in-bar drop target
   const droppedInBarRef = useRef(false);
+  const tabBarRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
+      ref={tabBarRef}
       className="tab-bar"
       onDragOver={(e) => {
         // Allow drop on the bar's empty space (after last tab) for reordering
         if (dragSourceId.current) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        // Dropping on empty space in the bar counts as an in-bar drop (no detach)
+        if (dragSourceId.current) {
+          e.preventDefault();
+          droppedInBarRef.current = true;
+        }
       }}
     >
       {tabs.map((tab) => {
@@ -98,14 +107,28 @@ const TabBar: React.FC<TabBarProps> = ({
               }
               setDropTargetId(null);
             }}
-            onDragEnd={() => {
+            onDragEnd={(e) => {
               const wasDroppedInBar = droppedInBarRef.current;
+
+              // Check if the drag ended clearly outside the tab bar bounds
+              const barEl = tabBarRef.current;
+              let endedOutsideBar = true;
+              if (barEl) {
+                const rect = barEl.getBoundingClientRect();
+                const THRESHOLD = 20;
+                endedOutsideBar =
+                  e.clientY < rect.top - THRESHOLD ||
+                  e.clientY > rect.bottom + THRESHOLD ||
+                  e.clientX < rect.left - THRESHOLD ||
+                  e.clientX > rect.right + THRESHOLD;
+              }
+
               dragSourceId.current = null;
               droppedInBarRef.current = false;
               setDropTargetId(null);
               onDragTabEnd();
-              // If dropped outside the tab bar and there are multiple tabs, detach
-              if (!wasDroppedInBar && tabs.length > 1) {
+              // Only detach if the tab was clearly dragged outside the tab bar
+              if (!wasDroppedInBar && endedOutsideBar && tabs.length > 1) {
                 onDetach(tab.id);
               }
             }}
