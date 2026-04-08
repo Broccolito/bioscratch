@@ -50,7 +50,7 @@ const TabBar: React.FC<TabBarProps> = ({
 
   const tabBarRef = useRef<HTMLDivElement>(null);
   // Ref mirror of dropTarget so handleUp reads the latest indicator state
-  const dropTargetRef = useRef<{ id: string; before: boolean } | null>(null);
+  const dropTargetRef = useRef<{ id: string; before: boolean } | null>(null as { id: string; before: boolean } | null);
 
   const startTabDrag = (e: React.MouseEvent, tabId: string) => {
     if (e.button !== 0) return;
@@ -108,6 +108,10 @@ const TabBar: React.FC<TabBarProps> = ({
     const handleUp = (ev: MouseEvent) => {
       document.removeEventListener("mousemove", handleMove);
       document.removeEventListener("mouseup", handleUp);
+
+      // Capture before clearing
+      const target = dropTargetRef.current;
+
       setDropTarget(null);
       setDraggingId(null);
       setDragGhost(null);
@@ -129,8 +133,7 @@ const TabBar: React.FC<TabBarProps> = ({
         return;
       }
 
-      // Reorder: use the last indicator state (exact match from mousemove)
-      const target = dropTargetRef.current;
+      // Reorder using the last indicator position from mousemove
       if (target) {
         onReorder(tabId, target.id, target.before);
       }
