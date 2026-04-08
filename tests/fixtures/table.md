@@ -2,8 +2,6 @@
 
 ## Simple Table
 
-happy 
-
 | Name    | Age | City        |
 | ------- | --- | ----------- |
 | Alice   | 30  | New York    |
