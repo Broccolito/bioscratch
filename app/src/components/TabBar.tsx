@@ -42,6 +42,8 @@ const TabBar: React.FC<TabBarProps> = ({
   const dragSourceId = useRef<string | null>(null);
   // Track whether the drag ended on a valid in-bar drop target
   const droppedInBarRef = useRef(false);
+  // Track whether the drag actually left the tab bar area
+  const leftBarRef = useRef(false);
   const tabBarRef = useRef<HTMLDivElement>(null);
 
   return (
@@ -57,6 +59,19 @@ const TabBar: React.FC<TabBarProps> = ({
         if (dragSourceId.current) {
           e.preventDefault();
           droppedInBarRef.current = true;
+        }
+      }}
+      onDragEnter={() => {
+        // Drag came back into the bar — cancel any pending detach
+        if (dragSourceId.current) leftBarRef.current = false;
+      }}
+      onDragLeave={(e) => {
+        // Only mark as left if the drag moved to something outside the bar
+        if (
+          dragSourceId.current &&
+          !tabBarRef.current?.contains(e.relatedTarget as Node)
+        ) {
+          leftBarRef.current = true;
         }
       }}
     >
@@ -80,6 +95,7 @@ const TabBar: React.FC<TabBarProps> = ({
             onDragStart={(e) => {
               dragSourceId.current = tab.id;
               droppedInBarRef.current = false;
+              leftBarRef.current = false;
               e.dataTransfer.setData("tab-id", tab.id);
               e.dataTransfer.effectAllowed = "move";
               setTimeout(() => onDragTabStart(tab.id), 0);
@@ -107,28 +123,17 @@ const TabBar: React.FC<TabBarProps> = ({
               }
               setDropTargetId(null);
             }}
-            onDragEnd={(e) => {
+            onDragEnd={() => {
               const wasDroppedInBar = droppedInBarRef.current;
-
-              // Check if the drag ended clearly outside the tab bar bounds
-              const barEl = tabBarRef.current;
-              let endedOutsideBar = true;
-              if (barEl) {
-                const rect = barEl.getBoundingClientRect();
-                const THRESHOLD = 20;
-                endedOutsideBar =
-                  e.clientY < rect.top - THRESHOLD ||
-                  e.clientY > rect.bottom + THRESHOLD ||
-                  e.clientX < rect.left - THRESHOLD ||
-                  e.clientX > rect.right + THRESHOLD;
-              }
+              const didLeaveBar = leftBarRef.current;
 
               dragSourceId.current = null;
               droppedInBarRef.current = false;
+              leftBarRef.current = false;
               setDropTargetId(null);
               onDragTabEnd();
-              // Only detach if the tab was clearly dragged outside the tab bar
-              if (!wasDroppedInBar && endedOutsideBar && tabs.length > 1) {
+              // Only detach if the drag actually left the tab bar
+              if (!wasDroppedInBar && didLeaveBar && tabs.length > 1) {
                 onDetach(tab.id);
               }
             }}
