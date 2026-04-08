@@ -20,10 +20,12 @@ interface TabBarProps {
 }
 
 function tabLabel(tab: TabData): string {
-  if (!tab.filePath) return "blank.md";
+  if (!tab.filePath) return "Untitled";
   const parts = tab.filePath.replace(/\\/g, "/").split("/");
   return parts[parts.length - 1];
 }
+
+const DETACH_THRESHOLD = 24; // px below bar bottom to trigger detach
 
 const TabBar: React.FC<TabBarProps> = ({
   tabs,
@@ -37,20 +39,30 @@ const TabBar: React.FC<TabBarProps> = ({
   onDragTabStart,
   onDragTabEnd,
 }) => {
-  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
-  const [dropBefore, setDropBefore] = useState(true);
+  const [dropTarget, setDropTarget] = useState<{ id: string; before: boolean } | null>(null);
   const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragGhost, setDragGhost] = useState<{
+    x: number;
+    y: number;
+    label: string;
+    detachReady: boolean;
+  } | null>(null);
+
   const tabBarRef = useRef<HTMLDivElement>(null);
+  // Ref mirror of dropTarget so handleUp reads the latest indicator state
+  const dropTargetRef = useRef<{ id: string; before: boolean } | null>(null);
 
   const startTabDrag = (e: React.MouseEvent, tabId: string) => {
     if (e.button !== 0) return;
-    // Don't start drag when clicking the close button
     if ((e.target as HTMLElement).closest(".tab-close")) return;
     e.preventDefault();
 
     const startX = e.clientX;
     const startY = e.clientY;
     let isDragging = false;
+
+    const tab = tabs.find((t) => t.id === tabId);
+    const label = tab ? tabLabel(tab) : tabId;
 
     const handleMove = (ev: MouseEvent) => {
       if (!isDragging) {
@@ -61,32 +73,47 @@ const TabBar: React.FC<TabBarProps> = ({
         onDragTabStart(tabId);
       }
 
-      // Update drop-target indicator
       const bar = tabBarRef.current;
+      const barRect = bar?.getBoundingClientRect();
+
+      // Ghost feedback when cursor leaves the bar
+      if (barRect && ev.clientY > barRect.bottom + 4) {
+        const detachReady = ev.clientY > barRect.bottom + DETACH_THRESHOLD;
+        setDragGhost({ x: ev.clientX, y: ev.clientY, label, detachReady });
+        dropTargetRef.current = null;
+        setDropTarget(null);
+        return;
+      }
+      setDragGhost(null);
+
+      // Update insert indicator while within the bar
       if (!bar) return;
       const tabEls = Array.from(bar.querySelectorAll<HTMLElement>("[data-tab-id]"));
-      let found = false;
+      let found: { id: string; before: boolean } | null = null;
       for (const el of tabEls) {
         if (el.dataset.tabId === tabId) continue;
         const rect = el.getBoundingClientRect();
         if (ev.clientX >= rect.left && ev.clientX <= rect.right) {
-          setDropTargetId(el.dataset.tabId!);
-          setDropBefore(ev.clientX < rect.left + rect.width / 2);
-          found = true;
+          found = {
+            id: el.dataset.tabId!,
+            before: ev.clientX < rect.left + rect.width / 2,
+          };
           break;
         }
       }
-      if (!found) setDropTargetId(null);
+      dropTargetRef.current = found;
+      setDropTarget(found);
     };
 
     const handleUp = (ev: MouseEvent) => {
       document.removeEventListener("mousemove", handleMove);
       document.removeEventListener("mouseup", handleUp);
-      setDropTargetId(null);
+      setDropTarget(null);
       setDraggingId(null);
+      setDragGhost(null);
+      dropTargetRef.current = null;
 
       if (!isDragging) {
-        // Small movement — treat as a click
         onSelect(tabId);
         return;
       }
@@ -96,28 +123,16 @@ const TabBar: React.FC<TabBarProps> = ({
       const bar = tabBarRef.current;
       const barRect = bar?.getBoundingClientRect();
 
-      // Detach if dropped clearly below or above the tab bar
-      if (barRect && (ev.clientY > barRect.bottom + 30 || ev.clientY < barRect.top - 30)) {
+      // Detach if released past the threshold below the bar
+      if (barRect && ev.clientY > barRect.bottom + DETACH_THRESHOLD) {
         if (tabs.length > 1) onDetach(tabId);
         return;
       }
 
-      // Reorder if dropped on another tab
-      if (bar) {
-        const tabEls = Array.from(bar.querySelectorAll<HTMLElement>("[data-tab-id]"));
-        for (const el of tabEls) {
-          if (el.dataset.tabId === tabId) continue;
-          const rect = el.getBoundingClientRect();
-          if (
-            ev.clientX >= rect.left &&
-            ev.clientX <= rect.right &&
-            ev.clientY >= rect.top - 10 &&
-            ev.clientY <= rect.bottom + 10
-          ) {
-            onReorder(tabId, el.dataset.tabId!, ev.clientX < rect.left + rect.width / 2);
-            return;
-          }
-        }
+      // Reorder: use the last indicator state (exact match from mousemove)
+      const target = dropTargetRef.current;
+      if (target) {
+        onReorder(tabId, target.id, target.before);
       }
     };
 
@@ -126,57 +141,69 @@ const TabBar: React.FC<TabBarProps> = ({
   };
 
   return (
-    <div ref={tabBarRef} className="tab-bar">
-      {tabs.map((tab) => {
-        const isActive = tab.id === activeId;
-        const isDeleted = !!(tab.filePath && deletedPaths?.has(tab.filePath));
-        const isDropTarget = dropTargetId === tab.id;
-        const isDragging = draggingId === tab.id;
+    <>
+      <div ref={tabBarRef} className="tab-bar">
+        {tabs.map((tab) => {
+          const isActive = tab.id === activeId;
+          const isDeleted = !!(tab.filePath && deletedPaths?.has(tab.filePath));
+          const isDragging = draggingId === tab.id;
+          const isInsertBefore = dropTarget?.id === tab.id && dropTarget.before;
+          const isInsertAfter = dropTarget?.id === tab.id && !dropTarget.before;
 
-        return (
-          <div
-            key={tab.id}
-            data-tab-id={tab.id}
-            className={[
-              "tab",
-              isActive ? "tab-active" : "",
-              isDragging ? "tab-dragging" : "",
-              isDropTarget && dropBefore ? "tab-insert-before" : "",
-              isDropTarget && !dropBefore ? "tab-insert-after" : "",
-            ]
-              .filter(Boolean)
-              .join(" ")}
-            onMouseDown={(e) => startTabDrag(e, tab.id)}
-            title={tab.filePath || "Untitled"}
-          >
-            <span
+          return (
+            <div
+              key={tab.id}
+              data-tab-id={tab.id}
               className={[
-                "tab-label",
-                tab.dirty ? "tab-dirty" : "",
-                isDeleted ? "tab-deleted" : "",
+                "tab",
+                isActive ? "tab-active" : "",
+                isDragging ? "tab-dragging" : "",
+                isInsertBefore ? "tab-insert-before" : "",
+                isInsertAfter ? "tab-insert-after" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
+              onMouseDown={(e) => startTabDrag(e, tab.id)}
+              title={tab.filePath || "Untitled"}
             >
-              {tabLabel(tab)}
-            </span>
-            <button
-              className="tab-close"
-              onClick={(e) => {
-                e.stopPropagation();
-                onClose(tab.id);
-              }}
-              title="Close tab"
-            >
-              ×
-            </button>
-          </div>
-        );
-      })}
-      <button className="tab-new" onClick={onNew} title="New tab (⌘T)">
-        +
-      </button>
-    </div>
+              <span
+                className={[
+                  "tab-label",
+                  tab.dirty ? "tab-dirty" : "",
+                  isDeleted ? "tab-deleted" : "",
+                ]
+                  .filter(Boolean)
+                  .join(" ")}
+              >
+                {tabLabel(tab)}
+              </span>
+              <button
+                className="tab-close"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose(tab.id);
+                }}
+                title="Close tab"
+              >
+                ×
+              </button>
+            </div>
+          );
+        })}
+        <button className="tab-new" onClick={onNew} title="New tab (⌘T)">
+          +
+        </button>
+      </div>
+
+      {dragGhost && (
+        <div
+          className={`tab-drag-ghost${dragGhost.detachReady ? " tab-drag-ghost-ready" : ""}`}
+          style={{ left: dragGhost.x + 14, top: dragGhost.y + 14 }}
+        >
+          {dragGhost.detachReady ? `Open in new window` : dragGhost.label}
+        </div>
+      )}
+    </>
   );
 };
 
