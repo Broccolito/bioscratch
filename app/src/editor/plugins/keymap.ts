@@ -24,45 +24,52 @@ function isMac(): boolean {
   return typeof navigator !== "undefined" && /Mac/.test(navigator.platform);
 }
 
-// Convert any $...$ patterns in the given paragraph to math_inline nodes.
-// Returns a transaction if any conversions were made, null otherwise.
-function convertInlineMathInNode(state: EditorState, nodePos: number): Transaction | null {
+// Convert $...$ and [text](url) patterns in the given paragraph to their ProseMirror
+// equivalents. Returns a transaction if any conversions were made, null otherwise.
+function convertInlinePatternsInNode(state: EditorState, nodePos: number): Transaction | null {
   const node = state.doc.nodeAt(nodePos);
   if (!node || node.type !== schema.nodes.paragraph) return null;
 
-  const MATH_RE = /\$([^$\n]+)\$/g;
-  // Collect all text runs in the paragraph with their offsets
-  const textParts: Array<{ text: string; offset: number }> = [];
-  let offset = 0;
-  node.forEach((child) => {
-    if (child.isText) {
-      textParts.push({ text: child.text!, offset });
-    }
-    offset += child.nodeSize;
-  });
-
-  // Find all $...$ matches in the full text
   const fullText = node.textContent;
-  const matches: Array<{ start: number; end: number; math: string }> = [];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const allMatches: Array<{ start: number; end: number; makeNode: () => any }> = [];
+
+  // Inline math: $...$
+  const MATH_RE = /\$([^$\n]+)\$/g;
   let m: RegExpExecArray | null;
   while ((m = MATH_RE.exec(fullText)) !== null) {
-    matches.push({ start: m.index, end: m.index + m[0].length, math: m[1] });
+    const math = m[1];
+    const start = m.index, end = m.index + m[0].length;
+    allMatches.push({ start, end, makeNode: () => schema.nodes.math_inline.create({ math }) });
   }
-  if (matches.length === 0) return null;
 
-  // Apply replacements right-to-left to preserve positions
+  // Markdown links: [text](url)
+  const LINK_RE = /\[([^\[\]]+)\]\(([^)]+)\)/g;
+  while ((m = LINK_RE.exec(fullText)) !== null) {
+    const linkText = m[1], href = m[2].trim();
+    const start = m.index, end = m.index + m[0].length;
+    allMatches.push({
+      start, end,
+      makeNode: () => schema.text(linkText, [schema.marks.link.create({ href })]),
+    });
+  }
+
+  if (allMatches.length === 0) return null;
+
+  // Process right-to-left so earlier positions stay valid; skip overlapping matches.
+  allMatches.sort((a, b) => b.start - a.start);
+  let lastStart = Infinity;
   let tr = state.tr;
-  for (let i = matches.length - 1; i >= 0; i--) {
-    const { start, end, math } = matches[i];
-    // +1 because nodePos points to the node start token, content starts at nodePos+1
-    const from = nodePos + 1 + start;
-    const to = nodePos + 1 + end;
-    tr = tr.replaceWith(from, to, schema.nodes.math_inline.create({ math }));
+  for (const { start, end, makeNode } of allMatches) {
+    if (end > lastStart) continue; // overlaps a previously processed match
+    lastStart = start;
+    // +1 because nodePos points to the node start token; content starts at nodePos+1
+    tr = tr.replaceWith(nodePos + 1 + start, nodePos + 1 + end, makeNode());
   }
   return tr;
 }
 
-// On Enter: first convert any $...$ in the current paragraph to math_inline,
+// On Enter: first convert any $...$ and [text](url) patterns in the current paragraph,
 // then check for block-level triggers (```, $$).
 const enterForMarkdownBlocks: Command = (state, dispatch) => {
   const { $head, empty } = state.selection;
@@ -74,19 +81,16 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
   const nodeStart = $head.before();
   const text = node.textContent;
 
-  // Convert any $...$ in the paragraph to math_inline first.
+  // Convert any $...$ and [text](url) patterns in the paragraph.
   // Do this regardless of cursor position.
-  // Only convert and stop here if there were math patterns but the line
-  // is NOT a block trigger — in that case let the normal Enter proceed.
-  const mathTr = convertInlineMathInNode(state, nodeStart);
-  const MATH_RE = /\$([^$\n]+)\$/;
-  const hasInlineMath = MATH_RE.test(text);
+  const conversionTr = convertInlinePatternsInNode(state, nodeStart);
+  const hasConversions = conversionTr !== null;
 
   // cursor must be at the end of the paragraph for block-level triggers
   if ($head.parentOffset !== text.length) {
-    // If there's inline math to convert, apply conversion but don't consume Enter
-    if (mathTr && hasInlineMath) {
-      if (dispatch) dispatch(mathTr);
+    // Apply any inline conversions but don't consume Enter
+    if (hasConversions) {
+      if (dispatch) dispatch(conversionTr!);
       return false; // let Enter proceed to split the block
     }
     return false;
@@ -119,10 +123,9 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
     return true;
   }
 
-  // No block trigger matched — apply any inline $...$ conversions and let
-  // the normal Enter (splitBlock) handle the rest.
-  if (mathTr && hasInlineMath) {
-    if (dispatch) dispatch(mathTr);
+  // No block trigger matched — apply inline conversions and let the normal Enter proceed.
+  if (hasConversions) {
+    if (dispatch) dispatch(conversionTr!);
     return false; // return false so Enter continues to splitBlock
   }
 

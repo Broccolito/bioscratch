@@ -6,6 +6,7 @@ import { schema } from "../editor/schema";
 import { buildKeymap } from "../editor/plugins/keymap";
 import { buildInputRules } from "../editor/plugins/inputRules";
 import { buildHistory } from "../editor/plugins/history";
+import { undo } from "prosemirror-history";
 import { buildDropImagePlugin } from "../editor/plugins/dropImage";
 import { buildSearchPlugin } from "../editor/plugins/search";
 import { buildHighlightPlugin } from "../editor/plugins/highlight";
@@ -447,6 +448,18 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
     const view = new EditorView(containerRef.current, {
       state,
 
+      // Disable macOS text features that interfere with math notation:
+      // - writingsuggestions: disables inline predictions (gray ghost text accepted
+      //   with Tab, e.g. typing "exp(pi)=" shows "23.14" in gray)
+      // - autocorrect: disables text substitution / math evaluation
+      attributes: {
+        autocorrect: "off",
+        autocomplete: "off",
+        spellcheck: "false",
+        autocapitalize: "sentences",
+        writingsuggestions: "false",
+      },
+
       nodeViews: {
         math_inline: (node, view, getPos) =>
           new MathInlineView(node, view, getPos),
@@ -467,18 +480,41 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       },
     });
 
-    // Set attributes on ProseMirror's own contenteditable div.
-    // autocorrect="off" disables macOS text replacements (e.g. pi= → 3.14).
-    // autocapitalize="sentences" lets macOS capitalize the first letter of sentences.
-    // spellcheck="false" keeps the red underlines off.
-    view.dom.setAttribute("autocorrect", "off");
-    view.dom.setAttribute("autocapitalize", "sentences");
-    view.dom.setAttribute("spellcheck", "false");
+    // Block macOS math auto-evaluation (e.g. "2pi=" → "2pi=6.28").
+    // Two layers: beforeinput to cancel it pre-change, and input to undo it
+    // post-change if macOS bypassed beforeinput (observed on macOS 15+/16).
+    const blockReplacementText = (e: Event) => {
+      if ((e as InputEvent).inputType === "insertReplacementText") {
+        e.preventDefault();
+      }
+    };
+    view.dom.addEventListener("beforeinput", blockReplacementText);
+
+    // Fallback: macOS can inject the math result via insertText with multi-char
+    // numeric data, bypassing beforeinput entirely. Detect and undo it.
+    const undoMathAutofill = (e: Event) => {
+      const ie = e as InputEvent;
+      if (
+        ie.inputType === "insertText" &&
+        typeof ie.data === "string" &&
+        ie.data.length > 1 &&
+        /^-?[0-9][0-9.]*$/.test(ie.data)
+      ) {
+        // Wait one frame for ProseMirror to process the DOM mutation,
+        // then undo it via history.
+        requestAnimationFrame(() => {
+          undo(view.state, view.dispatch);
+        });
+      }
+    };
+    view.dom.addEventListener("input", undoMathAutofill);
 
     viewRef.current = view;
     onMount(view);
 
     return () => {
+      view.dom.removeEventListener("beforeinput", blockReplacementText);
+      view.dom.removeEventListener("input", undoMathAutofill);
       view.destroy();
       viewRef.current = null;
     };

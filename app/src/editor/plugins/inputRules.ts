@@ -70,6 +70,18 @@ const hrRule = new InputRule(/^---\s$/, (state, _match, start, end) => {
 // Inline math is handled by the Enter key (see keymap.ts).
 // No immediate conversion on closing $, letting the user complete the expression first.
 
+// Markdown link: [text](url) — converts as soon as any character is typed after the closing )
+const linkRule = new InputRule(
+  /\[([^\[\]]+)\]\(([^)]+)\)(.)$/,
+  (state, match, start, end) => {
+    const [, linkText, href, trailing] = match;
+    const { tr } = state;
+    const mark = schema.marks.link.create({ href: href.trim() });
+    tr.replaceWith(start, end, [schema.text(linkText, [mark]), schema.text(trailing)]);
+    return tr;
+  }
+);
+
 export function buildInputRules() {
   return inputRules({
     rules: [
@@ -85,6 +97,7 @@ export function buildInputRules() {
       codeBlockRule,
       taskListRule,
       hrRule,
+      linkRule,
     ],
   });
 }
