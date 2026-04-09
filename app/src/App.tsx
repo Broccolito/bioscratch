@@ -767,8 +767,8 @@ const App: React.FC = () => {
   }, [filePath]);
 
   const handleExportPdf = useCallback(async () => {
-    await exportToPdf();
-  }, []);
+    await exportToPdf(filePath?.split("/").pop() || "Bioscratch Document");
+  }, [filePath]);
 
   // ---- Recovery ----
   const handleRestore = useCallback(() => {

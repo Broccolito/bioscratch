@@ -211,15 +211,23 @@ async fn export_html(path: String, html: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn show_html_save_dialog(app: tauri::AppHandle) -> Result<Option<String>, String> {
+async fn show_html_save_dialog(app: tauri::AppHandle, filename: Option<String>) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
+    let default_name = filename.unwrap_or_else(|| "document.html".to_string());
     let path = app
         .dialog()
         .file()
         .add_filter("HTML", &["html"])
-        .set_file_name("blank.html")
+        .set_file_name(&default_name)
         .blocking_save_file();
     Ok(path.map(|p| p.to_string()))
+}
+
+#[tauri::command]
+async fn write_temp_html(html: String) -> Result<String, String> {
+    let temp_path = std::env::temp_dir().join("bioscratch_print.html");
+    fs::write(&temp_path, html).map_err(|e| e.to_string())?;
+    Ok(temp_path.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -290,6 +298,7 @@ pub fn run() {
             delete_autosave,
             export_html,
             show_html_save_dialog,
+            write_temp_html,
             open_url,
             open_new_window,
             list_user_themes,
