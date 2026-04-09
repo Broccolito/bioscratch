@@ -1,6 +1,6 @@
 <p align="center"><img src="logo.png" alt="Bioscratch Logo" width="80" /></p>
 
-# Bioscratch
+<h1 align="center">Bioscratch</h1>
 
 <p align="center">A What You See Is What You Get (WYSIWYG) Markdown editor built for researchers, data scientists, and AI engineers — for humans and agents alike.</p>
 
