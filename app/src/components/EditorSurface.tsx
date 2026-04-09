@@ -12,6 +12,7 @@ import { buildImageRenderPlugin } from "../editor/plugins/imageRender";
 import { buildSearchPlugin } from "../editor/plugins/search";
 import { buildHighlightPlugin } from "../editor/plugins/highlight";
 import { buildMermaidPlugin } from "../editor/plugins/mermaidPlugin";
+import { buildCodeOnlyPlugin } from "../editor/plugins/codeOnlyPlugin";
 import mermaid from "mermaid";
 import { baseKeymap } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
@@ -502,6 +503,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       buildDropImagePlugin(),
       buildImageRenderPlugin(filePathRef),
       buildMermaidPlugin(),
+      buildCodeOnlyPlugin(),
       buildSearchPlugin(),
       columnResizing(),
       tableEditing(),
@@ -542,7 +544,24 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       },
 
       dispatchTransaction(tr: Transaction) {
-        const newState = view.state.apply(tr);
+        let newState = view.state.apply(tr);
+
+        // For non-markdown files the doc has exactly one code_block node.
+        // Clamp any selection that escapes outside it (gap cursors, arrow keys
+        // at boundaries, clicks in padding, Ctrl+A, etc.).
+        const d = newState.doc;
+        if (d.childCount === 1 && d.child(0).type.name === "code_block") {
+          const minPos = 1;                      // first char inside block
+          const maxPos = d.content.size - 1;    // last char inside block
+          const { $from, $to } = newState.selection;
+          if ($from.pos < minPos || $to.pos > maxPos) {
+            const clampedFrom = Math.min(Math.max($from.pos, minPos), maxPos);
+            const clampedTo   = Math.min(Math.max($to.pos,   minPos), maxPos);
+            const clamped = TextSelection.create(d, clampedFrom, clampedTo);
+            newState = newState.apply(newState.tr.setSelection(clamped));
+          }
+        }
+
         view.updateState(newState);
         if (tr.docChanged) {
           onChangeRef.current();

@@ -1,0 +1,26 @@
+Bioscratch Plain Text Fixture
+==============================
+
+This file has a .txt extension and should be displayed as plain text
+with no Markdown rendering. Lines that look like headings or bold text
+are shown as-is, not formatted:
+
+# This is not a heading
+**This is not bold**
+- This is not a list item
+
+The editor shows a monospace code block view with no syntax highlighting
+and no special treatment of Markdown syntax.
+
+Some typical plain text content:
+
+  Name:    Bioscratch
+  Version: 0.1.0
+  License: MIT
+
+Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod
+tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim
+veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea
+commodo consequat.
+
+--- end of file ---

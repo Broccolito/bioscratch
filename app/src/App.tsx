@@ -1,6 +1,6 @@
 import React, { useRef, useState, useEffect, useCallback } from "react";
 import { EditorView } from "prosemirror-view";
-import { EditorState } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { schema } from "./editor/schema";
 import { markdownToDoc } from "./editor/serialization/markdownImport";
 import { docToMarkdown } from "./editor/serialization/markdownExport";
@@ -69,7 +69,8 @@ function makeEditorStateFromMarkdown(
 }
 
 /** Create an EditorState appropriate for the given file mode.
- *  For non-markdown files the entire content is placed in a single code_block. */
+ *  For non-markdown files the entire content is placed in a single code_block,
+ *  with the cursor placed at position 1 (inside the block). */
 function makeEditorStateForContent(
   content: string,
   mode: FileMode,
@@ -83,7 +84,10 @@ function makeEditorStateForContent(
   const doc = schema.node("doc", null, [
     schema.node("code_block", { language }, textContent),
   ]);
-  return EditorState.create({ doc, plugins });
+  // Position 1 is the first valid cursor position inside the code_block.
+  // The default (position 0) would place the cursor before the block opening tag.
+  const selection = TextSelection.create(doc, 1);
+  return EditorState.create({ doc, plugins, selection });
 }
 
 const App: React.FC = () => {
