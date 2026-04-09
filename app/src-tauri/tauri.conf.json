@@ -61,7 +61,10 @@
         "name": "Text Document",
         "role": "Editor"
       }
-    ]
+    ],
+    "macOS": {
+      "infoPlist": "extra-info.plist"
+    }
   },
   "plugins": {}
 }

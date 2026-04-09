@@ -1,9 +1,14 @@
 use std::fs;
-use std::sync::Mutex;
+use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 use serde::{Deserialize, Serialize};
 
-struct PendingFile(Mutex<Option<String>>);
+// Static storage so the pending file path is always accessible — even if
+// RunEvent::Opened fires before setup() has registered Tauri managed state.
+static PENDING_FILE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+fn pending_file_storage() -> &'static Mutex<Option<String>> {
+    PENDING_FILE.get_or_init(|| Mutex::new(None))
+}
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileContent {
@@ -458,8 +463,8 @@ async fn quit_app(app: tauri::AppHandle) {
 /// Called by the frontend on mount to retrieve a file path that was passed
 /// to the app via macOS "Open With" before the JS listener was ready.
 #[tauri::command]
-fn get_initial_file(state: tauri::State<PendingFile>) -> Option<String> {
-    state.0.lock().unwrap().take()
+fn get_initial_file() -> Option<String> {
+    pending_file_storage().lock().unwrap().take()
 }
 
 // ---- App entry point ----
@@ -538,8 +543,6 @@ pub fn run() {
 
             app.set_menu(menu)?;
 
-            app.manage(PendingFile(Mutex::new(None)));
-
         app.on_menu_event(|app_handle, event| {
                 match event.id().as_ref() {
                     "github" => {
@@ -592,10 +595,9 @@ pub fn run() {
                     if url.scheme() == "file" {
                         if let Ok(path) = url.to_file_path() {
                             let path_str = path.to_string_lossy().to_string();
-                            // Store so the frontend can retrieve it on mount
-                            // (handles the "launched to open a file" case).
-                            let state = _app_handle.state::<PendingFile>();
-                            *state.0.lock().unwrap() = Some(path_str.clone());
+                            // Static storage is always available, even if this
+                            // fires before setup() completes.
+                            *pending_file_storage().lock().unwrap() = Some(path_str.clone());
                             // Also emit for the "app already running" case.
                             _app_handle.emit("open-file", path_str).ok();
                         }

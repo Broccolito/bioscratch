@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- Prevent AppKit from routing file opens through NSDocumentController
+         and from restoring previous document sessions. Without this, declaring
+         CFBundleDocumentTypes causes macOS to invoke NSDocumentController's
+         document-restoration path, which crashes in Tauri (not implemented). -->
+    <key>NSQuitAlwaysKeepsWindows</key>
+    <false/>
+</dict>
+</plist>
