@@ -1,24 +1,17 @@
 import { invoke } from "@tauri-apps/api/core";
 import DOMPurify from "dompurify";
 
-export async function exportToHtml(
-  _doc: unknown,
-  title: string = "Bioscratch Document"
-): Promise<void> {
-  const path = await invoke<string | null>("show_html_save_dialog");
-  if (!path) return;
-
-  // Get rendered HTML from the editor element
+function buildHtmlBody(): string {
   const editorEl = document.querySelector(".ProseMirror");
-  let bodyHtml = "";
-  if (editorEl) {
-    bodyHtml = DOMPurify.sanitize(editorEl.innerHTML, {
-      ADD_TAGS: ["math", "mrow", "mi", "mo", "mn", "msup", "msub", "mfrac", "mspace", "mtext", "annotation", "semantics"],
-      ADD_ATTR: ["xmlns", "class", "id", "style", "aria-hidden", "focusable"],
-    });
-  }
+  if (!editorEl) return "";
+  return DOMPurify.sanitize(editorEl.innerHTML, {
+    ADD_TAGS: ["math", "mrow", "mi", "mo", "mn", "msup", "msub", "mfrac", "mspace", "mtext", "annotation", "semantics"],
+    ADD_ATTR: ["xmlns", "class", "id", "style", "aria-hidden", "focusable"],
+  });
+}
 
-  const html = `<!DOCTYPE html>
+function buildHtmlDocument(title: string, bodyHtml: string): string {
+  return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
@@ -56,11 +49,23 @@ export async function exportToHtml(
 ${bodyHtml}
 </body>
 </html>`;
+}
 
+export async function exportToHtml(
+  _doc: unknown,
+  title: string = "Bioscratch Document"
+): Promise<void> {
+  const baseName = title.replace(/\.(md|markdown|txt)$/i, "");
+  const suggestedName = `${baseName}.html`;
+  const path = await invoke<string | null>("show_html_save_dialog", { filename: suggestedName });
+  if (!path) return;
+
+  const html = buildHtmlDocument(title, buildHtmlBody());
   await invoke("export_html", { path, html });
 }
 
-export async function exportToPdf(): Promise<void> {
-  const { getCurrentWindow } = await import("@tauri-apps/api/window");
-  await getCurrentWindow().print();
+export async function exportToPdf(title: string = "Bioscratch Document"): Promise<void> {
+  const html = buildHtmlDocument(title, buildHtmlBody());
+  const tempPath = await invoke<string>("write_temp_html", { html });
+  await invoke("open_url", { url: `file://${tempPath}` });
 }
