@@ -1,6 +1,9 @@
 use std::fs;
+use std::sync::Mutex;
 use tauri::{Emitter, Manager};
 use serde::{Deserialize, Serialize};
+
+struct PendingFile(Mutex<Option<String>>);
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct FileContent {
@@ -452,6 +455,13 @@ async fn quit_app(app: tauri::AppHandle) {
     app.exit(0);
 }
 
+/// Called by the frontend on mount to retrieve a file path that was passed
+/// to the app via macOS "Open With" before the JS listener was ready.
+#[tauri::command]
+fn get_initial_file(state: tauri::State<PendingFile>) -> Option<String> {
+    state.0.lock().unwrap().take()
+}
+
 // ---- App entry point ----
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -528,7 +538,9 @@ pub fn run() {
 
             app.set_menu(menu)?;
 
-            app.on_menu_event(|app_handle, event| {
+            app.manage(PendingFile(Mutex::new(None)));
+
+        app.on_menu_event(|app_handle, event| {
                 match event.id().as_ref() {
                     "github" => {
                         use tauri_plugin_opener::OpenerExt;
@@ -566,7 +578,29 @@ pub fn run() {
             check_for_updates,
             download_and_install,
             quit_app,
+            get_initial_file,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while running tauri application")
+        .run(|_app_handle, _event| {
+            // Handle macOS "Open With" / default-app file-open events.
+            // RunEvent::Opened fires when the OS asks the app to open a file
+            // (both when the app is already running and when it was just launched).
+            #[cfg(any(target_os = "macos", target_os = "ios"))]
+            if let tauri::RunEvent::Opened { urls } = _event {
+                for url in &urls {
+                    if url.scheme() == "file" {
+                        if let Ok(path) = url.to_file_path() {
+                            let path_str = path.to_string_lossy().to_string();
+                            // Store so the frontend can retrieve it on mount
+                            // (handles the "launched to open a file" case).
+                            let state = _app_handle.state::<PendingFile>();
+                            *state.0.lock().unwrap() = Some(path_str.clone());
+                            // Also emit for the "app already running" case.
+                            _app_handle.emit("open-file", path_str).ok();
+                        }
+                    }
+                }
+            }
+        });
 }

@@ -277,6 +277,7 @@ const App: React.FC = () => {
   // Refs for menu-action event handler (avoids stale closures across re-renders)
   const handleNewRef = useRef<() => void>(() => {});
   const handleOpenRef = useRef<() => void>(() => {});
+  const openFileByPathRef = useRef<(path: string) => Promise<void>>(async () => {});
   const handleSaveAsRef = useRef<() => void>(() => {});
   const handleExportHtmlRef = useRef<() => void>(() => {});
   const handleExportPdfRef = useRef<() => void>(() => {});
@@ -708,6 +709,35 @@ const App: React.FC = () => {
   useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
   useEffect(() => { handleOpenRef.current = handleOpen; }, [handleOpen]);
 
+  // ---- Open file by path (used by OS "Open With" and default-app handler) ----
+  const openFileByPath = useCallback(async (path: string) => {
+    const existingTab = tabs.find((t) => t.filePath === path);
+    if (existingTab) {
+      handleSelectTab(existingTab.id);
+      return;
+    }
+    try {
+      const fileContent = await invoke<string>("read_file", { path });
+      addRecentFile(path);
+      const mode = getFileMode(path);
+      const language = getCodeLanguage(path);
+      if (fileContent.length > 1_000_000) {
+        setPendingLargeFile({ path, content: fileContent, mode, language });
+        return;
+      }
+      const newTabId = doOpenFile(path, fileContent, mode, language);
+      if (mode === "markdown") {
+        const saved = await loadAutosave(path).catch(() => null);
+        if (saved && saved !== fileContent) {
+          setRecovery({ key: path, content: saved, filePath: path, tabId: newTabId });
+        }
+      }
+    } catch (e) {
+      console.error("Failed to open file:", e);
+    }
+  }, [tabs, handleSelectTab, addRecentFile, doOpenFile]);
+  useEffect(() => { openFileByPathRef.current = openFileByPath; }, [openFileByPath]);
+
   // ---- Save As ----
   const handleSaveAs = useCallback(async () => {
     const view = viewRef.current;
@@ -873,6 +903,20 @@ const App: React.FC = () => {
       }
     });
     return () => { promise.then((fn) => fn()); };
+  }, []);
+
+  // ---- OS "Open With" / default-app file handler ----
+  useEffect(() => {
+    // Check for a file the OS asked us to open before the JS listener was ready
+    // (covers the "app launched to open a file" case).
+    invoke<string | null>("get_initial_file").then((path) => {
+      if (path) openFileByPathRef.current(path);
+    });
+    // Also listen for files opened while the app is already running.
+    const unlisten = listen<string>("open-file", (event) => {
+      openFileByPathRef.current(event.payload);
+    });
+    return () => { unlisten.then((fn) => fn()); };
   }, []);
 
   // ---- Export ----

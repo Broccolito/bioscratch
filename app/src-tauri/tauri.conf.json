@@ -32,6 +32,35 @@
       "icons/128x128@2x.png",
       "icons/icon.icns",
       "icons/icon.ico"
+    ],
+    "fileAssociations": [
+      {
+        "ext": ["md", "markdown", "mdown", "mkd", "mdwn", "mkdn"],
+        "name": "Markdown Document",
+        "role": "Editor"
+      },
+      {
+        "ext": [
+          "txt", "text", "log", "diff", "patch",
+          "json", "json5", "yaml", "yml", "toml", "xml", "csv", "tsv",
+          "ini", "env", "cfg", "conf", "config", "properties",
+          "html", "htm", "css", "scss", "sass", "less",
+          "js", "jsx", "ts", "tsx", "mjs", "cjs", "vue", "svelte", "astro",
+          "rs", "c", "h", "cpp", "cc", "cxx", "hpp", "hxx",
+          "cs", "java", "kt", "kts", "scala", "swift", "m", "mm", "zig", "v",
+          "py", "pyw", "rb", "rbw", "lua", "pl", "pm", "php",
+          "sh", "bash", "zsh", "fish", "ps1", "psm1", "bat", "cmd",
+          "r", "rmd", "jl", "go",
+          "ex", "exs", "erl", "hrl", "hs", "lhs", "ml", "mli",
+          "fs", "fsx", "fsi", "clj", "cljs", "cljc", "lisp", "el", "vim",
+          "tex", "rst", "adoc", "org", "wiki",
+          "sql", "graphql", "gql", "proto", "thrift",
+          "tf", "tfvars", "hcl", "nix", "cabal",
+          "f", "f90", "f95", "for"
+        ],
+        "name": "Text Document",
+        "role": "Editor"
+      }
     ]
   },
   "plugins": {}

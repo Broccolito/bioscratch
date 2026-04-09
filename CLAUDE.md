@@ -32,14 +32,14 @@ ProseMirror — WYSIWYG editing, schema, plugins, serialization
 - **`App.tsx`** — root orchestrator: tab state, file open/save, autosave polling, file-change polling, drag-drop coordination
 - **`components/EditorSurface.tsx`** — mounts the single shared `EditorView` and houses custom ProseMirror node views (`MathInlineView`, `MathBlockView`, `MermaidBlockView`). Note: all NodeViews live here, not in `schema.ts`
 - **`editor/schema.ts`** — ProseMirror schema: all nodes (headings, lists, task lists, code blocks, tables, math, images) and marks
-- **`editor/plugins/`** — keymap, inputRules (Markdown shortcuts), history, search, dropImage, highlight, imageRender (Typora-style image decoration), mermaidPlugin (cursor-active decoration for Mermaid blocks)
+- **`editor/plugins/`** — keymap, inputRules (Markdown shortcuts), history, search, dropImage, highlight, imageRender (Typora-style image decoration), mermaidPlugin (cursor-active decoration for Mermaid blocks), codeOnlyPlugin (non-Markdown file editing mode)
 - **`editor/serialization/`** — bidirectional Markdown ↔ ProseMirror doc via unified/remark ecosystem
 - **`hooks/`** — `useDocumentState` (filePath/dirty/content state + load/save logic), `useAutosave` (30s polling), `useRecentFiles` (recent file list via Tauri), `useTheme` (localStorage + CSS var application)
 - **`lib/`** — `themeLoader.ts` (YAML → CSS vars), `export.ts` (HTML export), `stats.ts` (word/char counts), `math.ts` (KaTeX helpers), `imagePaths.ts` (path resolution for local images)
 
 ### Rust backend (`app/src-tauri/src/lib.rs`)
 
-Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`add_recent_file`, `get_recent_files`, `clear_recent_files`), `export_html`, `export_pdf_pandoc`, `open_url`, `open_new_window`, `get_app_data_dir`, `list_user_themes`, `save_user_theme`, `delete_user_theme`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
+Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`read_recent_files`, `save_recent_files`), `export_html`, `export_pdf_pandoc`, `open_url`, `open_new_window`, `get_app_data_dir`, `list_user_themes`, `save_user_theme`, `delete_user_theme`, `check_for_updates`, `download_and_install`, `quit_app`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
 
 ## Key Patterns
 
@@ -63,11 +63,15 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 
 **Mermaid rendering** — `mermaidPlugin.ts` adds a node decoration (`mermaidActive: true`) when the cursor is inside a `mermaid` code block. `MermaidBlockView` in `EditorSurface.tsx` reads this decoration to toggle between source-visible (active) and rendered diagram (inactive) states — same Typora-style toggle pattern as image rendering.
 
+**File mode** — `lib/fileMode.ts` detects file type from extension and sets one of three modes: `markdown`, `plaintext`, or `code`. Code mode maps 70+ extensions to highlight.js language IDs. In code/plaintext mode, `codeOnlyPlugin` replaces the ProseMirror schema with a plain textarea-like experience.
+
+**Auto-update** — `check_for_updates` (in lib.rs) hits the GitHub releases API and compares SemVer. `download_and_install` curls the DMG to `~/Downloads/` and opens it. The `UpdateDialog` component in `components/` drives the UI for this flow.
+
 **HTML export** — Single self-contained `.html` file with KaTeX, highlight.js, and all CSS inlined. DOMPurify sanitizes content.
 
 **PDF export** — `export_pdf_pandoc` in lib.rs shells out to Pandoc with a generated temp HTML file and resolves relative image paths before conversion. Requires Pandoc installed on the host.
 
-**User themes** — In addition to the 26+ built-in YAML themes in `app/src/themes/`, users can import custom YAML theme files via `handleImportTheme()` in `App.tsx`. Custom themes are stored in `{app_data_dir}/user_themes/` via `save_user_theme` and listed/deleted via the corresponding Tauri commands. `themeLoader.ts` merges built-in (`BUILTIN_THEME_RAWS`) and user themes at runtime.
+**User themes** — In addition to the 32 built-in YAML themes in `app/src/themes/`, users can import custom YAML theme files via `handleImportTheme()` in `App.tsx`. Custom themes are stored in `{app_data_dir}/user_themes/` via `save_user_theme` and listed/deleted via the corresponding Tauri commands. `themeLoader.ts` merges built-in (`BUILTIN_THEME_RAWS`) and user themes at runtime.
 
 ## Styling Conventions
 
