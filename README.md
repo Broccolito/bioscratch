@@ -1,91 +1,122 @@
 # Bioscratch
 
-A minimal, Typora-style WYSIWYG Markdown editor built with Tauri v2, React, TypeScript, and ProseMirror.
+![Bioscratch Logo](logo.png)
+
+A What You See Is What You Get (WYSIWYG) Markdown editor built for researchers, data scientists, and AI engineers — for humans and agents alike.
+
+**[Download](https://github.com/Broccolito/bioscratch/releases)** · **[Report a Bug](https://github.com/Broccolito/bioscratch/issues)**
+
+---
+
+## Why Bioscratch?
+
+The name comes from two places: **biosketch** — the academic format where researchers document their skills, projects, and contributions — and **scratch**, as in what you see while you're writing *is* what you get, no preview pane, no mode switching.
+
+As `skill.md` files become a common way for researchers and engineers to represent expertise in a form that both humans and AI agents can read and parse, having a proper tool to write them starts to matter. Most Markdown editors still split the writing experience from the reading experience. Bioscratch doesn't. You type, you see. Tables render, math renders, diagrams render — right inline. The file on disk stays plain Markdown, readable by anything.
+
+---
 
 ## Features
 
-- **Multi-tab editing** — open and switch between multiple documents simultaneously
-- **WYSIWYG single-pane editor** — no split view; what you type is what you see
-- **Full Markdown round-trip** — open `.md` files, edit, and save back as clean Markdown
-- **Autosave + crash recovery** — saves every 30 seconds; prompts recovery on restart
-- **Light and dark themes**
-- **HTML export** — export to self-contained HTML with embedded styles and math
+**True WYSIWYG editing** — Headings, bold, italic, lists, tables, task lists, code blocks with syntax highlighting, inline and block math (KaTeX), and Mermaid diagrams all render as you type. Click into anything to edit the raw syntax. No split pane, no mental context-switching.
 
-### Supported content types
-- Headings (H1–H6), paragraphs
-- Bold, italic, strikethrough, inline code
-- Links, images (drag-and-drop)
-- Bullet lists, ordered lists, task lists
-- Blockquotes
-- Fenced code blocks with syntax highlighting (highlight.js)
-- Tables (GFM-style)
-- Inline math (`$...$`) and block math (`$$...$$`) via KaTeX
-- Horizontal rules
+**Opens almost anything** — `.md`, `.txt`, `.py`, `.r`, `.json`, `.yaml`, `.toml`, `.tex`, `.sql`, `.html`, `.ts`, `.go`, `.rs`, and more. Markdown-first, but works well for anything text-based.
 
-### Keyboard shortcuts
-| Action | Mac | Windows/Linux |
-|--------|-----|---------------|
-| Save | Cmd+S | Ctrl+S |
-| Open | Cmd+O | Ctrl+O |
-| New tab | Cmd+N | Ctrl+N |
-| Close tab | Cmd+W | Ctrl+W |
-| Find | Cmd+F | Ctrl+F |
-| Bold | Cmd+B | Ctrl+B |
-| Italic | Cmd+I | Ctrl+I |
-| Inline code | Cmd+` | Ctrl+` |
-| Undo | Cmd+Z | Ctrl+Z |
-| Redo | Cmd+Shift+Z | Ctrl+Shift+Z |
+**Export to HTML and PDF** — One-click export from the toolbar. **HTML export** produces a self-contained file with KaTeX math, syntax highlighting, and Mermaid diagrams bundled in. **PDF export** uses Pandoc for properly typeset output — local images, inline or block, are resolved automatically regardless of where the file lives.
 
-### Markdown input rules
-- `# ` → Heading 1, `## ` → Heading 2, etc.
-- `- ` or `* ` → Bullet list
-- `1. ` → Ordered list
-- `- [ ] ` → Task list item
-- `> ` → Blockquote
-- ` ``` ` → Code block
-- `---` → Horizontal rule
+**Mermaid diagram support** — Write flowcharts, sequence diagrams, and ERDs in fenced code blocks. They render live in the editor and carry through into HTML exports.
 
-## Tech stack
+**30+ themes, fully customizable** — Ships with themes inspired by GitHub, IBM Carbon, Material Design, Apple, Spotify, NASA, Atlassian, Twitter/X, Medium, BBC, Audi, Mailchimp, Ubuntu, Ant Design, and more — **light and dark variants for each**. Don't like any of them? Drop a YAML file in the user themes folder and it appears in the selector immediately.
+
+**Multi-tab, multi-window** — Open multiple files in tabs. **Drag a tab outside the tab bar** to detach it into its own window. Autosave runs every 30 seconds in the background, and crash recovery kicks in on next open if the autosave diverges from disk.
+
+**Free and open source** — No account, no telemetry, no subscription. MIT licensed.
+
+---
+
+## Download
+
+macOS only for now. Both chips supported:
+
+| Build | Chip |
+|---|---|
+| `Bioscratch_*_aarch64.dmg` | Apple Silicon (M1 / M2 / M3 / M4) |
+| `Bioscratch_*_x86_64.dmg` | Intel |
+
+→ [Releases page](https://github.com/Broccolito/bioscratch/releases)
+
+> **PDF export requires Pandoc.** Install it once:
+> ```bash
+> brew install pandoc
+> ```
+
+---
+
+## Keyboard Shortcuts
+
+| Action | Shortcut |
+|---|---|
+| Open file | `⌘O` |
+| Save | `⌘S` |
+| Save As | `⌘⇧S` |
+| New tab | `⌘T` |
+| Close tab | `⌘W` |
+| Find | `⌘F` |
+| Bold | `⌘B` |
+| Italic | `⌘I` |
+| Inline code | `` ⌘` `` |
+| Undo / Redo | `⌘Z` / `⌘⇧Z` |
+
+Markdown input shortcuts also work inline: `##` + space for a heading, ` ``` ` for a code block, `- [ ]` for a task list item, `---` for a horizontal rule.
+
+---
+
+## Custom Themes
+
+Themes are flat YAML files — each key maps directly to a CSS custom property on `:root`. To add your own, go to **Theme → Add Custom Theme** in the toolbar and paste something like:
+
+```yaml
+bg-editor: "#1e1e2e"
+text-primary: "#cdd6f4"
+accent: "#89b4fa"
+border: "#313244"
+```
+
+Changes apply live. Theme files persist in `{AppData}/user_themes/` and survive updates.
+
+---
+
+## Building from Source
+
+Requires [Rust](https://rustup.rs/), [Node.js ≥ 20](https://nodejs.org/), and the [Tauri v2 prerequisites](https://tauri.app/start/prerequisites/).
+
+```bash
+git clone https://github.com/Broccolito/bioscratch.git
+cd bioscratch/app
+npm install
+npm run tauri dev      # dev mode with hot reload
+npm run tauri build    # production .dmg
+```
+
+---
+
+## Stack
 
 | Layer | Technology |
-|-------|-----------|
+|---|---|
 | Desktop shell | Tauri v2 (Rust) |
 | Frontend | React 19 + TypeScript + Vite |
-| Editor | ProseMirror |
-| Markdown | unified / remark-parse / remark-gfm / remark-math |
-| Math rendering | KaTeX |
-| Code highlighting | highlight.js |
-| Tables | prosemirror-tables |
+| Editor engine | ProseMirror |
+| Markdown parsing | unified / remark / remark-gfm / remark-math |
+| Math | KaTeX |
+| Syntax highlighting | highlight.js |
+| Diagrams | Mermaid |
+| PDF export | Pandoc |
 
-## Development
+---
 
-```bash
-cd app
-npm install
-npm run tauri dev
-```
+## Developer
 
-## Build
+Bioscratch is developed and maintained by **Wanjun Gu** at the University of California, San Francisco (UCSF).
 
-```bash
-cd app
-npm run tauri build
-```
-
-## Project structure
-
-```
-app/
-  src/
-    components/       React UI components (Toolbar, TabBar, EditorSurface, StatusBar, SearchBar)
-    editor/
-      schema.ts       ProseMirror document schema
-      plugins/        Keymap, input rules, search, history, image drop
-      serialization/  Markdown import/export
-    hooks/            useTheme, useAutosave, useRecentFiles
-    lib/              Stats, export, image utilities
-    styles/           CSS (app layout, editor, markdown content)
-  src-tauri/          Rust backend — file I/O, dialogs, autosave, HTML export
-tests/
-  fixtures/           Sample Markdown files (basic, code, math, tables, mixed)
-```
+For questions, feedback, or collaboration, reach out at [wanjun.gu@ucsf.edu](mailto:wanjun.gu@ucsf.edu).
