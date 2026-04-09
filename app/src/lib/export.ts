@@ -35,7 +35,6 @@ function buildHtmlDocument(title: string, bodyHtml: string): string {
 <title>${title}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -65,7 +64,11 @@ function buildHtmlDocument(title: string, bodyHtml: string): string {
 </head>
 <body>
 ${bodyHtml}
-<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
+<script type="module">
+import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
+await mermaid.run();
+</script>
 </body>
 </html>`;
 }
@@ -98,7 +101,14 @@ function resolveImagePaths(markdown: string, docPath: string | null): string {
   });
 }
 
+/** Strip supplementary-plane Unicode (U+10000–U+10FFFF, i.e. most emoji)
+ *  so pdflatex doesn't crash with "Unicode character not set up for use". */
+function stripSupplementaryPlane(text: string): string {
+  return text.replace(/[\u{10000}-\u{10FFFF}]/gu, "");
+}
+
 export async function exportToPdf(markdown: string, filename: string, docPath: string | null): Promise<void> {
   const resolved = resolveImagePaths(markdown, docPath);
-  await invoke("export_pdf_pandoc", { markdown: resolved, filename, docPath });
+  const clean = stripSupplementaryPlane(resolved);
+  await invoke("export_pdf_pandoc", { markdown: clean, filename, docPath });
 }

@@ -108,7 +108,7 @@ flowchart LR
     A[Idea]:::violet --> B[Design]:::blue
     B --> C[Build]:::orange
     C --> D{Works?}:::yellow
-    D -->|Yes| E[Ship 🚀]:::green
+    D -->|Yes| E[Ship]:::green
     D -->|No| F[Debug]:::red
     F --> C
 
