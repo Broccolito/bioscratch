@@ -1,6 +1,10 @@
 # Bioscratch macOS Notarization
 
-Credentials are stored in `notarization_credentials.env` (gitignored). Source it or copy values as needed.
+Credentials are stored in `notarization_credentials.env` (gitignored). Source it before running any commands:
+
+```bash
+source notarization/notarization_credentials.env
+```
 
 ## Prerequisites
 
@@ -13,9 +17,9 @@ Credentials are stored in `notarization_credentials.env` (gitignored). Source it
    security import /tmp/DeveloperIDG2CA.cer -k ~/Library/Keychains/login.keychain-db
 
    # Import the UCSF Developer ID certificate
-   security import UCSF-AppleDeveloper-Main_Application.p12 \
+   security import "$P12_FILE" \
      -k ~/Library/Keychains/login.keychain-db \
-     -P "<P12_PASSPHRASE from notarization_credentials.env>" \
+     -P "$P12_PASSPHRASE" \
      -T /usr/bin/codesign \
      -T /usr/bin/productsign
    ```
@@ -47,16 +51,14 @@ Artifacts land in `app/src-tauri/target/<arch>/release/bundle/`.
 ## Sign
 
 ```bash
-IDENTITY="Developer ID Application: University of California at San Francisco (F3YYBXAFJ8)"
-
 codesign --deep --force --verify --verbose \
-  --sign "$IDENTITY" \
+  --sign "$SIGNING_IDENTITY" \
   --options runtime \
   --entitlements notarization_entitlements.plist \
   app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Bioscratch.app
 
 codesign --deep --force --verify --verbose \
-  --sign "$IDENTITY" \
+  --sign "$SIGNING_IDENTITY" \
   --options runtime \
   --entitlements notarization_entitlements.plist \
   app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Bioscratch.app
@@ -74,9 +76,9 @@ DMG_PATH="app/src-tauri/target/${ARCH}-apple-darwin/release/bundle/dmg/Bioscratc
 # Notarize the .app
 ditto -c -k --keepParent "$APP_PATH" /tmp/Bioscratch_${ARCH}.zip
 xcrun notarytool submit /tmp/Bioscratch_${ARCH}.zip \
-  --apple-id wanjungu001@gmail.com \
-  --password <APPLE_APP_SPECIFIC_PASSWORD> \
-  --team-id F3YYBXAFJ8 \
+  --apple-id "$APPLE_ID" \
+  --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+  --team-id "$APPLE_TEAM_ID" \
   --wait
 
 # Staple the .app
@@ -87,9 +89,9 @@ hdiutil create -volname "Bioscratch" -srcfolder "$APP_PATH" -ov -format UDZO "$D
 
 # Notarize and staple the DMG
 xcrun notarytool submit "$DMG_PATH" \
-  --apple-id wanjungu001@gmail.com \
-  --password <APPLE_APP_SPECIFIC_PASSWORD> \
-  --team-id F3YYBXAFJ8 \
+  --apple-id "$APPLE_ID" \
+  --password "$APPLE_APP_SPECIFIC_PASSWORD" \
+  --team-id "$APPLE_TEAM_ID" \
   --wait
 xcrun stapler staple "$DMG_PATH"
 ```
