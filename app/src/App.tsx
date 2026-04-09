@@ -6,6 +6,7 @@ import { markdownToDoc } from "./editor/serialization/markdownImport";
 import { docToMarkdown } from "./editor/serialization/markdownExport";
 import { getDocStats } from "./lib/stats";
 import { exportToHtml, exportToPdf } from "./lib/export";
+import { getFileMode, getCodeLanguage, FileMode } from "./lib/fileMode";
 import { useTheme } from "./hooks/useTheme";
 import {
   fetchUserThemes,
@@ -25,7 +26,9 @@ import EditorSurface from "./components/EditorSurface";
 import StatusBar from "./components/StatusBar";
 import SearchBar from "./components/SearchBar";
 import RecoveryDialog from "./components/RecoveryDialog";
+import LargeFileDialog from "./components/LargeFileDialog";
 import ThemeSelector from "./components/ThemeSelector";
+import UpdateDialog from "./components/UpdateDialog";
 
 import "./styles/app.css";
 
@@ -43,6 +46,8 @@ interface StoredTab {
   dirty: boolean;
   content: string;
   editorState: EditorState | null;
+  fileMode: FileMode;
+  codeLanguage: string;
 }
 
 let nextTabId = 1;
@@ -63,12 +68,31 @@ function makeEditorStateFromMarkdown(
   return EditorState.create({ doc, plugins });
 }
 
+/** Create an EditorState appropriate for the given file mode.
+ *  For non-markdown files the entire content is placed in a single code_block. */
+function makeEditorStateForContent(
+  content: string,
+  mode: FileMode,
+  language: string,
+  plugins: EditorState["plugins"]
+): EditorState {
+  if (mode === "markdown") {
+    return makeEditorStateFromMarkdown(content, plugins);
+  }
+  const textContent = content ? [schema.text(content)] : [];
+  const doc = schema.node("doc", null, [
+    schema.node("code_block", { language }, textContent),
+  ]);
+  return EditorState.create({ doc, plugins });
+}
+
 const App: React.FC = () => {
   const viewRef = useRef<EditorView | null>(null);
   // User theme state: filename → parsed vars
   const [userThemeVars, setUserThemeVars] = useState<Record<string, Record<string, string>>>({});
   const { theme, setTheme } = useTheme(userThemeVars);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const { addRecentFile } = useRecentFiles();
 
   // Load user themes on mount
@@ -121,6 +145,15 @@ const App: React.FC = () => {
   const [charCount, setCharCount] = useState(0);
   const [content, setContent] = useState("");
 
+  // Active tab file mode
+  const [fileMode, setFileMode] = useState<FileMode>("markdown");
+  const [codeLanguage, setCodeLanguage] = useState("");
+
+  // Pending large-file confirmation
+  const [pendingLargeFile, setPendingLargeFile] = useState<{
+    path: string; content: string; mode: FileMode; language: string;
+  } | null>(null);
+
   const [searchVisible, setSearchVisible] = useState(false);
   const [recovery, setRecovery] = useState<RecoveryData | null>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -132,8 +165,8 @@ const App: React.FC = () => {
   const [deletedPaths, setDeletedPaths] = useState<Set<string>>(new Set());
   const fileDeleted = !!(filePath && deletedPaths.has(filePath));
 
-  // Autosave current tab
-  useAutosave(content, filePath, dirty);
+  // Autosave current tab — only for markdown files
+  useAutosave(content, filePath, dirty && fileMode === "markdown");
 
   // Keep tab bar in sync with active tab metadata
   const syncTabMeta = useCallback(
@@ -160,13 +193,17 @@ const App: React.FC = () => {
         setActiveTabId(id);
         invoke<string>("read_file", { path: initialFile })
           .then((fileContent) => {
-            const state = makeEditorStateFromMarkdown(fileContent, view.state.plugins);
+            const mode = getFileMode(initialFile);
+            const lang = getCodeLanguage(initialFile);
+            const state = makeEditorStateForContent(fileContent, mode, lang, view.state.plugins);
             view.updateState(state);
             setFilePath(initialFile);
+            setFileMode(mode);
+            setCodeLanguage(lang);
             setContent(fileContent);
             setDirty(false);
             lastDiskContentRef.current = fileContent;
-            const stats = getDocStats(markdownToDoc(fileContent, schema));
+            const stats = getDocStats(state.doc);
             setWordCount(stats.words);
             setCharCount(stats.chars);
           })
@@ -189,21 +226,31 @@ const App: React.FC = () => {
       const stats = getDocStats(view.state.doc);
       setWordCount(stats.words);
       setCharCount(stats.chars);
-      setContent(docToMarkdown(view.state.doc));
+      if (fileModeRef.current === "markdown") {
+        setContent(docToMarkdown(view.state.doc));
+      } else {
+        // For code/plaintext: extract raw text from the single code_block node
+        setContent(view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "");
+      }
     }
   }, [activeTabId, syncTabMeta]);
 
   // ---- Load content into the active editor ----
+  // mode/language default to the current tab's values (for external reload via polling).
   const loadDocContent = useCallback(
-    (markdown: string, path: string | null) => {
+    (rawContent: string, path: string | null, mode?: FileMode, language?: string) => {
       const view = viewRef.current;
       if (!view) return;
-      const newState = makeEditorStateFromMarkdown(markdown, view.state.plugins);
+      const actualMode = mode ?? fileModeRef.current;
+      const actualLang = language ?? codeLanguageRef.current;
+      const newState = makeEditorStateForContent(rawContent, actualMode, actualLang, view.state.plugins);
       view.updateState(newState);
       setFilePath(path);
-      setContent(markdown);
+      setFileMode(actualMode);
+      setCodeLanguage(actualLang);
+      setContent(rawContent);
       setDirty(false);
-      lastDiskContentRef.current = markdown;
+      lastDiskContentRef.current = rawContent;
       syncTabMeta(activeTabId, { filePath: path, dirty: false });
       const stats = getDocStats(newState.doc);
       setWordCount(stats.words);
@@ -223,6 +270,13 @@ const App: React.FC = () => {
   const lastDiskContentRef = useRef<string>("");
   // Forward ref so handleCloseTab can call handleSave before it's declared
   const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  // Refs for menu-action event handler (avoids stale closures across re-renders)
+  const handleNewRef = useRef<() => void>(() => {});
+  const handleOpenRef = useRef<() => void>(() => {});
+  const handleSaveAsRef = useRef<() => void>(() => {});
+  const handleExportHtmlRef = useRef<() => void>(() => {});
+  const handleExportPdfRef = useRef<() => void>(() => {});
+  const handleNewWindowRef = useRef<() => void>(() => {});
 
   // Stable refs so keyboard handler always gets latest callbacks
   const tabsRef = useRef(tabs);
@@ -237,6 +291,10 @@ const App: React.FC = () => {
   useEffect(() => { filePathRef.current = filePath; }, [filePath]);
   const contentRef = useRef(content);
   useEffect(() => { contentRef.current = content; }, [content]);
+  const fileModeRef = useRef<FileMode>(fileMode);
+  useEffect(() => { fileModeRef.current = fileMode; }, [fileMode]);
+  const codeLanguageRef = useRef(codeLanguage);
+  useEffect(() => { codeLanguageRef.current = codeLanguage; }, [codeLanguage]);
 
   // ---- Save current tab's EditorState into storage ----
   const stashActiveTab = useCallback(() => {
@@ -247,8 +305,10 @@ const App: React.FC = () => {
       dirty,
       content,
       editorState: view ? view.state : null,
+      fileMode,
+      codeLanguage,
     });
-  }, [activeTabId, filePath, dirty, content]);
+  }, [activeTabId, filePath, dirty, content, fileMode, codeLanguage]);
 
   // ---- Drag-and-drop file open ----
   const TEXT_EXTENSIONS = new Set([
@@ -298,6 +358,8 @@ const App: React.FC = () => {
           dirty: dirtyRef.current,
           content: contentRef.current,
           editorState: view ? view.state : null,
+          fileMode: fileModeRef.current,
+          codeLanguage: codeLanguageRef.current,
         });
       }
 
@@ -307,6 +369,8 @@ const App: React.FC = () => {
       // active tab, so we build their EditorState now and put them in storedTabsRef.
       for (let i = 0; i < newFiles.length - 1; i++) {
         const { path, content } = newFiles[i];
+        const mode = getFileMode(path);
+        const lang = getCodeLanguage(path);
         const id = makeTabId();
         newTabMeta.push({ id, filePath: path, dirty: false });
         storedTabsRef.current.set(id, {
@@ -314,12 +378,16 @@ const App: React.FC = () => {
           filePath: path,
           dirty: false,
           content,
-          editorState: makeEditorStateFromMarkdown(content, plugins),
+          editorState: makeEditorStateForContent(content, mode, lang, plugins),
+          fileMode: mode,
+          codeLanguage: lang,
         });
       }
 
       // The last file becomes the active tab
       const { path: activePath, content: activeContent } = newFiles[newFiles.length - 1];
+      const activeMode = getFileMode(activePath);
+      const activeLang = getCodeLanguage(activePath);
       const activeId = makeTabId();
       newTabMeta.push({ id: activeId, filePath: activePath, dirty: false });
 
@@ -328,18 +396,23 @@ const App: React.FC = () => {
       filePathRef.current = activePath;
       dirtyRef.current = false;
       contentRef.current = activeContent;
+      fileModeRef.current = activeMode;
+      codeLanguageRef.current = activeLang;
 
       // Single React state batch — one render covers all new tabs
       setTabs((prev) => [...prev, ...newTabMeta]);
       setActiveTabId(activeId);
       setFilePath(activePath);
+      setFileMode(activeMode);
+      setCodeLanguage(activeLang);
       setContent(activeContent);
       setDirty(false);
 
+      const activeState = makeEditorStateForContent(activeContent, activeMode, activeLang, plugins);
       if (view) {
-        view.updateState(makeEditorStateFromMarkdown(activeContent, plugins));
+        view.updateState(activeState);
       }
-      const stats = getDocStats(markdownToDoc(activeContent, schema));
+      const stats = getDocStats(activeState.doc);
       setWordCount(stats.words);
       setCharCount(stats.chars);
     },
@@ -395,23 +468,29 @@ const App: React.FC = () => {
 
       const stored = storedTabsRef.current.get(tabId);
       if (stored) {
+        const mode = stored.fileMode ?? "markdown";
+        const lang = stored.codeLanguage ?? "";
         const state =
           stored.editorState ??
-          makeEditorStateFromMarkdown(stored.content, view.state.plugins);
+          makeEditorStateForContent(stored.content, mode, lang, view.state.plugins);
         view.updateState(state);
         setFilePath(stored.filePath);
         setContent(stored.content);
         setDirty(stored.dirty);
+        setFileMode(mode);
+        setCodeLanguage(lang);
         const stats = getDocStats(state.doc);
         setWordCount(stats.words);
         setCharCount(stats.chars);
       } else {
-        // Brand new tab — empty document
+        // Brand new tab — empty markdown document
         const emptyState = makeEmptyEditorState(view.state.plugins);
         view.updateState(emptyState);
         setFilePath(null);
         setContent("");
         setDirty(false);
+        setFileMode("markdown");
+        setCodeLanguage("");
         setWordCount(0);
         setCharCount(0);
       }
@@ -445,11 +524,14 @@ const App: React.FC = () => {
       view.updateState(emptyState);
     }
     setFilePath(null);
+    setFileMode("markdown");
+    setCodeLanguage("");
     setContent("");
     setDirty(false);
     setWordCount(0);
     setCharCount(0);
   }, [stashActiveTab]);
+  useEffect(() => { handleNewRef.current = handleNew; }, [handleNew]);
 
   // ---- Close tab ----
   const handleCloseTab = useCallback(
@@ -490,6 +572,8 @@ const App: React.FC = () => {
               view.updateState(makeEmptyEditorState(view.state.plugins));
             }
             setFilePath(null);
+            setFileMode("markdown");
+            setCodeLanguage("");
             setContent("");
             setDirty(false);
             setWordCount(0);
@@ -518,6 +602,31 @@ const App: React.FC = () => {
     [tabs, activeTabId, dirty, restoreTab]
   );
 
+  // ---- Helper: load file content into a new tab (stashes the current tab) ----
+  const doOpenFile = useCallback(
+    (path: string, fileContent: string, mode: FileMode, language: string): string => {
+      stashActiveTab();
+      const id = makeTabId();
+      const view = viewRef.current;
+      const plugins = view?.state.plugins ?? [];
+      const newState = makeEditorStateForContent(fileContent, mode, language, plugins);
+      setTabs((prev) => [...prev, { id, filePath: path, dirty: false }]);
+      setActiveTabId(id);
+      if (view) view.updateState(newState);
+      setFilePath(path);
+      setFileMode(mode);
+      setCodeLanguage(language);
+      setContent(fileContent);
+      setDirty(false);
+      lastDiskContentRef.current = fileContent;
+      const stats = getDocStats(newState.doc);
+      setWordCount(stats.words);
+      setCharCount(stats.chars);
+      return id;
+    },
+    [stashActiveTab]
+  );
+
   // ---- Open file ----
   const handleOpen = useCallback(async () => {
     try {
@@ -534,61 +643,38 @@ const App: React.FC = () => {
       const fileContent = await invoke<string>("read_file", { path });
       addRecentFile(path);
 
-      if (false) {
-        // never reuse blank tab
-      } else {
-        stashActiveTab();
-        const id = makeTabId();
-        setTabs((prev) => [
-          ...prev,
-          { id, filePath: path, dirty: false },
-        ]);
-        setActiveTabId(id);
-        // Load into view
-        const view = viewRef.current;
-        if (view) {
-          const state = makeEditorStateFromMarkdown(
-            fileContent,
-            view.state.plugins
-          );
-          view.updateState(state);
-        }
-        setFilePath(path);
-        setContent(fileContent);
-        setDirty(false);
-        const stats = getDocStats(
-          markdownToDoc(fileContent, schema)
-        );
-        setWordCount(stats.words);
-        setCharCount(stats.chars);
+      const mode = getFileMode(path);
+      const language = getCodeLanguage(path);
+
+      // Warn before loading files over 1 MB
+      if (fileContent.length > 1_000_000) {
+        setPendingLargeFile({ path, content: fileContent, mode, language });
+        return;
       }
 
-      // Check autosave
-      const saved = await loadAutosave(path).catch(() => null);
-      if (saved && saved !== fileContent) {
-        setRecovery({ key: path, content: saved, filePath: path, tabId: activeTabId });
+      const newTabId = doOpenFile(path, fileContent, mode, language);
+
+      // Check autosave (markdown only)
+      if (mode === "markdown") {
+        const saved = await loadAutosave(path).catch(() => null);
+        if (saved && saved !== fileContent) {
+          setRecovery({ key: path, content: saved, filePath: path, tabId: newTabId });
+        }
       }
     } catch (e) {
       console.error("Failed to open file:", e);
     }
-  }, [
-    tabs,
-    filePath,
-    dirty,
-    activeTabId,
-    loadDocContent,
-    addRecentFile,
-    syncTabMeta,
-    stashActiveTab,
-    handleSelectTab,
-  ]);
+  }, [tabs, activeTabId, addRecentFile, stashActiveTab, handleSelectTab, doOpenFile]);
 
   // ---- Save ----
   const handleSave = useCallback(async () => {
     const view = viewRef.current;
     if (!view) return;
 
-    const markdown = docToMarkdown(view.state.doc);
+    // For markdown, serialize from ProseMirror doc; for code/plaintext use raw content
+    const saveContent = fileModeRef.current === "markdown"
+      ? docToMarkdown(view.state.doc)
+      : (view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "");
     let savePath = filePath;
 
     if (!savePath) {
@@ -599,11 +685,11 @@ const App: React.FC = () => {
 
     try {
       suppressWatchUntilRef.current = Date.now() + 2000;
-      await invoke("write_file", { path: savePath, content: markdown });
-      lastDiskContentRef.current = markdown;
+      await invoke("write_file", { path: savePath, content: saveContent });
+      lastDiskContentRef.current = saveContent;
       setFilePath(savePath);
       setDirty(false);
-      setContent(markdown);
+      setContent(saveContent);
       setDeletedPaths((prev) => { const n = new Set(prev); n.delete(savePath); return n; });
       setExternalChange(null);
       syncTabMeta(activeTabId, { filePath: savePath, dirty: false });
@@ -616,23 +702,26 @@ const App: React.FC = () => {
   }, [filePath, activeTabId, addRecentFile, syncTabMeta]);
   // Keep ref current so handleCloseTab (declared before handleSave) can call it
   useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
+  useEffect(() => { handleOpenRef.current = handleOpen; }, [handleOpen]);
 
   // ---- Save As ----
   const handleSaveAs = useCallback(async () => {
     const view = viewRef.current;
     if (!view) return;
 
-    const markdown = docToMarkdown(view.state.doc);
+    const saveContent = fileModeRef.current === "markdown"
+      ? docToMarkdown(view.state.doc)
+      : (view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "");
     const path = await invoke<string | null>("show_save_dialog");
     if (!path) return;
 
     try {
       suppressWatchUntilRef.current = Date.now() + 2000;
-      await invoke("write_file", { path, content: markdown });
-      lastDiskContentRef.current = markdown;
+      await invoke("write_file", { path, content: saveContent });
+      lastDiskContentRef.current = saveContent;
       setFilePath(path);
       setDirty(false);
-      setContent(markdown);
+      setContent(saveContent);
       setDeletedPaths((prev) => { const n = new Set(prev); n.delete(path); return n; });
       setExternalChange(null);
       syncTabMeta(activeTabId, { filePath: path, dirty: false });
@@ -641,6 +730,7 @@ const App: React.FC = () => {
       console.error("Failed to save:", e);
     }
   }, [activeTabId, addRecentFile, syncTabMeta]);
+  useEffect(() => { handleSaveAsRef.current = handleSaveAs; }, [handleSaveAs]);
 
   // ---- Tab reorder ----
   const handleReorderTabs = useCallback((draggedId: string, targetId: string, before: boolean) => {
@@ -664,8 +754,14 @@ const App: React.FC = () => {
 
     const stored = storedTabsRef.current.get(tabId);
     const tabFilePath = tabId === activeTabId ? filePath : (stored?.filePath ?? null);
+    const tabMode = tabId === activeTabId ? fileModeRef.current : (stored?.fileMode ?? "markdown");
     const tabContent = tabId === activeTabId
-      ? (viewRef.current ? docToMarkdown(viewRef.current.state.doc) : content)
+      ? (viewRef.current
+          ? (tabMode === "markdown"
+              ? docToMarkdown(viewRef.current.state.doc)
+              : (viewRef.current.state.doc.childCount > 0
+                  ? viewRef.current.state.doc.child(0).textContent : ""))
+          : content)
       : (stored?.content ?? "");
     const tabDirty = tabId === activeTabId ? dirty : (stored?.dirty ?? false);
 
@@ -699,6 +795,7 @@ const App: React.FC = () => {
       console.error("Failed to open new window:", e);
     }
   }, []);
+  useEffect(() => { handleNewWindowRef.current = handleNewWindow; }, [handleNewWindow]);
 
   // ---- File polling: detect external modifications and deletions ----
   // Polls every 1.5 s; guaranteed to work without any native watch permissions.
@@ -756,6 +853,24 @@ const App: React.FC = () => {
     };
   }, [filePath]);
 
+  // ---- Native menu event listener ----
+  useEffect(() => {
+    const promise = listen<string>("menu-action", (event) => {
+      switch (event.payload) {
+        case "new":         handleNewRef.current(); break;
+        case "open":        handleOpenRef.current(); break;
+        case "save":        handleSaveRef.current(); break;
+        case "save-as":     handleSaveAsRef.current(); break;
+        case "export-html": handleExportHtmlRef.current(); break;
+        case "export-pdf":  handleExportPdfRef.current(); break;
+        case "theme":       setThemePickerOpen(true); break;
+        case "check-updates": setUpdateDialogOpen(true); break;
+        case "new-window":  handleNewWindowRef.current(); break;
+      }
+    });
+    return () => { promise.then((fn) => fn()); };
+  }, []);
+
   // ---- Export ----
   const handleExportHtml = useCallback(async () => {
     const view = viewRef.current;
@@ -777,6 +892,8 @@ const App: React.FC = () => {
       alert(String(err));
     }
   }, [filePath]);
+  useEffect(() => { handleExportHtmlRef.current = handleExportHtml; }, [handleExportHtml]);
+  useEffect(() => { handleExportPdfRef.current = handleExportPdf; }, [handleExportPdf]);
 
   // ---- Recovery ----
   const handleRestore = useCallback(() => {
@@ -942,6 +1059,19 @@ const App: React.FC = () => {
         />
       )}
 
+      {pendingLargeFile && (
+        <LargeFileDialog
+          path={pendingLargeFile.path}
+          byteSize={pendingLargeFile.content.length}
+          onConfirm={async () => {
+            const { path, content: fileContent, mode, language } = pendingLargeFile;
+            setPendingLargeFile(null);
+            doOpenFile(path, fileContent, mode, language);
+          }}
+          onCancel={() => setPendingLargeFile(null)}
+        />
+      )}
+
       {themePickerOpen && (
         <ThemeSelector
           currentTheme={theme}
@@ -951,6 +1081,10 @@ const App: React.FC = () => {
           onImport={handleImportTheme}
           onDeleteUserTheme={handleDeleteUserTheme}
         />
+      )}
+
+      {updateDialogOpen && (
+        <UpdateDialog onClose={() => setUpdateDialogOpen(false)} />
       )}
     </div>
   );

@@ -30,14 +30,16 @@ ProseMirror — WYSIWYG editing, schema, plugins, serialization
 ### Frontend (`app/src/`)
 
 - **`App.tsx`** — root orchestrator: tab state, file open/save, autosave polling, file-change polling, drag-drop coordination
-- **`components/EditorSurface.tsx`** — mounts the single shared `EditorView` and houses custom ProseMirror node views (`MathInlineView`, `MathBlockView`). Note: math NodeViews live here, not in `schema.ts`
+- **`components/EditorSurface.tsx`** — mounts the single shared `EditorView` and houses custom ProseMirror node views (`MathInlineView`, `MathBlockView`, `MermaidBlockView`). Note: all NodeViews live here, not in `schema.ts`
 - **`editor/schema.ts`** — ProseMirror schema: all nodes (headings, lists, task lists, code blocks, tables, math, images) and marks
-- **`editor/plugins/`** — keymap, inputRules (Markdown shortcuts), history, search, dropImage, highlight, imageRender (Typora-style image decoration)
+- **`editor/plugins/`** — keymap, inputRules (Markdown shortcuts), history, search, dropImage, highlight, imageRender (Typora-style image decoration), mermaidPlugin (cursor-active decoration for Mermaid blocks)
 - **`editor/serialization/`** — bidirectional Markdown ↔ ProseMirror doc via unified/remark ecosystem
+- **`hooks/`** — `useDocumentState` (filePath/dirty/content state + load/save logic), `useAutosave` (30s polling), `useRecentFiles` (recent file list via Tauri), `useTheme` (localStorage + CSS var application)
+- **`lib/`** — `themeLoader.ts` (YAML → CSS vars), `export.ts` (HTML export), `stats.ts` (word/char counts), `math.ts` (KaTeX helpers), `imagePaths.ts` (path resolution for local images)
 
 ### Rust backend (`app/src-tauri/src/lib.rs`)
 
-All Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files, HTML export, `open_url`, `open_new_window`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
+Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`add_recent_file`, `get_recent_files`, `clear_recent_files`), `export_html`, `export_pdf_pandoc`, `open_url`, `open_new_window`, `get_app_data_dir`, `list_user_themes`, `save_user_theme`, `delete_user_theme`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
 
 ## Key Patterns
 
@@ -59,7 +61,13 @@ All Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_di
 
 **Image rendering** — Images are stored as plain ProseMirror paragraphs containing `![alt](src)` text (not as image nodes). `imageRender.ts` is a decoration plugin that implements Typora-style rendering: when the cursor is elsewhere the source paragraph is collapsed and an image widget is shown below it; when the cursor enters the paragraph the source text becomes visible. Tauri's WebView cannot load `file://` URLs, so local images are read via `readFile()` and converted to base64 data URLs. A module-level `srcCache` prevents re-reading files on every keystroke.
 
+**Mermaid rendering** — `mermaidPlugin.ts` adds a node decoration (`mermaidActive: true`) when the cursor is inside a `mermaid` code block. `MermaidBlockView` in `EditorSurface.tsx` reads this decoration to toggle between source-visible (active) and rendered diagram (inactive) states — same Typora-style toggle pattern as image rendering.
+
 **HTML export** — Single self-contained `.html` file with KaTeX, highlight.js, and all CSS inlined. DOMPurify sanitizes content.
+
+**PDF export** — `export_pdf_pandoc` in lib.rs shells out to Pandoc with a generated temp HTML file and resolves relative image paths before conversion. Requires Pandoc installed on the host.
+
+**User themes** — In addition to the 26+ built-in YAML themes in `app/src/themes/`, users can import custom YAML theme files via `handleImportTheme()` in `App.tsx`. Custom themes are stored in `{app_data_dir}/user_themes/` via `save_user_theme` and listed/deleted via the corresponding Tauri commands. `themeLoader.ts` merges built-in (`BUILTIN_THEME_RAWS`) and user themes at runtime.
 
 ## Styling Conventions
 

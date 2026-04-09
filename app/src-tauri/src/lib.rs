@@ -1,5 +1,5 @@
 use std::fs;
-use tauri::Manager;
+use tauri::{Emitter, Manager};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -327,6 +327,133 @@ fn urlencoding_simple(s: &str) -> String {
     }).collect()
 }
 
+// ---- Update checking ----
+
+#[derive(Debug, Serialize)]
+pub struct UpdateInfo {
+    pub current_version: String,
+    pub latest_version: String,
+    pub is_update_available: bool,
+    pub download_url: Option<String>,
+    pub release_url: Option<String>,
+    pub release_notes: Option<String>,
+}
+
+#[tauri::command]
+async fn check_for_updates() -> Result<UpdateInfo, String> {
+    const CURRENT: &str = env!("CARGO_PKG_VERSION");
+
+    let output = std::process::Command::new("curl")
+        .args([
+            "-s", "--max-time", "10",
+            "-H", "Accept: application/vnd.github.v3+json",
+            "-H", "User-Agent: Bioscratch-App",
+            "https://api.github.com/repos/Broccolito/bioscratch/releases/latest",
+        ])
+        .output()
+        .map_err(|e| format!("Network error: {}", e))?;
+
+    let body = String::from_utf8_lossy(&output.stdout);
+    let json: serde_json::Value = serde_json::from_str(&body)
+        .map_err(|_| "Invalid response from update server".to_string())?;
+
+    // GitHub returns {"message": "Not Found"} when no releases exist
+    if json.get("message").is_some() {
+        return Ok(UpdateInfo {
+            current_version: CURRENT.to_string(),
+            latest_version: CURRENT.to_string(),
+            is_update_available: false,
+            download_url: None,
+            release_url: None,
+            release_notes: None,
+        });
+    }
+
+    let tag = json["tag_name"].as_str().unwrap_or("v0.1.0");
+    let latest_version = tag.trim_start_matches('v').to_string();
+    let release_url = json["html_url"].as_str().map(String::from);
+    // Truncate long release notes
+    let release_notes = json["body"].as_str().map(|s| s.chars().take(600).collect::<String>());
+
+    // Pick the best .dmg asset for the current arch
+    #[cfg(target_arch = "aarch64")]
+    let arch_hint = "aarch64";
+    #[cfg(target_arch = "x86_64")]
+    let arch_hint = "x86_64";
+    #[cfg(not(any(target_arch = "aarch64", target_arch = "x86_64")))]
+    let arch_hint = "";
+
+    let download_url = json["assets"]
+        .as_array()
+        .and_then(|assets| {
+            let arch_match = assets.iter().find(|a| {
+                let name = a["name"].as_str().unwrap_or("");
+                name.ends_with(".dmg") && (arch_hint.is_empty() || name.contains(arch_hint))
+            });
+            arch_match.or_else(|| assets.iter().find(|a| a["name"].as_str().unwrap_or("").ends_with(".dmg")))
+        })
+        .and_then(|a| a["browser_download_url"].as_str())
+        .map(String::from);
+
+    let is_update_available = version_newer(&latest_version, CURRENT);
+
+    Ok(UpdateInfo {
+        current_version: CURRENT.to_string(),
+        latest_version,
+        is_update_available,
+        download_url,
+        release_url,
+        release_notes,
+    })
+}
+
+fn version_newer(latest: &str, current: &str) -> bool {
+    let parse = |v: &str| -> Vec<u32> {
+        v.split('.').filter_map(|p| p.parse().ok()).collect()
+    };
+    let lat = parse(latest);
+    let cur = parse(current);
+    for i in 0..lat.len().max(cur.len()) {
+        let l = lat.get(i).copied().unwrap_or(0);
+        let c = cur.get(i).copied().unwrap_or(0);
+        if l > c { return true; }
+        if l < c { return false; }
+    }
+    false
+}
+
+#[tauri::command]
+async fn download_and_install(url: String) -> Result<(), String> {
+    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
+    let dest = format!("{}/Downloads/Bioscratch_update.dmg", home);
+    let dest_clone = dest.clone();
+    let url_clone = url.clone();
+
+    tauri::async_runtime::spawn_blocking(move || {
+        std::process::Command::new("curl")
+            .args(["-L", "-o", &dest_clone, &url_clone])
+            .status()
+            .map_err(|e| format!("Download failed: {}", e))
+            .and_then(|s| if s.success() { Ok(()) } else { Err("Download failed".to_string()) })
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+
+    std::process::Command::new("open")
+        .arg(&dest)
+        .spawn()
+        .map_err(|e| format!("Failed to open installer: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn quit_app(app: tauri::AppHandle) {
+    app.exit(0);
+}
+
+// ---- App entry point ----
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let builder = tauri::Builder::default()
@@ -338,6 +465,85 @@ pub fn run() {
     let builder = builder.plugin(tauri_plugin_debug_bridge::init());
 
     builder
+        .setup(|app| {
+            use tauri::menu::{MenuBuilder, MenuItem, PredefinedMenuItem, SubmenuBuilder};
+
+            // ── Bioscratch (app) menu ──────────────────────────────────────
+            let about = PredefinedMenuItem::about(app, Some("About Bioscratch"), None)?;
+            let check_updates = MenuItem::with_id(app, "check-updates", "Check for Updates…", true, None::<&str>)?;
+            let sep_a1 = PredefinedMenuItem::separator(app)?;
+            let quit = PredefinedMenuItem::quit(app, Some("Quit Bioscratch"))?;
+            let app_menu = SubmenuBuilder::new(app, "Bioscratch")
+                .items(&[&about, &check_updates, &sep_a1, &quit])
+                .build()?;
+
+            // ── File menu ─────────────────────────────────────────────────
+            let new_item     = MenuItem::with_id(app, "new",         "New Tab",        true, Some("CmdOrCtrl+T"))?;
+            let open_item    = MenuItem::with_id(app, "open",        "Open…",          true, Some("CmdOrCtrl+O"))?;
+            let sep_f1       = PredefinedMenuItem::separator(app)?;
+            let save_item    = MenuItem::with_id(app, "save",        "Save",           true, Some("CmdOrCtrl+S"))?;
+            let save_as_item = MenuItem::with_id(app, "save-as",     "Save As…",       true, Some("Shift+CmdOrCtrl+S"))?;
+            let sep_f2       = PredefinedMenuItem::separator(app)?;
+            let exp_html     = MenuItem::with_id(app, "export-html", "Export as HTML…",true, None::<&str>)?;
+            let exp_pdf      = MenuItem::with_id(app, "export-pdf",  "Export as PDF…", true, None::<&str>)?;
+            let file_menu = SubmenuBuilder::new(app, "File")
+                .items(&[&new_item, &open_item, &sep_f1, &save_item, &save_as_item, &sep_f2, &exp_html, &exp_pdf])
+                .build()?;
+
+            // ── Edit menu (OS-provided) ────────────────────────────────────
+            let undo       = PredefinedMenuItem::undo(app,       Some("Undo"))?;
+            let redo       = PredefinedMenuItem::redo(app,       Some("Redo"))?;
+            let sep_e1     = PredefinedMenuItem::separator(app)?;
+            let cut        = PredefinedMenuItem::cut(app,        Some("Cut"))?;
+            let copy       = PredefinedMenuItem::copy(app,       Some("Copy"))?;
+            let paste      = PredefinedMenuItem::paste(app,      Some("Paste"))?;
+            let select_all = PredefinedMenuItem::select_all(app, Some("Select All"))?;
+            let edit_menu = SubmenuBuilder::new(app, "Edit")
+                .items(&[&undo, &redo, &sep_e1, &cut, &copy, &paste, &select_all])
+                .build()?;
+
+            // ── View menu ─────────────────────────────────────────────────
+            let theme_item = MenuItem::with_id(app, "theme", "Theme…", true, None::<&str>)?;
+            let view_menu = SubmenuBuilder::new(app, "View")
+                .items(&[&theme_item])
+                .build()?;
+
+            // ── Window menu ───────────────────────────────────────────────
+            let minimize   = PredefinedMenuItem::minimize(app, Some("Minimize"))?;
+            let sep_w1     = PredefinedMenuItem::separator(app)?;
+            let new_window = MenuItem::with_id(app, "new-window", "New Window", true, Some("Shift+CmdOrCtrl+N"))?;
+            let window_menu = SubmenuBuilder::new(app, "Window")
+                .items(&[&minimize, &sep_w1, &new_window])
+                .build()?;
+
+            // ── Help menu ─────────────────────────────────────────────────
+            let github_item = MenuItem::with_id(app, "github", "Bioscratch on GitHub", true, None::<&str>)?;
+            let help_menu = SubmenuBuilder::new(app, "Help")
+                .items(&[&github_item])
+                .build()?;
+
+            let menu = MenuBuilder::new(app)
+                .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, &help_menu])
+                .build()?;
+
+            app.set_menu(menu)?;
+
+            app.on_menu_event(|app_handle, event| {
+                match event.id().as_ref() {
+                    "github" => {
+                        use tauri_plugin_opener::OpenerExt;
+                        app_handle.opener()
+                            .open_url("https://github.com/Broccolito/bioscratch", None::<&str>)
+                            .ok();
+                    }
+                    id => {
+                        app_handle.emit("menu-action", id).ok();
+                    }
+                }
+            });
+
+            Ok(())
+        })
         .invoke_handler(tauri::generate_handler![
             read_file,
             write_file,
@@ -357,6 +563,9 @@ pub fn run() {
             list_user_themes,
             save_user_theme,
             delete_user_theme,
+            check_for_updates,
+            download_and_install,
+            quit_app,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

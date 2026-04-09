@@ -623,6 +623,10 @@ body {
   color: var(--text-primary);
 }
 
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .no-tabs-hint {
   position: absolute;
   top: 50%;
