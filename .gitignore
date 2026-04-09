@@ -1,3 +1,8 @@
 # macOS
 .DS_Store
 **/.DS_Store
+
+# Notarization credentials — never commit these
+*.p12
+p12_credentials.txt
+notarization_credentials.env
