@@ -1,20 +1,16 @@
 # Bioscratch
 
-![Bioscratch Logo](logo.png)
+<img src="logo.png" alt="Bioscratch Logo" width="80" />
 
 A What You See Is What You Get (WYSIWYG) Markdown editor built for researchers, data scientists, and AI engineers — for humans and agents alike.
 
 **[Download](https://github.com/Broccolito/bioscratch/releases)** · **[Report a Bug](https://github.com/Broccolito/bioscratch/issues)**
-
----
 
 ## Why Bioscratch?
 
 The name comes from two places: **biosketch** — the academic format where researchers document their skills, projects, and contributions — and **scratch**, as in what you see while you're writing *is* what you get, no preview pane, no mode switching.
 
 As `skill.md` files become a common way for researchers and engineers to represent expertise in a form that both humans and AI agents can read and parse, having a proper tool to write them starts to matter. Most Markdown editors still split the writing experience from the reading experience. Bioscratch doesn't. You type, you see. Tables render, math renders, diagrams render — right inline. The file on disk stays plain Markdown, readable by anything.
-
----
 
 ## Features
 
@@ -32,8 +28,6 @@ As `skill.md` files become a common way for researchers and engineers to represe
 
 **Free and open source** — No account, no telemetry, no subscription. MIT licensed.
 
----
-
 ## Download
 
 macOS only for now. Both chips supported:
@@ -49,8 +43,6 @@ macOS only for now. Both chips supported:
 > ```bash
 > brew install pandoc
 > ```
-
----
 
 ## Keyboard Shortcuts
 
@@ -69,8 +61,6 @@ macOS only for now. Both chips supported:
 
 Markdown input shortcuts also work inline: `##` + space for a heading, ` ``` ` for a code block, `- [ ]` for a task list item, `---` for a horizontal rule.
 
----
-
 ## Custom Themes
 
 Themes are flat YAML files — each key maps directly to a CSS custom property on `:root`. To add your own, go to **Theme → Add Custom Theme** in the toolbar and paste something like:
@@ -84,8 +74,6 @@ border: "#313244"
 
 Changes apply live. Theme files persist in `{AppData}/user_themes/` and survive updates.
 
----
-
 ## Building from Source
 
 Requires [Rust](https://rustup.rs/), [Node.js ≥ 20](https://nodejs.org/), and the [Tauri v2 prerequisites](https://tauri.app/start/prerequisites/).
@@ -97,8 +85,6 @@ npm install
 npm run tauri dev      # dev mode with hot reload
 npm run tauri build    # production .dmg
 ```
-
----
 
 ## Stack
 
@@ -113,10 +99,6 @@ npm run tauri build    # production .dmg
 | Diagrams | Mermaid |
 | PDF export | Pandoc |
 
----
-
 ## Developer
 
-Bioscratch is developed and maintained by **Wanjun Gu** at the University of California, San Francisco (UCSF).
-
-For questions, feedback, or collaboration, reach out at [wanjun.gu@ucsf.edu](mailto:wanjun.gu@ucsf.edu).
+Bioscratch is developed and maintained by **Wanjun Gu** at the University of California, San Francisco (UCSF). For questions, feedback, or collaboration, reach out at [wanjun.gu@ucsf.edu](mailto:wanjun.gu@ucsf.edu).
