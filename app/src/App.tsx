@@ -767,7 +767,15 @@ const App: React.FC = () => {
   }, [filePath]);
 
   const handleExportPdf = useCallback(async () => {
-    await exportToPdf(filePath?.split("/").pop() || "Bioscratch Document");
+    const view = viewRef.current;
+    if (!view) return;
+    const markdown = docToMarkdown(view.state.doc);
+    const filename = filePath?.split("/").pop() || "document.md";
+    try {
+      await exportToPdf(markdown, filename, filePath ?? null);
+    } catch (err) {
+      alert(String(err));
+    }
   }, [filePath]);
 
   // ---- Recovery ----

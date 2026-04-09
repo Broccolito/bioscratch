@@ -4,7 +4,23 @@ import DOMPurify from "dompurify";
 function buildHtmlBody(): string {
   const editorEl = document.querySelector(".ProseMirror");
   if (!editorEl) return "";
-  return DOMPurify.sanitize(editorEl.innerHTML, {
+
+  // Clone DOM so we can transform it without affecting the live editor
+  const clone = editorEl.cloneNode(true) as HTMLElement;
+
+  // Replace .mermaid-block-view elements with <div class="mermaid"> for export.
+  // Mermaid.js (included in the <head>) will re-render them on page load.
+  clone.querySelectorAll(".mermaid-block-view").forEach((block) => {
+    const sourceCode = block.querySelector("code.language-mermaid");
+    if (sourceCode) {
+      const div = document.createElement("div");
+      div.className = "mermaid";
+      div.textContent = sourceCode.textContent || "";
+      block.replaceWith(div);
+    }
+  });
+
+  return DOMPurify.sanitize(clone.innerHTML, {
     ADD_TAGS: ["math", "mrow", "mi", "mo", "mn", "msup", "msub", "mfrac", "mspace", "mtext", "annotation", "semantics"],
     ADD_ATTR: ["xmlns", "class", "id", "style", "aria-hidden", "focusable"],
   });
@@ -19,6 +35,7 @@ function buildHtmlDocument(title: string, bodyHtml: string): string {
 <title>${title}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
 <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -43,10 +60,12 @@ function buildHtmlDocument(title: string, bodyHtml: string): string {
   img { max-width: 100%; height: auto; }
   hr { border: none; border-top: 1px solid #e1e4e8; margin: 2em 0; }
   .katex-display { margin: 1em 0; }
+  .mermaid { text-align: center; margin: 1.2em 0; }
 </style>
 </head>
 <body>
 ${bodyHtml}
+<script>mermaid.initialize({ startOnLoad: true, theme: 'neutral' });</script>
 </body>
 </html>`;
 }
@@ -64,8 +83,22 @@ export async function exportToHtml(
   await invoke("export_html", { path, html });
 }
 
-export async function exportToPdf(title: string = "Bioscratch Document"): Promise<void> {
-  const html = buildHtmlDocument(title, buildHtmlBody());
-  const tempPath = await invoke<string>("write_temp_html", { html });
-  await invoke("open_url", { url: `file://${tempPath}` });
+/** Rewrite relative image paths in markdown to absolute paths so Pandoc can
+ *  find them regardless of where the temp file is written. */
+function resolveImagePaths(markdown: string, docPath: string | null): string {
+  if (!docPath) return markdown;
+  const lastSlash = Math.max(docPath.lastIndexOf("/"), docPath.lastIndexOf("\\"));
+  const dir = docPath.substring(0, lastSlash + 1);
+  return markdown.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_match, alt, src) => {
+    const s = src.trim();
+    if (s.startsWith("http://") || s.startsWith("https://") || s.startsWith("data:") || s.startsWith("/")) {
+      return `![${alt}](${s})`;
+    }
+    return `![${alt}](${dir}${s})`;
+  });
+}
+
+export async function exportToPdf(markdown: string, filename: string, docPath: string | null): Promise<void> {
+  const resolved = resolveImagePaths(markdown, docPath);
+  await invoke("export_pdf_pandoc", { markdown: resolved, filename, docPath });
 }
