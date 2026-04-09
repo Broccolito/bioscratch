@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { EditorView } from "prosemirror-view";
 import { toggleMark, setBlockType, wrapIn } from "prosemirror-commands";
 import { wrapInList } from "prosemirror-schema-list";
@@ -13,9 +13,9 @@ interface ToolbarProps {
   onSave: () => void;
   onSaveAs: () => void;
   onExportHtml: () => void;
+  onExportPdf: () => void;
   onToggleSearch: () => void;
-  onToggleTheme: () => void;
-  theme: "light" | "dark";
+  onOpenThemeSelector: () => void;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -25,10 +25,24 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onSave,
   onSaveAs,
   onExportHtml,
+  onExportPdf,
   onToggleSearch,
-  onToggleTheme,
-  theme,
+  onOpenThemeSelector,
 }) => {
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (!exportMenuRef.current?.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [exportMenuOpen]);
+
   const exec = useCallback(
     (command: (state: any, dispatch?: any) => boolean) => {
       if (!view) return;
@@ -144,6 +158,41 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <button className="toolbar-btn" onClick={onSaveAs} title="Save As">
         Save As
       </button>
+      <div className="export-menu-wrapper" ref={exportMenuRef}>
+        <button
+          className={`toolbar-btn${exportMenuOpen ? " active" : ""}`}
+          onClick={() => setExportMenuOpen((v) => !v)}
+          title="Export document"
+        >
+          Export
+          <svg viewBox="0 0 16 16" fill="currentColor" width="9" height="9" style={{ marginLeft: 1 }}>
+            <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+          </svg>
+        </button>
+        {exportMenuOpen && (
+          <div className="export-menu">
+            <button
+              className="export-menu-item"
+              onClick={() => { onExportHtml(); setExportMenuOpen(false); }}
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13">
+                <path d="M5.854 4.854a.5.5 0 1 0-.708-.708l-3.5 3.5a.5.5 0 0 0 0 .708l3.5 3.5a.5.5 0 0 0 .708-.708L2.707 8l3.147-3.146zm4.292 0a.5.5 0 0 1 .708-.708l3.5 3.5a.5.5 0 0 1 0 .708l-3.5 3.5a.5.5 0 0 1-.708-.708L13.293 8l-3.147-3.146z"/>
+              </svg>
+              Export as HTML
+            </button>
+            <button
+              className="export-menu-item"
+              onClick={() => { onExportPdf(); setExportMenuOpen(false); }}
+            >
+              <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13">
+                <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/>
+                <path d="M4.603 14.087a.81.81 0 0 1-.438-.42c-.195-.388-.13-.776.08-1.102.198-.307.526-.568.897-.787a7.68 7.68 0 0 1 1.482-.645 19.697 19.697 0 0 0 1.062-2.227 7.269 7.269 0 0 1-.43-1.295c-.086-.4-.119-.796-.046-1.136.075-.354.274-.672.65-.823.192-.077.4-.12.602-.077a.7.7 0 0 1 .477.365c.088.164.12.356.127.538.007.188-.012.396-.047.614-.084.51-.27 1.134-.52 1.794a10.954 10.954 0 0 0 .98 1.686 5.753 5.753 0 0 1 1.334.05c.364.066.734.195.96.465.12.144.193.32.2.518.007.192-.047.382-.138.563a1.04 1.04 0 0 1-.354.416.856.856 0 0 1-.51.138c-.331-.014-.654-.196-.933-.417a5.712 5.712 0 0 1-.911-.95 11.651 11.651 0 0 0-1.997.406 11.307 11.307 0 0 1-1.02 1.51c-.292.35-.609.656-.927.787a.793.793 0 0 1-.58.029zm1.379-1.901c-.166.076-.32.156-.459.238-.328.194-.541.383-.647.547-.094.145-.096.25-.04.361.01.022.02.036.026.044a.266.266 0 0 0 .035-.012c.137-.056.355-.235.635-.572a8.18 8.18 0 0 0 .45-.606zm1.64-1.33a12.71 12.71 0 0 1 1.01-.193 11.744 11.744 0 0 1-.51-.858 20.801 20.801 0 0 1-.5 1.05zm2.446.45c.15.163.296.3.435.41.24.19.407.253.498.256a.107.107 0 0 0 .07-.015.307.307 0 0 0 .094-.125.436.436 0 0 0 .059-.2.095.095 0 0 0-.026-.063c-.052-.062-.2-.152-.518-.209a3.876 3.876 0 0 0-.612-.053zM8.078 7.8a6.7 6.7 0 0 0 .2-.828c.031-.188.043-.343.038-.465a.613.613 0 0 0-.032-.198.517.517 0 0 0-.145.04c-.087.035-.158.106-.196.283-.04.192-.03.469.046.822.024.111.054.227.09.346z"/>
+              </svg>
+              Export as PDF
+            </button>
+          </div>
+        )}
+      </div>
 
       <div className="toolbar-separator" />
 
@@ -261,29 +310,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       <div className="toolbar-separator" />
 
-      {/* Export */}
-      <button className="toolbar-btn" onClick={onExportHtml} title="Export HTML">
-        HTML
-      </button>
-
-      <div className="toolbar-separator" />
-
       {/* Search & Theme */}
       <button className="toolbar-btn icon-only" onClick={onToggleSearch} title="Search (Ctrl+F)">
         <svg viewBox="0 0 16 16" fill="currentColor">
           <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.44 1.406a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
         </svg>
       </button>
-      <button className="toolbar-btn icon-only" onClick={onToggleTheme} title="Toggle Theme">
-        {theme === "light" ? (
-          <svg viewBox="0 0 16 16" fill="currentColor">
-            <path d="M6 .278a.768.768 0 0 1 .08.858 7.208 7.208 0 0 0-.878 3.46c0 4.021 3.278 7.277 7.318 7.277.527 0 1.04-.055 1.533-.16a.787.787 0 0 1 .81.316.733.733 0 0 1-.031.893A8.349 8.349 0 0 1 8.344 16C3.734 16 0 12.286 0 7.71 0 4.266 2.114 1.312 5.124.06A.752.752 0 0 1 6 .278z"/>
-          </svg>
-        ) : (
-          <svg viewBox="0 0 16 16" fill="currentColor">
-            <path d="M8 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM8 0a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 0zm0 13a.5.5 0 0 1 .5.5v2a.5.5 0 0 1-1 0v-2A.5.5 0 0 1 8 13zm8-5a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2a.5.5 0 0 1 .5.5zM3 8a.5.5 0 0 1-.5.5h-2a.5.5 0 0 1 0-1h2A.5.5 0 0 1 3 8zm10.657-5.657a.5.5 0 0 1 0 .707l-1.414 1.415a.5.5 0 1 1-.707-.708l1.414-1.414a.5.5 0 0 1 .707 0zm-9.193 9.193a.5.5 0 0 1 0 .707L3.05 13.657a.5.5 0 0 1-.707-.707l1.414-1.414a.5.5 0 0 1 .707 0zm9.193 2.121a.5.5 0 0 1-.707 0l-1.414-1.414a.5.5 0 0 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .707zM4.464 4.465a.5.5 0 0 1-.707 0L2.343 3.05a.5.5 0 1 1 .707-.707l1.414 1.414a.5.5 0 0 1 0 .708z"/>
-          </svg>
-        )}
+      <button className="toolbar-btn" onClick={onOpenThemeSelector} title="Select Theme">
+        <svg viewBox="0 0 16 16" fill="currentColor">
+          <path d="M8 5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm4 3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM5.5 7a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm.5 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
+          <path d="M16 8c0 3.15-1.866 2.585-3.567 2.07C11.42 9.763 10.465 9.473 10 10c-.603.683-.475 1.819-.351 2.92C9.826 14.495 9.996 16 8 16a8 8 0 1 1 8-8zm-8 7c.611 0 .654-.171.655-.176.078-.146.124-.464.07-1.119-.014-.168-.037-.37-.061-.591-.052-.464-.112-1.005-.118-1.462-.01-.707.083-1.61.704-2.314.369-.42.842-.63 1.31-.766.357-.104.745-.194 1.107-.279C15.066 8.479 15 8.36 15 8a7 7 0 1 0-7 7z"/>
+        </svg>
+        Theme
       </button>
     </div>
   );

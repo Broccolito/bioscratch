@@ -1,0 +1,27 @@
+# Bioscratch – Apple HIG Dark Theme
+name: Apple Dark
+
+bg-app: "#000000"
+bg-toolbar: "#1c1c1e"
+bg-editor: "#1c1c1e"
+bg-statusbar: "#000000"
+
+text-primary: "#f5f5f7"
+text-secondary: "#98989d"
+text-muted: "#48484a"
+
+border-color: "#38383a"
+border-subtle: "#2c2c2e"
+
+accent: "#0a84ff"
+accent-hover: "#409cff"
+accent-bg: "rgba(10, 132, 255, 0.12)"
+
+toolbar-btn-hover: "#2c2c2e"
+toolbar-btn-active: "#3a3a3c"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.50)"
+shadow-md: "0 4px 12px rgba(0, 0, 0, 0.70)"
+
+code-bg: "#141414"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

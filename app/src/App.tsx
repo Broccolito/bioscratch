@@ -5,8 +5,14 @@ import { schema } from "./editor/schema";
 import { markdownToDoc } from "./editor/serialization/markdownImport";
 import { docToMarkdown } from "./editor/serialization/markdownExport";
 import { getDocStats } from "./lib/stats";
-import { exportToHtml } from "./lib/export";
+import { exportToHtml, exportToPdf } from "./lib/export";
 import { useTheme } from "./hooks/useTheme";
+import {
+  fetchUserThemes,
+  saveUserTheme,
+  deleteUserTheme,
+  parseUserThemeYaml,
+} from "./lib/themeLoader";
 import { useRecentFiles } from "./hooks/useRecentFiles";
 import { useAutosave } from "./hooks/useAutosave";
 import { loadAutosave, deleteAutosave } from "./hooks/useAutosave";
@@ -19,6 +25,7 @@ import EditorSurface from "./components/EditorSurface";
 import StatusBar from "./components/StatusBar";
 import SearchBar from "./components/SearchBar";
 import RecoveryDialog from "./components/RecoveryDialog";
+import ThemeSelector from "./components/ThemeSelector";
 
 import "./styles/app.css";
 
@@ -58,8 +65,45 @@ function makeEditorStateFromMarkdown(
 
 const App: React.FC = () => {
   const viewRef = useRef<EditorView | null>(null);
-  const { theme, toggleTheme } = useTheme();
+  // User theme state: filename → parsed vars
+  const [userThemeVars, setUserThemeVars] = useState<Record<string, Record<string, string>>>({});
+  const { theme, setTheme } = useTheme(userThemeVars);
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
   const { addRecentFile } = useRecentFiles();
+
+  // Load user themes on mount
+  useEffect(() => {
+    fetchUserThemes().then((entries) => {
+      const map: Record<string, Record<string, string>> = {};
+      for (const { filename, content } of entries) {
+        map[filename] = parseUserThemeYaml(content);
+      }
+      setUserThemeVars(map);
+    });
+  }, []);
+
+  // Import a YAML theme file from disk
+  const handleImportTheme = useCallback(async () => {
+    const path = await invoke<string | null>("show_open_dialog");
+    if (!path) return;
+    const content = await invoke<string>("read_file", { path });
+    const filename = path.split(/[\\/]/).pop() ?? "custom.yaml";
+    await saveUserTheme(filename, content);
+    const vars = parseUserThemeYaml(content);
+    setUserThemeVars((prev) => ({ ...prev, [filename]: vars }));
+  }, []);
+
+  // Delete a user theme by filename
+  const handleDeleteUserTheme = useCallback(async (filename: string) => {
+    await deleteUserTheme(filename);
+    setUserThemeVars((prev) => {
+      const next = { ...prev };
+      delete next[filename];
+      return next;
+    });
+    // If the deleted theme is active, fall back to "light"
+    if (theme === `user:${filename}`) setTheme("light");
+  }, [theme, setTheme]);
 
   // Per-tab storage (inactive tabs)
   const storedTabsRef = useRef<Map<string, StoredTab>>(new Map());
@@ -722,6 +766,10 @@ const App: React.FC = () => {
     );
   }, [filePath]);
 
+  const handleExportPdf = useCallback(async () => {
+    await exportToPdf();
+  }, []);
+
   // ---- Recovery ----
   const handleRestore = useCallback(() => {
     if (!recovery) return;
@@ -801,9 +849,9 @@ const App: React.FC = () => {
         onSave={handleSave}
         onSaveAs={handleSaveAs}
         onExportHtml={handleExportHtml}
+        onExportPdf={handleExportPdf}
         onToggleSearch={handleToggleSearch}
-        onToggleTheme={toggleTheme}
-        theme={theme}
+        onOpenThemeSelector={() => setThemePickerOpen(true)}
       />
 
       <TabBar
@@ -865,6 +913,7 @@ const App: React.FC = () => {
           onChange={handleChange}
           onSave={handleSave}
           onSearch={handleToggleSearch}
+          filePath={filePath}
         />
       </div>
 
@@ -882,6 +931,17 @@ const App: React.FC = () => {
           filePath={recovery.filePath}
           onRestore={handleRestore}
           onDiscard={handleDiscard}
+        />
+      )}
+
+      {themePickerOpen && (
+        <ThemeSelector
+          currentTheme={theme}
+          userThemeVars={userThemeVars}
+          onSelect={(t) => { setTheme(t); setThemePickerOpen(false); }}
+          onClose={() => setThemePickerOpen(false)}
+          onImport={handleImportTheme}
+          onDeleteUserTheme={handleDeleteUserTheme}
         />
       )}
     </div>

@@ -1,0 +1,27 @@
+# Bioscratch – BBC GEL Dark Theme
+name: BBC Dark
+
+bg-app: "#0d0d0d"
+bg-toolbar: "#1a1a1a"
+bg-editor: "#1a1a1a"
+bg-statusbar: "#050505"
+
+text-primary: "#f0f0f0"
+text-secondary: "#909090"
+text-muted: "#505050"
+
+border-color: "#2a2a2a"
+border-subtle: "#1f1f1f"
+
+accent: "#ff3030"
+accent-hover: "#ff5555"
+accent-bg: "rgba(255, 48, 48, 0.12)"
+
+toolbar-btn-hover: "#252525"
+toolbar-btn-active: "#303030"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.50)"
+shadow-md: "0 2px 8px rgba(0, 0, 0, 0.70)"
+
+code-bg: "#111111"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

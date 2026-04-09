@@ -1,0 +1,27 @@
+# Bioscratch – Microsoft Fluent Dark Theme
+name: Microsoft Dark
+
+bg-app: "#201f1e"
+bg-toolbar: "#292827"
+bg-editor: "#323130"
+bg-statusbar: "#161514"
+
+text-primary: "#f3f2f1"
+text-secondary: "#c8c6c4"
+text-muted: "#605e5c"
+
+border-color: "#3b3a39"
+border-subtle: "#292827"
+
+accent: "#479ef5"
+accent-hover: "#6cb8f6"
+accent-bg: "rgba(71, 158, 245, 0.12)"
+
+toolbar-btn-hover: "#3b3a39"
+toolbar-btn-active: "#484644"
+
+shadow-sm: "0 1.6px 3.6px rgba(0, 0, 0, 0.50)"
+shadow-md: "0 3.2px 7.2px rgba(0, 0, 0, 0.65)"
+
+code-bg: "#252423"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

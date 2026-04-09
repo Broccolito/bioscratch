@@ -1,0 +1,27 @@
+# Bioscratch – Atlassian Dark Theme
+name: Atlassian Dark
+
+bg-app: "#0d1117"
+bg-toolbar: "#161d2a"
+bg-editor: "#1d2433"
+bg-statusbar: "#060c14"
+
+text-primary: "#c7d1db"
+text-secondary: "#8696a7"
+text-muted: "#44546f"
+
+border-color: "#2c3a54"
+border-subtle: "#1d2433"
+
+accent: "#4c9aff"
+accent-hover: "#6ab0ff"
+accent-bg: "rgba(76, 154, 255, 0.12)"
+
+toolbar-btn-hover: "#243048"
+toolbar-btn-active: "#2e3f5c"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.40)"
+shadow-md: "0 4px 8px rgba(0, 0, 0, 0.55)"
+
+code-bg: "#161d2a"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

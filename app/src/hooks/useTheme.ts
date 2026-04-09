@@ -1,26 +1,39 @@
-import { useState, useEffect } from "react";
+import { useState, useLayoutEffect } from "react";
+import {
+  ThemeName,
+  applyTheme,
+  builtinThemeConfigs,
+  parseUserThemeYaml,
+} from "../lib/themeLoader";
 
-export type Theme = "light" | "dark";
+export type { ThemeName };
 
-export function useTheme() {
-  const [theme, setTheme] = useState<Theme>(() => {
+/** Resolve CSS vars for a theme id, given optional user-theme map. */
+function resolveVars(
+  name: ThemeName,
+  userThemeVars: Record<string, Record<string, string>>
+): Record<string, string> {
+  return builtinThemeConfigs[name] ?? userThemeVars[name] ?? builtinThemeConfigs["light"];
+}
+
+export function useTheme(userThemeVars: Record<string, Record<string, string>> = {}) {
+  const [theme, setThemeState] = useState<ThemeName>(() => {
     const stored = localStorage.getItem("bioscratch-theme");
-    if (stored === "light" || stored === "dark") return stored;
-    // Use system preference
-    if (window.matchMedia("(prefers-color-scheme: dark)").matches) {
-      return "dark";
-    }
-    return "light";
+    if (stored) return stored;
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   });
 
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", theme);
+  // useLayoutEffect applies before browser paint – no flash.
+  useLayoutEffect(() => {
+    const vars = resolveVars(theme, userThemeVars);
+    applyTheme(theme, vars);
     localStorage.setItem("bioscratch-theme", theme);
-  }, [theme]);
+  }, [theme, userThemeVars]);
 
-  const toggleTheme = () => {
-    setTheme((t) => (t === "light" ? "dark" : "light"));
-  };
+  const setTheme = (t: ThemeName) => setThemeState(t);
 
-  return { theme, toggleTheme };
+  return { theme, setTheme };
 }
+
+/** Parse a user-imported YAML content string into vars. */
+export { parseUserThemeYaml };

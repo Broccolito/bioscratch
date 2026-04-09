@@ -1,0 +1,27 @@
+# Bioscratch – NASA Light Theme
+name: NASA Light
+
+bg-app: "#f4f6f8"
+bg-toolbar: "#ffffff"
+bg-editor: "#ffffff"
+bg-statusbar: "#eaecef"
+
+text-primary: "#1a2332"
+text-secondary: "#4a5568"
+text-muted: "#8a98a8"
+
+border-color: "#d8dfe7"
+border-subtle: "#edf0f4"
+
+accent: "#0b3d91"
+accent-hover: "#072d6b"
+accent-bg: "rgba(11, 61, 145, 0.08)"
+
+toolbar-btn-hover: "#edf0f4"
+toolbar-btn-active: "#dde3ea"
+
+shadow-sm: "0 1px 3px rgba(0, 0, 0, 0.08)"
+shadow-md: "0 4px 12px rgba(0, 0, 0, 0.12)"
+
+code-bg: "#f0f3f6"
+code-inline-bg: "rgba(11, 61, 145, 0.06)"

@@ -182,7 +182,7 @@ li.task-list-item .task-list-content {
   overflow-y: visible;
 }
 
-[data-theme="dark"] .code-block-view pre {
+[data-color-scheme="dark"] .code-block-view pre {
   background: #17140f;
 }
 
@@ -199,21 +199,123 @@ li.task-list-item .task-list-content {
   color: var(--text-primary);
 }
 
-/* ---- Image NodeView ---- */
+/* ---- Image source paragraph states ---- */
+
+/* INACTIVE: collapse to zero height — only the image widget below is visible */
+.image-source-hidden {
+  height: 0 !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  min-height: 0 !important;
+  line-height: 0 !important;
+  font-size: 0 !important;
+}
+
+/* ACTIVE: source line styled as monospace text above the image preview */
+.image-source-editing {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.82em !important;
+  color: var(--text-muted, #a09588) !important;
+  background: var(--code-bg, #ede8df);
+  border-radius: 4px;
+  padding: 3px 8px !important;
+  margin-bottom: 0 !important;
+}
+
+/* Inline markdown text hidden when image widget is shown in its place */
+.image-inline-hidden {
+  display: none;
+}
+
+/* Inline image widget (sits within a paragraph alongside other text) */
+span.image-inline-widget {
+  display: inline-block;
+  vertical-align: middle;
+  max-width: 100%;
+  cursor: pointer;
+}
+
+span.image-inline-widget img {
+  max-width: 100%;
+  max-height: 420px;
+  width: auto;
+  height: auto;
+  border-radius: 5px;
+  border: 1px solid var(--border-subtle, #e0d9cf);
+  display: block;
+}
+
+span.image-inline-widget .image-placeholder {
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 12px;
+  background: var(--code-bg, #ede8df);
+  border: 1px dashed var(--border-color, #d4ccc0);
+  border-radius: 5px;
+  color: var(--text-muted, #a09588);
+  font-size: 0.85em;
+}
+
+span.image-inline-widget:hover img {
+  border-color: var(--accent, #4a6580);
+}
+
+/* ---- Block image widget (decoration) ---- */
 .image-view-wrapper {
   display: block;
+  margin: 1em 0;
+  cursor: pointer;
+}
+
+/* Default: center */
+.image-view-wrapper,
+.image-view-wrapper[data-align="center"] {
   text-align: center;
-  margin: 0.9em 0;
-  cursor: default;
+}
+.image-view-wrapper[data-align="center"] .image-rendered img {
+  margin: 0 auto;
+}
+
+/* Left align */
+.image-view-wrapper[data-align="left"] {
+  text-align: left;
+}
+.image-view-wrapper[data-align="left"] .image-rendered img {
+  margin: 0;
+}
+
+/* Right align */
+.image-view-wrapper[data-align="right"] {
+  text-align: right;
+}
+.image-view-wrapper[data-align="right"] .image-rendered img {
+  margin: 0 0 0 auto;
+}
+
+.image-rendered {
+  display: block;
 }
 
 .image-view-wrapper img {
   max-width: 100%;
+  width: 100%;
   height: auto;
-  border-radius: 4px;
+  border-radius: 5px;
   display: block;
-  margin: 0 auto;
   border: 1px solid var(--border-subtle, #e0d9cf);
+  transition: opacity 0.12s;
+}
+
+/* Active state: keep image fully visible, just add accent border */
+.image-view-wrapper.editing img {
+  opacity: 1;
+  border-color: var(--accent, #4a6580);
+}
+
+/* Hover hint that the image is clickable */
+.image-view-wrapper:hover img {
+  border-color: var(--accent, #4a6580);
 }
 
 .image-placeholder {
@@ -244,7 +346,7 @@ li.task-list-item .task-list-content {
   white-space: nowrap;
 }
 
-[data-theme="dark"] .link-tooltip {
+[data-color-scheme="dark"] .link-tooltip {
   background: #231f1b;
   border-color: #332e27;
 }

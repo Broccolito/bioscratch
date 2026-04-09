@@ -77,7 +77,7 @@
   background: transparent;
 }
 
-[data-theme="dark"] .ProseMirror blockquote {
+[data-color-scheme="dark"] .ProseMirror blockquote {
   border-left-color: #3d3830;
 }
 
@@ -118,7 +118,7 @@
   border: 1px solid var(--border-subtle, #e0d9cf);
 }
 
-[data-theme="dark"] .ProseMirror code {
+[data-color-scheme="dark"] .ProseMirror code {
   background: rgba(255, 255, 255, 0.08);
   border-color: #332e27;
 }
@@ -198,7 +198,7 @@
   background: rgba(60, 50, 35, 0.022);
 }
 
-[data-theme="dark"] .ProseMirror tr:nth-child(even) td {
+[data-color-scheme="dark"] .ProseMirror tr:nth-child(even) td {
   background: rgba(255, 255, 255, 0.025);
 }
 

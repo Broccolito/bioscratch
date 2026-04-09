@@ -71,8 +71,9 @@ const hrRule = new InputRule(/^---\s$/, (state, _match, start, end) => {
 // No immediate conversion on closing $, letting the user complete the expression first.
 
 // Markdown link: [text](url) — converts as soon as any character is typed after the closing )
+// Negative lookbehind (?<!!) prevents matching inside image syntax ![alt](url)
 const linkRule = new InputRule(
-  /\[([^\[\]]+)\]\(([^)]+)\)(.)$/,
+  /(?<!!)\[([^\[\]]+)\]\(([^)]+)\)(.)$/,
   (state, match, start, end) => {
     const [, linkText, href, trailing] = match;
     const { tr } = state;

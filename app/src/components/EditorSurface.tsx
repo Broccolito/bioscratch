@@ -8,6 +8,7 @@ import { buildInputRules } from "../editor/plugins/inputRules";
 import { buildHistory } from "../editor/plugins/history";
 import { undo } from "prosemirror-history";
 import { buildDropImagePlugin } from "../editor/plugins/dropImage";
+import { buildImageRenderPlugin } from "../editor/plugins/imageRender";
 import { buildSearchPlugin } from "../editor/plugins/search";
 import { buildHighlightPlugin } from "../editor/plugins/highlight";
 import { baseKeymap } from "prosemirror-commands";
@@ -282,58 +283,6 @@ class CodeBlockView implements NodeView {
   destroy() {}
 }
 
-// ---- Image NodeView ----
-class ImageView implements NodeView {
-  dom: HTMLElement;
-  private node: ProseMirrorNode;
-
-  constructor(node: ProseMirrorNode) {
-    this.node = node;
-    this.dom = document.createElement("span");
-    this.dom.className = "image-view-wrapper";
-    this.renderImage();
-  }
-
-  renderImage() {
-    this.dom.innerHTML = "";
-    const { src, alt, title, width, height } = this.node.attrs;
-
-    const img = document.createElement("img");
-    img.src = src;
-    if (alt) img.alt = alt;
-    if (title) img.title = title;
-    if (width) img.width = parseInt(width);
-    if (height) img.height = parseInt(height);
-
-    img.onerror = () => {
-      this.dom.innerHTML = "";
-      const placeholder = document.createElement("span");
-      placeholder.className = "image-placeholder";
-      placeholder.textContent = `Image not found: ${alt || src}`;
-      this.dom.appendChild(placeholder);
-    };
-
-    this.dom.appendChild(img);
-  }
-
-  update(node: ProseMirrorNode) {
-    if (node.type !== this.node.type) return false;
-    this.node = node;
-    this.renderImage();
-    return true;
-  }
-
-  stopEvent() {
-    return false;
-  }
-
-  ignoreMutation() {
-    return true;
-  }
-
-  destroy() {}
-}
-
 // ---- Task List Item NodeView ----
 // Renders a clickable checkbox that toggles the checked attribute.
 class TaskListItemView implements NodeView {
@@ -404,6 +353,7 @@ interface EditorSurfaceProps {
   onChange: () => void;
   onSave: () => void;
   onSearch: () => void;
+  filePath: string | null;
 }
 
 const EditorSurface: React.FC<EditorSurfaceProps> = ({
@@ -411,6 +361,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   onChange,
   onSave,
   onSearch,
+  filePath,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -419,9 +370,11 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   const onSaveRef = useRef(onSave);
   const onSearchRef = useRef(onSearch);
   const onChangeRef = useRef(onChange);
+  const filePathRef = useRef<string | null>(filePath);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
   useEffect(() => { onSearchRef.current = onSearch; }, [onSearch]);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  useEffect(() => { filePathRef.current = filePath; }, [filePath]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -434,6 +387,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       dropCursor(),
       gapCursor(),
       buildDropImagePlugin(),
+      buildImageRenderPlugin(filePathRef),
       buildSearchPlugin(),
       columnResizing(),
       tableEditing(),
@@ -466,7 +420,6 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
         math_block: (node, view, getPos) =>
           new MathBlockView(node, view, getPos),
         code_block: (node) => new CodeBlockView(node),
-        image: (node) => new ImageView(node),
         task_list_item: (node, view, getPos) =>
           new TaskListItemView(node, view, getPos),
       },
