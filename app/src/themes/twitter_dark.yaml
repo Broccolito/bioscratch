@@ -1,0 +1,27 @@
+# Bioscratch – Twitter Dark Theme
+name: Twitter Dark
+
+bg-app: "#000000"
+bg-toolbar: "#16181c"
+bg-editor: "#16181c"
+bg-statusbar: "#000000"
+
+text-primary: "#e7e9ea"
+text-secondary: "#71767b"
+text-muted: "#3e4144"
+
+border-color: "#2f3336"
+border-subtle: "#212327"
+
+accent: "#1d9bf0"
+accent-hover: "#1a8cd8"
+accent-bg: "rgba(29, 155, 240, 0.12)"
+
+toolbar-btn-hover: "#212327"
+toolbar-btn-active: "#2f3336"
+
+shadow-sm: "0 1px 3px rgba(0, 0, 0, 0.40)"
+shadow-md: "0 4px 12px rgba(0, 0, 0, 0.60)"
+
+code-bg: "#0d0f12"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

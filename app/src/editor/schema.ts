@@ -145,6 +145,7 @@ export const schema = new Schema({
         title: { default: null },
         width: { default: null },
         height: { default: null },
+        align: { default: "center" },
       },
       group: "inline",
       draggable: true,
@@ -157,19 +158,20 @@ export const schema = new Schema({
               src: el.getAttribute("src"),
               alt: el.getAttribute("alt"),
               title: el.getAttribute("title"),
-              width: el.getAttribute("width"),
-              height: el.getAttribute("height"),
+              width: el.getAttribute("width") || el.style.width || null,
+              height: el.getAttribute("height") || el.style.height || null,
+              align: el.getAttribute("data-align") || "center",
             };
           },
         },
       ],
       toDOM(node) {
-        const { src, alt, title, width, height } = node.attrs;
+        const { src, alt, title, width, height, align } = node.attrs;
         const attrs: Record<string, string> = { src };
         if (alt) attrs.alt = alt;
         if (title) attrs.title = title;
-        if (width) attrs.width = width;
-        if (height) attrs.height = height;
+        if (width) attrs.style = `width:${width};${height ? `height:${height};` : ""}`;
+        if (align && align !== "center") attrs["data-align"] = align;
         return ["img", attrs];
       },
     },

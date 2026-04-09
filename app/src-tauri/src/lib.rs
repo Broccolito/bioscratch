@@ -8,6 +8,12 @@ pub struct FileContent {
     pub content: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct UserTheme {
+    pub filename: String,
+    pub content: String,
+}
+
 #[tauri::command]
 async fn read_file(path: String) -> Result<String, String> {
     fs::read_to_string(&path).map_err(|e| e.to_string())
@@ -150,6 +156,56 @@ async fn delete_autosave(app: tauri::AppHandle, key: String) -> Result<(), Strin
 }
 
 #[tauri::command]
+async fn list_user_themes(app: tauri::AppHandle) -> Result<Vec<UserTheme>, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let themes_dir = data_dir.join("user_themes");
+    if !themes_dir.exists() {
+        return Ok(vec![]);
+    }
+    let mut themes = vec![];
+    for entry in fs::read_dir(&themes_dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) == Some("yaml") {
+            let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
+            themes.push(UserTheme { filename, content });
+        }
+    }
+    Ok(themes)
+}
+
+#[tauri::command]
+async fn save_user_theme(app: tauri::AppHandle, filename: String, content: String) -> Result<(), String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let themes_dir = data_dir.join("user_themes");
+    fs::create_dir_all(&themes_dir).map_err(|e| e.to_string())?;
+    // Sanitize filename: only allow safe characters
+    let safe_name: String = filename.chars().map(|c| {
+        if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' { c } else { '_' }
+    }).collect();
+    let safe_name = if safe_name.ends_with(".yaml") { safe_name } else { format!("{}.yaml", safe_name) };
+    fs::write(themes_dir.join(&safe_name), content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn delete_user_theme(app: tauri::AppHandle, filename: String) -> Result<(), String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let themes_dir = data_dir.join("user_themes");
+    // Only allow filenames without path separators for safety
+    let safe_name = std::path::Path::new(&filename)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .ok_or("Invalid filename")?
+        .to_string();
+    let path = themes_dir.join(&safe_name);
+    if path.exists() {
+        fs::remove_file(&path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
 async fn export_html(path: String, html: String) -> Result<(), String> {
     fs::write(&path, html).map_err(|e| e.to_string())
 }
@@ -236,6 +292,9 @@ pub fn run() {
             show_html_save_dialog,
             open_url,
             open_new_window,
+            list_user_themes,
+            save_user_theme,
+            delete_user_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

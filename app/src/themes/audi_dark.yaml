@@ -1,0 +1,27 @@
+# Bioscratch – Audi Dark Theme
+name: Audi Dark
+
+bg-app: "#1a1a1a"
+bg-toolbar: "#222222"
+bg-editor: "#222222"
+bg-statusbar: "#111111"
+
+text-primary: "#f0f0f0"
+text-secondary: "#aaaaaa"
+text-muted: "#555555"
+
+border-color: "#333333"
+border-subtle: "#282828"
+
+accent: "#e01a35"
+accent-hover: "#ff2040"
+accent-bg: "rgba(224, 26, 53, 0.15)"
+
+toolbar-btn-hover: "#2c2c2c"
+toolbar-btn-active: "#383838"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.50)"
+shadow-md: "0 2px 8px rgba(0, 0, 0, 0.70)"
+
+code-bg: "#181818"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

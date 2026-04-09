@@ -1,67 +1,9 @@
 /* ======================================================
    Bioscratch – App Layout
+   Theme CSS custom properties are defined in
+   src/themes/light.yaml and src/themes/dark.yaml and
+   applied at runtime via src/lib/themeLoader.ts.
    ====================================================== */
-
-:root {
-  /* Paper palette */
-  --bg-app:           #eceae6;
-  --bg-toolbar:       #f5f4f0;
-  --bg-editor:        #fafaf8;
-  --bg-statusbar:     #eceae6;
-
-  /* Ink tones */
-  --text-primary:     #2b2620;
-  --text-secondary:   #6e645a;
-  --text-muted:       #a09588;
-
-  /* Structure */
-  --border-color:     #d4ccc0;
-  --border-subtle:    #e0d9cf;
-
-  /* Accent – muted steel blue, ink-like */
-  --accent:           #4a6580;
-  --accent-hover:     #324a60;
-  --accent-bg:        rgba(74, 101, 128, 0.08);
-
-  /* Interactive states */
-  --toolbar-btn-hover:  #e8e2d8;
-  --toolbar-btn-active: #d9d1c6;
-
-  /* Shadow – warm, soft */
-  --shadow-sm:  0 1px 2px rgba(40, 30, 20, 0.06);
-  --shadow-md:  0 2px 8px rgba(40, 30, 20, 0.10);
-
-  /* Code */
-  --code-bg:          #f0eeea;
-  --code-inline-bg:   rgba(60, 50, 35, 0.055);
-}
-
-[data-theme="dark"] {
-  --bg-app:           #1c1916;
-  --bg-toolbar:       #231f1b;
-  --bg-editor:        #201d19;
-  --bg-statusbar:     #181512;
-
-  --text-primary:     #e6dfd4;
-  --text-secondary:   #9c9080;
-  --text-muted:       #6b6058;
-
-  --border-color:     #332e27;
-  --border-subtle:    #2a2520;
-
-  --accent:           #7a9db8;
-  --accent-hover:     #9cb8d0;
-  --accent-bg:        rgba(122, 157, 184, 0.10);
-
-  --toolbar-btn-hover:  #2a2520;
-  --toolbar-btn-active: #332e27;
-
-  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md:  0 2px 8px rgba(0, 0, 0, 0.45);
-
-  --code-bg:          #17140f;
-  --code-inline-bg:   rgba(255, 255, 255, 0.08);
-}
 
 *, *::before, *::after {
   box-sizing: border-box;
@@ -171,6 +113,67 @@ body {
 .toolbar-select:focus {
   border-color: var(--accent);
   color: var(--text-primary);
+}
+
+/* ---- Export dropdown ---- */
+.export-menu-wrapper {
+  position: relative;
+}
+
+.export-menu {
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 0;
+  background: var(--bg-toolbar);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  box-shadow: var(--shadow-md);
+  z-index: 500;
+  min-width: 158px;
+  padding: 4px 0;
+}
+
+.export-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 12px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
+  font-size: 12px;
+  color: var(--text-primary);
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+
+.export-menu-item:hover {
+  background: var(--toolbar-btn-hover);
+}
+
+/* ---- Print / PDF export ---- */
+@media print {
+  .toolbar,
+  .tab-bar,
+  .status-bar,
+  .search-bar,
+  .file-watch-banner,
+  .drop-overlay,
+  .theme-selector-backdrop,
+  .modal-overlay { display: none !important; }
+
+  body { overflow: visible; }
+
+  .app-container { display: block; height: auto; }
+
+  .editor-scroll-area {
+    overflow: visible;
+    height: auto;
+    display: block;
+  }
 }
 
 /* ---- Tab bar ---- */
@@ -479,12 +482,12 @@ body {
   color: #5a4e20;
 }
 
-[data-theme="dark"] .file-watch-deleted {
+[data-color-scheme="dark"] .file-watch-deleted {
   background: #2a1a16;
   color: #d4856a;
 }
 
-[data-theme="dark"] .file-watch-changed {
+[data-color-scheme="dark"] .file-watch-changed {
   background: #211e0e;
   color: #c4b46a;
 }
@@ -540,7 +543,7 @@ body {
   color: var(--text-muted);
 }
 
-[data-theme="dark"] .drop-overlay {
+[data-color-scheme="dark"] .drop-overlay {
   background: rgba(28, 25, 22, 0.88);
 }
 
@@ -688,4 +691,280 @@ body {
   font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif;
   color: var(--text-secondary);
   background: var(--bg-toolbar);
+}
+
+/* ======================================================
+   Theme Selector popup — 4-column scrollable grid
+   ====================================================== */
+
+.theme-selector-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(20, 15, 10, 0.42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2500;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.theme-selector-dialog {
+  background: var(--bg-toolbar);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(20, 15, 10, 0.32);
+  width: 580px;
+  max-width: calc(100vw - 32px);
+  outline: none;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.theme-selector-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 16px 12px;
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+.theme-selector-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.theme-selector-close {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+  padding: 0;
+  transition: background 0.12s, color 0.12s;
+}
+
+.theme-selector-close:hover {
+  background: var(--toolbar-btn-hover);
+  color: var(--text-primary);
+}
+
+/* Scrollable card area: 2.5 card rows visible */
+.theme-selector-scroll {
+  overflow-y: auto;
+  max-height: 322px;
+  padding: 12px 14px 8px;
+  flex: 1;
+}
+
+.theme-selector-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.theme-selector-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.theme-selector-scroll::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 3px;
+}
+
+.theme-selector-section-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+  margin-top: 4px;
+}
+
+.theme-selector-section-label:first-child {
+  margin-top: 0;
+}
+
+/* 4-column card grid */
+.theme-selector-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+/* Footer with import button */
+.theme-selector-footer {
+  border-top: 1px solid var(--border-subtle);
+  padding: 10px 14px;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.theme-import-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s, border-color 0.12s;
+}
+
+.theme-import-btn:hover {
+  background: var(--toolbar-btn-hover);
+  color: var(--text-primary);
+  border-color: var(--accent);
+}
+
+/* ---- Individual theme card ---- */
+/* Outer wrapper — position:relative so delete badge can anchor to it */
+.theme-card {
+  position: relative;
+}
+
+/* The clickable button that fills the card */
+.theme-card-inner {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  border: 2px solid var(--border-color);
+  border-radius: 8px;
+  background: var(--bg-app);
+  cursor: pointer;
+  padding: 0;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s;
+  overflow: hidden;
+  text-align: left;
+}
+
+.theme-card-inner:hover {
+  border-color: var(--accent);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+  transform: translateY(-1px);
+}
+
+.theme-card--active .theme-card-inner {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg), 0 4px 14px rgba(0, 0, 0, 0.10);
+}
+
+/* Red delete badge for user themes */
+.theme-card-delete {
+  position: absolute;
+  top: -7px;
+  right: -7px;
+  z-index: 10;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #d93025;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.12s, transform 0.12s;
+  padding: 0;
+}
+
+.theme-card:hover .theme-card-delete {
+  opacity: 1;
+}
+
+.theme-card-delete:hover {
+  background: #b91c1c;
+  transform: scale(1.1);
+}
+
+.theme-card-preview {
+  width: 100%;
+}
+
+.theme-card-footer {
+  padding: 7px 9px 8px;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.theme-card-name {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Active checkmark badge */
+.theme-card-check {
+  position: absolute;
+  bottom: 30px;
+  right: 7px;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  pointer-events: none;
+}
+
+/* ---- Mini theme preview inside each card ---- */
+.theme-preview-frame {
+  width: 100%;
+  border-radius: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid;
+}
+
+.theme-preview-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 4px 6px;
+  border-bottom: 1px solid;
+}
+
+.theme-preview-pill {
+  height: 3px;
+  width: 14px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.theme-preview-body {
+  padding: 6px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.theme-preview-line {
+  height: 3px;
+  border-radius: 2px;
+  width: 100%;
+}
+
+.theme-preview-line--heading {
+  height: 5px;
+  width: 60%;
+  margin-bottom: 1px;
 }

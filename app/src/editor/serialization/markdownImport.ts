@@ -70,8 +70,12 @@ function convertInline(
     }
 
     case "image": {
+      // Store images as raw markdown text so the imageRender decoration plugin
+      // can handle rendering.  This keeps the text fully editable (undo, copy,
+      // delete all work) and lets the plugin show the image as a widget below.
       const n = node as { type: "image"; url: string; alt: string | null; title: string | null };
-      return [schema.nodes.image.create({ src: n.url, alt: n.alt, title: n.title })];
+      const titlePart = n.title ? ` "${n.title}"` : "";
+      return [schema.text(`![${n.alt ?? ""}](${n.url}${titlePart})`)];
     }
 
     case "html": {

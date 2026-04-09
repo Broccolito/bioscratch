@@ -1,0 +1,35 @@
+# Bioscratch – Dark Theme
+# Deep ink-on-paper dark theme
+name: Dark
+
+# Background
+bg-app: "#1c1916"
+bg-toolbar: "#231f1b"
+bg-editor: "#201d19"
+bg-statusbar: "#181512"
+
+# Text
+text-primary: "#e6dfd4"
+text-secondary: "#9c9080"
+text-muted: "#6b6058"
+
+# Structure
+border-color: "#332e27"
+border-subtle: "#2a2520"
+
+# Accent – soft steel blue
+accent: "#7a9db8"
+accent-hover: "#9cb8d0"
+accent-bg: "rgba(122, 157, 184, 0.10)"
+
+# Interactive states
+toolbar-btn-hover: "#2a2520"
+toolbar-btn-active: "#332e27"
+
+# Shadow
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.30)"
+shadow-md: "0 2px 8px rgba(0, 0, 0, 0.45)"
+
+# Code
+code-bg: "#17140f"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

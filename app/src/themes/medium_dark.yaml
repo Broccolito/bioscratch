@@ -1,0 +1,27 @@
+# Bioscratch – Medium Dark Theme
+name: Medium Dark
+
+bg-app: "#191919"
+bg-toolbar: "#242424"
+bg-editor: "#242424"
+bg-statusbar: "#121212"
+
+text-primary: "#e8e6e3"
+text-secondary: "#909090"
+text-muted: "#606060"
+
+border-color: "#333333"
+border-subtle: "#292929"
+
+accent: "#4dc247"
+accent-hover: "#62d45c"
+accent-bg: "rgba(77, 194, 71, 0.12)"
+
+toolbar-btn-hover: "#333333"
+toolbar-btn-active: "#3d3d3d"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.40)"
+shadow-md: "0 2px 8px rgba(0, 0, 0, 0.55)"
+
+code-bg: "#1a1a1a"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

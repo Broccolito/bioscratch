@@ -1,0 +1,27 @@
+# Bioscratch – Ubuntu Dark Theme (Aubergine)
+name: Ubuntu Dark
+
+bg-app: "#2c001e"
+bg-toolbar: "#3a0229"
+bg-editor: "#38022a"
+bg-statusbar: "#1a0012"
+
+text-primary: "#e8dbd5"
+text-secondary: "#c0a8a0"
+text-muted: "#7a5060"
+
+border-color: "#4a0234"
+border-subtle: "#350228"
+
+accent: "#e95420"
+accent-hover: "#ff6535"
+accent-bg: "rgba(233, 84, 32, 0.15)"
+
+toolbar-btn-hover: "#4a0234"
+toolbar-btn-active: "#5a0240"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.40)"
+shadow-md: "0 2px 8px rgba(0, 0, 0, 0.60)"
+
+code-bg: "#1a0012"
+code-inline-bg: "rgba(255, 255, 255, 0.10)"

@@ -43,8 +43,8 @@ function convertInlinePatternsInNode(state: EditorState, nodePos: number): Trans
     allMatches.push({ start, end, makeNode: () => schema.nodes.math_inline.create({ math }) });
   }
 
-  // Markdown links: [text](url)
-  const LINK_RE = /\[([^\[\]]+)\]\(([^)]+)\)/g;
+  // Markdown links: [text](url) — negative lookbehind prevents matching inside ![alt](url)
+  const LINK_RE = /(?<!!)\[([^\[\]]+)\]\(([^)]+)\)/g;
   while ((m = LINK_RE.exec(fullText)) !== null) {
     const linkText = m[1], href = m[2].trim();
     const start = m.index, end = m.index + m[0].length;
@@ -88,10 +88,14 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
 
   // cursor must be at the end of the paragraph for block-level triggers
   if ($head.parentOffset !== text.length) {
-    // Apply any inline conversions but don't consume Enter
+    // Apply inline conversions and split at the cursor; consume Enter.
     if (hasConversions) {
-      if (dispatch) dispatch(conversionTr!);
-      return false; // let Enter proceed to split the block
+      if (dispatch) {
+        const tr = conversionTr!;
+        tr.split(tr.mapping.map(state.selection.to));
+        dispatch(tr.scrollIntoView());
+      }
+      return true;
     }
     return false;
   }
@@ -123,10 +127,15 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
     return true;
   }
 
-  // No block trigger matched — apply inline conversions and let the normal Enter proceed.
+  // No block trigger matched — convert inline patterns and split the block atomically.
   if (hasConversions) {
-    if (dispatch) dispatch(conversionTr!);
-    return false; // return false so Enter continues to splitBlock
+    if (dispatch) {
+      const tr = conversionTr!;
+      // Map the cursor through the conversion replacements, then split there.
+      tr.split(tr.mapping.map(state.selection.to));
+      dispatch(tr.scrollIntoView());
+    }
+    return true; // consumed — conversion + split done in one transaction
   }
 
   return false;

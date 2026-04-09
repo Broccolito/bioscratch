@@ -59,3 +59,8 @@ ${bodyHtml}
 
   await invoke("export_html", { path, html });
 }
+
+export async function exportToPdf(): Promise<void> {
+  const { getCurrentWindow } = await import("@tauri-apps/api/window");
+  await getCurrentWindow().print();
+}

@@ -1,0 +1,27 @@
+# Bioscratch – Google Material Dark Theme
+name: Material Dark
+
+bg-app: "#121212"
+bg-toolbar: "#1e1e1e"
+bg-editor: "#1e1e1e"
+bg-statusbar: "#0a0a0a"
+
+text-primary: "#e0e0e0"
+text-secondary: "#9e9e9e"
+text-muted: "#616161"
+
+border-color: "#2c2c2c"
+border-subtle: "#212121"
+
+accent: "#90caf9"
+accent-hover: "#bbdefb"
+accent-bg: "rgba(144, 202, 249, 0.12)"
+
+toolbar-btn-hover: "#2c2c2c"
+toolbar-btn-active: "#3a3a3a"
+
+shadow-sm: "0 1px 3px rgba(0, 0, 0, 0.40)"
+shadow-md: "0 4px 6px rgba(0, 0, 0, 0.55)"
+
+code-bg: "#1a1a1a"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"
