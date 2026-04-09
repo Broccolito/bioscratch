@@ -365,3 +365,87 @@ span.image-inline-widget:hover img {
 .ProseMirror a {
   cursor: pointer;
 }
+
+/* ---- Mermaid Block NodeView ---- */
+.mermaid-block-view {
+  margin: 0.85em 0;
+  border: 1px solid var(--border-color, #d4ccc0);
+  border-radius: 5px;
+  overflow: hidden;
+  cursor: default;
+}
+
+/* Source section: collapsed when inactive */
+.mermaid-block-view:not(.mermaid-active) .mermaid-source-section {
+  height: 0;
+  overflow: hidden;
+  font-size: 0;
+  line-height: 0;
+  padding: 0;
+}
+
+/* Source section: visible when active */
+.mermaid-block-view.mermaid-active .mermaid-source-section {
+  border-bottom: 1px solid var(--border-color, #d4ccc0);
+}
+
+.mermaid-source-section pre {
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--code-bg, #ede8df);
+  overflow-x: auto;
+  border-radius: 0;
+}
+
+[data-color-scheme="dark"] .mermaid-source-section pre {
+  background: #17140f;
+}
+
+.mermaid-source-section pre code {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 0.845em;
+  line-height: 1.58;
+  background: none;
+  padding: 0;
+  border: none;
+  display: block;
+  min-height: 1.6em;
+  color: var(--text-primary);
+}
+
+/* Preview section */
+.mermaid-preview {
+  padding: 20px 16px;
+  background: #fff;
+  text-align: center;
+  min-height: 48px;
+  cursor: pointer;
+}
+
+[data-color-scheme="dark"] .mermaid-preview {
+  background: #1e1b16;
+}
+
+.mermaid-preview svg {
+  max-width: 100%;
+  height: auto;
+  display: inline-block;
+}
+
+.mermaid-empty {
+  color: var(--text-muted, #a09588);
+  font-size: 0.85em;
+  padding: 12px 0;
+  font-style: italic;
+}
+
+.mermaid-error {
+  color: #c0392b;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 0.82em;
+  padding: 10px 14px;
+  background: rgba(192, 57, 43, 0.07);
+  border-radius: 4px;
+  text-align: left;
+  white-space: pre-wrap;
+}

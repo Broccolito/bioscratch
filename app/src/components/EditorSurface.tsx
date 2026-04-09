@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from "react";
-import { EditorState, Transaction } from "prosemirror-state";
+import { EditorState, Transaction, TextSelection } from "prosemirror-state";
 import { EditorView, NodeView } from "prosemirror-view";
 import { Node as ProseMirrorNode } from "prosemirror-model";
 import { schema } from "../editor/schema";
@@ -11,6 +11,8 @@ import { buildDropImagePlugin } from "../editor/plugins/dropImage";
 import { buildImageRenderPlugin } from "../editor/plugins/imageRender";
 import { buildSearchPlugin } from "../editor/plugins/search";
 import { buildHighlightPlugin } from "../editor/plugins/highlight";
+import { buildMermaidPlugin } from "../editor/plugins/mermaidPlugin";
+import mermaid from "mermaid";
 import { baseKeymap } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
 import { dropCursor } from "prosemirror-dropcursor";
@@ -232,6 +234,117 @@ class MathBlockView implements NodeView {
   destroy() {}
 }
 
+// ---- Mermaid helpers -------------------------------------------------------
+
+function escapeMermaidError(s: string): string {
+  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Initialize once at module load (static import avoids Vite pre-bundle issues)
+mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "loose" });
+
+// ---- Mermaid Block NodeView ----
+// Two states driven by mermaidPlugin decorations:
+//   Inactive  → source section collapsed (height 0), only rendered diagram shown
+//   Active    → source section visible above, live-updating rendered diagram below
+class MermaidBlockView implements NodeView {
+  dom: HTMLElement;
+  contentDOM: HTMLElement;
+  private preview: HTMLElement;
+  private node: ProseMirrorNode;
+  private renderTimeout: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number | undefined) {
+    this.node = node;
+
+    this.dom = document.createElement("div");
+    this.dom.className = "mermaid-block-view";
+
+    // Source section — contains contentDOM (ProseMirror manages text here).
+    // Collapsed via CSS when .mermaid-active is absent.
+    const sourceSection = document.createElement("div");
+    sourceSection.className = "mermaid-source-section";
+    const pre = document.createElement("pre");
+    this.contentDOM = document.createElement("code");
+    this.contentDOM.className = "language-mermaid";
+    pre.appendChild(this.contentDOM);
+    sourceSection.appendChild(pre);
+    this.dom.appendChild(sourceSection);
+
+    // Preview section — always visible
+    this.preview = document.createElement("div");
+    this.preview.className = "mermaid-preview";
+    this.dom.appendChild(this.preview);
+
+    // Click on preview → move cursor into the block (makes source visible)
+    this.preview.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      const pos = getPos();
+      if (pos !== undefined) {
+        const state = view.state;
+        view.dispatch(
+          state.tr.setSelection(TextSelection.near(state.doc.resolve(pos + 1)))
+        );
+        view.focus();
+      }
+    });
+
+    this.renderDiagram(node.textContent);
+  }
+
+  update(node: ProseMirrorNode, outerDeco: readonly any[]) {
+    if (node.type !== this.node.type) return false;
+
+    const contentChanged = node.textContent !== this.node.textContent;
+    this.node = node;
+
+    // mermaidPlugin sets spec.mermaidActive when cursor is inside this block
+    const nowActive = outerDeco.some((d) => (d.spec as any)?.mermaidActive);
+    this.dom.classList.toggle("mermaid-active", nowActive);
+
+    if (contentChanged) {
+      this.scheduleRender(node.textContent);
+    }
+
+    return true;
+  }
+
+  scheduleRender(source: string) {
+    if (this.renderTimeout) clearTimeout(this.renderTimeout);
+    this.renderTimeout = setTimeout(() => this.renderDiagram(source), 300);
+  }
+
+  async renderDiagram(source: string) {
+    const trimmed = source.trim();
+    if (!trimmed) {
+      this.preview.innerHTML = '<div class="mermaid-empty">Start typing a Mermaid diagram above</div>';
+      return;
+    }
+    // Use a hidden off-screen container so mermaid can measure and clean up reliably
+    const container = document.createElement("div");
+    container.style.cssText = "position:absolute;top:-9999px;left:-9999px;";
+    document.body.appendChild(container);
+    try {
+      const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+      const { svg } = await mermaid.render(id, trimmed, container);
+      this.preview.innerHTML = svg;
+    } catch (err: any) {
+      this.preview.innerHTML = `<div class="mermaid-error">${escapeMermaidError(String(err?.message ?? err ?? "Diagram error"))}</div>`;
+    } finally {
+      document.body.removeChild(container);
+    }
+  }
+
+  ignoreMutation(mutation: MutationRecord | { type: "selection"; target: Node }) {
+    // Don't let ProseMirror react to preview DOM changes (SVG injection)
+    return this.preview.contains(mutation.target as Node);
+  }
+
+  destroy() {
+    if (this.renderTimeout) clearTimeout(this.renderTimeout);
+  }
+}
+
 // ---- Code Block NodeView ----
 class CodeBlockView implements NodeView {
   dom: HTMLElement;
@@ -388,6 +501,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       gapCursor(),
       buildDropImagePlugin(),
       buildImageRenderPlugin(filePathRef),
+      buildMermaidPlugin(),
       buildSearchPlugin(),
       columnResizing(),
       tableEditing(),
@@ -419,7 +533,10 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
           new MathInlineView(node, view, getPos),
         math_block: (node, view, getPos) =>
           new MathBlockView(node, view, getPos),
-        code_block: (node) => new CodeBlockView(node),
+        code_block: (node, view, getPos) =>
+          node.attrs.language === "mermaid"
+            ? new MermaidBlockView(node, view, getPos)
+            : new CodeBlockView(node),
         task_list_item: (node, view, getPos) =>
           new TaskListItemView(node, view, getPos),
       },
