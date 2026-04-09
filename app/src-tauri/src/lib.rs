@@ -224,10 +224,63 @@ async fn show_html_save_dialog(app: tauri::AppHandle, filename: Option<String>) 
 }
 
 #[tauri::command]
-async fn write_temp_html(html: String) -> Result<String, String> {
-    let temp_path = std::env::temp_dir().join("bioscratch_print.html");
-    fs::write(&temp_path, html).map_err(|e| e.to_string())?;
-    Ok(temp_path.to_string_lossy().to_string())
+async fn export_pdf_pandoc(
+    app: tauri::AppHandle,
+    markdown: String,
+    filename: Option<String>,
+    doc_path: Option<String>,
+) -> Result<(), String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    let base = filename.as_deref().unwrap_or("document");
+    let base = base.trim_end_matches(".md").trim_end_matches(".markdown");
+    let suggested = format!("{}.pdf", base);
+
+    let path = app
+        .dialog()
+        .file()
+        .add_filter("PDF", &["pdf"])
+        .set_file_name(&suggested)
+        .blocking_save_file();
+
+    let output_path = match path {
+        Some(p) => p.to_string(),
+        None => return Ok(()), // user cancelled
+    };
+
+    let temp_md = std::env::temp_dir().join("bioscratch_export.md");
+    fs::write(&temp_md, &markdown).map_err(|e| e.to_string())?;
+
+    // Resolve resource path: use the source document's directory so that
+    // relative image paths (e.g. img/shiba.jpg) resolve correctly.
+    let resource_path = doc_path
+        .as_deref()
+        .and_then(|p| std::path::Path::new(p).parent())
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_else(|| std::env::temp_dir().to_string_lossy().to_string());
+
+    let output = std::process::Command::new("pandoc")
+        .arg(temp_md.to_str().unwrap_or(""))
+        .arg("-o")
+        .arg(&output_path)
+        .arg("--standalone")
+        .arg("--from=markdown-implicit_figures")
+        .arg(format!("--resource-path={}", resource_path))
+        .output()
+        .map_err(|e| {
+            if e.kind() == std::io::ErrorKind::NotFound {
+                "Pandoc not found. Please install it: brew install pandoc".to_string()
+            } else {
+                format!("Failed to run pandoc: {}", e)
+            }
+        })?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!("Pandoc error: {}", stderr));
+    }
+
+    Ok(())
 }
 
 #[tauri::command]
@@ -298,7 +351,7 @@ pub fn run() {
             delete_autosave,
             export_html,
             show_html_save_dialog,
-            write_temp_html,
+            export_pdf_pandoc,
             open_url,
             open_new_window,
             list_user_themes,
