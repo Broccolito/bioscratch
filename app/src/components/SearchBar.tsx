@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { EditorView } from "prosemirror-view";
 import {
   setSearch,
@@ -13,19 +13,29 @@ interface SearchBarProps {
 
 const SearchBar: React.FC<SearchBarProps> = ({ view, onClose }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  // Drive the input off React state so it accumulates keystrokes correctly.
+  // Plugin state only controls decorations; reading it back for the controlled
+  // value doesn't work because search transactions don't change the doc, so
+  // dispatchTransaction never fires onChangeRef → React never re-renders →
+  // the controlled input resets to "" after every keystroke.
+  const [query, setQuery] = useState("");
+  // Bump this to force a re-render after navigation so the match counter updates.
+  const [, setNavTick] = useState(0);
 
   useEffect(() => {
     inputRef.current?.focus();
   }, []);
 
-  const getSearchState = () => {
-    if (!view) return null;
-    return searchPluginKey.getState(view.state);
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newQuery = e.target.value;
+    setQuery(newQuery);
+    if (view) setSearch(newQuery, view.state, view.dispatch);
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleNavigate = (dir: 1 | -1) => {
     if (!view) return;
-    setSearch(e.target.value, view.state, view.dispatch);
+    navigateSearch(dir, view.state, view.dispatch);
+    setNavTick((t) => t + 1);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -33,28 +43,22 @@ const SearchBar: React.FC<SearchBarProps> = ({ view, onClose }) => {
       handleClose();
     } else if (e.key === "Enter") {
       e.preventDefault();
-      if (!view) return;
-      navigateSearch(e.shiftKey ? -1 : 1, view.state, view.dispatch);
+      handleNavigate(e.shiftKey ? -1 : 1);
     }
   };
 
   const handleClose = () => {
-    if (view) {
-      setSearch("", view.state, view.dispatch);
-    }
+    if (view) setSearch("", view.state, view.dispatch);
     onClose();
   };
 
-  const searchState = getSearchState();
-  const matchCount = searchState?.matches.length || 0;
-  const currentIndex = searchState?.currentIndex || 0;
-  const query = searchState?.query || "";
+  const searchState = view ? searchPluginKey.getState(view.state) : null;
+  const matchCount = searchState?.matches.length ?? 0;
+  const currentIndex = searchState?.currentIndex ?? 0;
 
   const matchText =
     matchCount === 0
-      ? query
-        ? "No matches"
-        : ""
+      ? query ? "No matches" : ""
       : `${currentIndex + 1} / ${matchCount}`;
 
   return (
@@ -70,20 +74,14 @@ const SearchBar: React.FC<SearchBarProps> = ({ view, onClose }) => {
       <span className="match-count">{matchText}</span>
       <button
         className="search-btn"
-        onClick={() => {
-          if (!view) return;
-          navigateSearch(-1, view.state, view.dispatch);
-        }}
+        onClick={() => handleNavigate(-1)}
         title="Previous match (Shift+Enter)"
       >
         ↑
       </button>
       <button
         className="search-btn"
-        onClick={() => {
-          if (!view) return;
-          navigateSearch(1, view.state, view.dispatch);
-        }}
+        onClick={() => handleNavigate(1)}
         title="Next match (Enter)"
       >
         ↓

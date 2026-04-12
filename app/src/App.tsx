@@ -1087,6 +1087,7 @@ const App: React.FC = () => {
           onSave={handleSave}
           onSearch={handleToggleSearch}
           filePath={filePath}
+          fileMode={fileMode}
         />
       </div>
 

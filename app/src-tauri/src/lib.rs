@@ -532,9 +532,13 @@ pub fn run() {
                 .build()?;
 
             // ── Help menu ─────────────────────────────────────────────────
-            let github_item = MenuItem::with_id(app, "github", "Bioscratch on GitHub", true, None::<&str>)?;
+            let learn_more     = MenuItem::with_id(app, "learn-more",      "Learn More…",           true, None::<&str>)?;
+            let sep_h1         = PredefinedMenuItem::separator(app)?;
+            let github_item    = MenuItem::with_id(app, "github",          "Bioscratch on GitHub",  true, None::<&str>)?;
+            let report_issue   = MenuItem::with_id(app, "report-issue",    "Report an Issue",       true, None::<&str>)?;
+            let request_feat   = MenuItem::with_id(app, "request-feature", "Request a Feature",     true, None::<&str>)?;
             let help_menu = SubmenuBuilder::new(app, "Help")
-                .items(&[&github_item])
+                .items(&[&learn_more, &sep_h1, &github_item, &report_issue, &request_feat])
                 .build()?;
 
             let menu = MenuBuilder::new(app)
@@ -545,10 +549,28 @@ pub fn run() {
 
         app.on_menu_event(|app_handle, event| {
                 match event.id().as_ref() {
+                    "learn-more" => {
+                        use tauri_plugin_opener::OpenerExt;
+                        app_handle.opener()
+                            .open_url("https://broccolito.github.io/bioscratch-landing/", None::<&str>)
+                            .ok();
+                    }
                     "github" => {
                         use tauri_plugin_opener::OpenerExt;
                         app_handle.opener()
                             .open_url("https://github.com/Broccolito/bioscratch", None::<&str>)
+                            .ok();
+                    }
+                    "report-issue" => {
+                        use tauri_plugin_opener::OpenerExt;
+                        app_handle.opener()
+                            .open_url("https://github.com/Broccolito/bioscratch/issues/new", None::<&str>)
+                            .ok();
+                    }
+                    "request-feature" => {
+                        use tauri_plugin_opener::OpenerExt;
+                        app_handle.opener()
+                            .open_url("https://github.com/Broccolito/bioscratch/issues/new?labels=enhancement", None::<&str>)
                             .ok();
                     }
                     id => {

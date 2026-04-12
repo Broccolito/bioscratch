@@ -43,7 +43,11 @@ ProseMirror — WYSIWYG editing, schema, plugins, serialization
 
 ### Rust backend (`app/src-tauri/src/lib.rs`)
 
-Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`read_recent_files`, `save_recent_files`), `export_html`, `export_pdf_pandoc`, `open_url`, `open_new_window`, `get_app_data_dir`, `list_user_themes`, `save_user_theme`, `delete_user_theme`, `check_for_updates`, `download_and_install`, `quit_app`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
+Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`read_recent_files`, `save_recent_files`), `export_html`, `export_pdf_pandoc`, `open_url`, `open_new_window`, `get_app_data_dir`, `get_initial_file`, `list_user_themes`, `save_user_theme`, `delete_user_theme`, `check_for_updates`, `download_and_install`, `quit_app`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
+
+**macOS Open With / file association** — `lib.rs` handles macOS `RunEvent::Opened` to capture files passed before the JS bridge is ready, storing them in a `Mutex<Option<String>>`. The frontend retrieves them via `get_initial_file()` on startup. An `extra-info.plist` in `app/src-tauri/` prevents `NSDocumentController` from intercepting file opens and triggering document restoration (which would break the app's own file handling).
+
+**macOS menu** — `lib.rs` builds the app menu at startup: File (New Tab, Open, Save, Save As, Export HTML, Export PDF), Edit (OS-standard cut/copy/paste/undo), View (Theme), Window (Minimize, New Window), Help (GitHub). Menu events are dispatched to the focused window's webview via `emit_to()`.
 
 ## Key Patterns
 
@@ -59,7 +63,7 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 
 **Tab drag-to-detach** — Uses mouse events (not HTML5 drag API). When a tab is dragged outside the tab bar, the file is saved to disk, a new Tauri window is spawned with `?file={path}`, and the tab is closed in the original window.
 
-**CSS structure** — Three CSS files: `app.css` (layout/toolbar/tabs/welcome), `editor.css` (ProseMirror internals), `markdown.css` (content rendering — also inlined into HTML exports). All colors are CSS custom properties (`--bg-editor`, `--text-primary`, etc.) — never hardcode color values in CSS. Theme tokens are defined in `app/src/themes/*.yaml` and applied to `:root` by `themeLoader.ts`.
+**CSS structure** — Three CSS files in `app/src/styles/`: `app.css` (layout/toolbar/tabs/welcome), `editor.css` (ProseMirror internals), `markdown.css` (content rendering — also inlined into HTML exports). `EditorSurface.tsx` also imports `highlight.js/styles/github.css` and `katex/dist/katex.min.css`. All colors are CSS custom properties (`--bg-editor`, `--text-primary`, etc.) — never hardcode color values in CSS. Theme tokens are defined in `app/src/themes/*.yaml` and applied to `:root` by `themeLoader.ts`.
 
 **Theme system** — Each theme is a flat YAML file in `app/src/themes/`. Keys map directly to `--key` CSS custom properties set on `:root`. `useTheme.ts` reads/writes `localStorage` and applies via `useLayoutEffect` to avoid flash. To add a theme: create the YAML, import it in `themeLoader.ts`, extend `ThemeName`, add to `themeConfigs`, and add to `ThemeSelector.tsx`'s `THEMES` array.
 
@@ -67,7 +71,7 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 
 **Mermaid rendering** — `mermaidPlugin.ts` adds a node decoration (`mermaidActive: true`) when the cursor is inside a `mermaid` code block. `MermaidBlockView` in `EditorSurface.tsx` reads this decoration to toggle between source-visible (active) and rendered diagram (inactive) states — same Typora-style toggle pattern as image rendering.
 
-**File mode** — `lib/fileMode.ts` detects file type from extension and sets one of three modes: `markdown`, `plaintext`, or `code`. Code mode maps 70+ extensions to highlight.js language IDs. In code/plaintext mode, `codeOnlyPlugin` replaces the ProseMirror schema with a plain textarea-like experience.
+**File mode** — `lib/fileMode.ts` detects file type from extension and sets one of three modes: `markdown`, `plaintext`, or `code`. Code mode maps ~97 extensions to highlight.js language IDs. In code/plaintext mode, `codeOnlyPlugin` replaces the ProseMirror schema with a plain textarea-like experience.
 
 **Auto-update** — `check_for_updates` (in lib.rs) hits the GitHub releases API and compares SemVer. `download_and_install` curls the DMG to `~/Downloads/` and opens it. The `UpdateDialog` component in `components/` drives the UI for this flow.
 
@@ -76,6 +80,10 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 **PDF export** — `export_pdf_pandoc` in lib.rs shells out to Pandoc with a generated temp HTML file and resolves relative image paths before conversion. Requires Pandoc installed on the host.
 
 **User themes** — In addition to the 32 built-in YAML themes in `app/src/themes/`, users can import custom YAML theme files via `handleImportTheme()` in `App.tsx`. Custom themes are stored in `{app_data_dir}/user_themes/` via `save_user_theme` and listed/deleted via the corresponding Tauri commands. `themeLoader.ts` merges built-in (`BUILTIN_THEME_RAWS`) and user themes at runtime.
+
+## TypeScript Configuration
+
+`tsconfig.json` enables strict mode with `noUnusedLocals` and `noUnusedParameters`. `npm run build` will fail on unused variables — clean these up before committing.
 
 ## Styling Conventions
 

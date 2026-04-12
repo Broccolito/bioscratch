@@ -1,6 +1,6 @@
 [package]
 name = "bioscratch"
-version = "0.1.0"
+version = "0.1.1"
 description = "Bioscratch - WYSIWYG Markdown Editor"
 authors = ["Bioscratch"]
 edition = "2021"

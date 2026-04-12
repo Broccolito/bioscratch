@@ -13,6 +13,8 @@ import { buildSearchPlugin } from "../editor/plugins/search";
 import { buildHighlightPlugin } from "../editor/plugins/highlight";
 import { buildMermaidPlugin } from "../editor/plugins/mermaidPlugin";
 import { buildCodeOnlyPlugin } from "../editor/plugins/codeOnlyPlugin";
+import { buildMarkdownPastePlugin } from "../editor/plugins/markdownPaste";
+import { FileMode } from "../lib/fileMode";
 import mermaid from "mermaid";
 import { baseKeymap } from "prosemirror-commands";
 import { keymap } from "prosemirror-keymap";
@@ -468,6 +470,7 @@ interface EditorSurfaceProps {
   onSave: () => void;
   onSearch: () => void;
   filePath: string | null;
+  fileMode: FileMode;
 }
 
 const EditorSurface: React.FC<EditorSurfaceProps> = ({
@@ -476,6 +479,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   onSave,
   onSearch,
   filePath,
+  fileMode,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -485,10 +489,12 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   const onSearchRef = useRef(onSearch);
   const onChangeRef = useRef(onChange);
   const filePathRef = useRef<string | null>(filePath);
+  const fileModeRef = useRef<FileMode>(fileMode);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
   useEffect(() => { onSearchRef.current = onSearch; }, [onSearch]);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
   useEffect(() => { filePathRef.current = filePath; }, [filePath]);
+  useEffect(() => { fileModeRef.current = fileMode; }, [fileMode]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -501,6 +507,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       dropCursor(),
       gapCursor(),
       buildDropImagePlugin(),
+      buildMarkdownPastePlugin(fileModeRef),
       buildImageRenderPlugin(filePathRef),
       buildMermaidPlugin(),
       buildCodeOnlyPlugin(),
