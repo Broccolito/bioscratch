@@ -3,11 +3,14 @@ import { EditorView } from "prosemirror-view";
 import { toggleMark, setBlockType, wrapIn } from "prosemirror-commands";
 import { wrapInList } from "prosemirror-schema-list";
 import { schema } from "../editor/schema";
+import type { FileMode } from "../lib/fileMode";
 // prosemirror-tables imports used selectively
 
 
 interface ToolbarProps {
   view: EditorView | null;
+  hasDocument: boolean;
+  fileMode: FileMode;
   onNew: () => void;
   onOpen: () => void;
   onSave: () => void;
@@ -20,6 +23,8 @@ interface ToolbarProps {
 
 const Toolbar: React.FC<ToolbarProps> = ({
   view,
+  hasDocument,
+  fileMode,
   onNew,
   onOpen,
   onSave,
@@ -29,6 +34,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onToggleSearch,
   onOpenThemeSelector,
 }) => {
+  // File ops (Save, Save As, Export) need an open document.
+  // Formatting ops (Paragraph → HR) need an open markdown document.
+  const fileOpsEnabled = hasDocument;
+  const formattingEnabled = hasDocument && fileMode === "markdown";
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
 
@@ -149,19 +158,20 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </svg>
         Open
       </button>
-      <button className="toolbar-btn" onClick={onSave} title="Save (Ctrl+S)">
+      <button className="toolbar-btn" onClick={onSave} disabled={!fileOpsEnabled} title="Save (Ctrl+S)">
         <svg viewBox="0 0 16 16" fill="currentColor">
           <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/>
         </svg>
         Save
       </button>
-      <button className="toolbar-btn" onClick={onSaveAs} title="Save As">
+      <button className="toolbar-btn" onClick={onSaveAs} disabled={!fileOpsEnabled} title="Save As">
         Save As
       </button>
       <div className="export-menu-wrapper" ref={exportMenuRef}>
         <button
           className={`toolbar-btn${exportMenuOpen ? " active" : ""}`}
           onClick={() => setExportMenuOpen((v) => !v)}
+          disabled={!fileOpsEnabled}
           title="Export document"
         >
           Export
@@ -201,6 +211,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
         className="toolbar-select"
         value={getHeadingLevel()}
         onChange={(e) => setHeading(parseInt(e.target.value))}
+        disabled={!formattingEnabled}
         title="Heading level"
       >
         <option value="0">Paragraph</option>
@@ -218,6 +229,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <button
         className="toolbar-btn icon-only"
         onClick={() => exec(toggleMark(schema.marks.bold))}
+        disabled={!formattingEnabled}
         title="Bold (Ctrl+B)"
         style={{ fontWeight: "bold", fontSize: "15px" }}
       >
@@ -226,6 +238,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <button
         className="toolbar-btn icon-only"
         onClick={() => exec(toggleMark(schema.marks.italic))}
+        disabled={!formattingEnabled}
         title="Italic (Ctrl+I)"
         style={{ fontStyle: "italic", fontSize: "15px" }}
       >
@@ -234,6 +247,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <button
         className="toolbar-btn icon-only"
         onClick={() => exec(toggleMark(schema.marks.code))}
+        disabled={!formattingEnabled}
         title="Inline Code (Ctrl+`)"
         style={{ fontFamily: "monospace", fontSize: "14px" }}
       >
@@ -242,6 +256,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <button
         className="toolbar-btn icon-only"
         onClick={() => exec(toggleMark(schema.marks.strikethrough))}
+        disabled={!formattingEnabled}
         title="Strikethrough"
         style={{ textDecoration: "line-through", fontSize: "14px" }}
       >
@@ -254,6 +269,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <button
         className="toolbar-btn"
         onClick={() => exec(wrapInList(schema.nodes.bullet_list))}
+        disabled={!formattingEnabled}
         title="Bullet List"
       >
         <svg viewBox="0 0 16 16" fill="currentColor">
@@ -264,6 +280,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <button
         className="toolbar-btn"
         onClick={() => exec(wrapInList(schema.nodes.ordered_list))}
+        disabled={!formattingEnabled}
         title="Ordered List"
       >
         <svg viewBox="0 0 16 16" fill="currentColor">
@@ -275,6 +292,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <button
         className="toolbar-btn"
         onClick={() => exec(wrapIn(schema.nodes.blockquote))}
+        disabled={!formattingEnabled}
         title="Blockquote"
       >
         <svg viewBox="0 0 16 16" fill="currentColor">
@@ -286,25 +304,25 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <div className="toolbar-separator" />
 
       {/* Blocks */}
-      <button className="toolbar-btn" onClick={insertCodeBlock} title="Code Block">
+      <button className="toolbar-btn" onClick={insertCodeBlock} disabled={!formattingEnabled} title="Code Block">
         <svg viewBox="0 0 16 16" fill="currentColor">
           <path d="M10.478 1.647a.5.5 0 1 0-.956-.294l-4 13a.5.5 0 0 0 .956.294l4-13zM4.854 4.146a.5.5 0 0 1 0 .708L1.707 8l3.147 3.146a.5.5 0 0 1-.708.708l-3.5-3.5a.5.5 0 0 1 0-.708l3.5-3.5a.5.5 0 0 1 .708 0zm6.292 0a.5.5 0 0 0 0 .708L14.293 8l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5a.5.5 0 0 0-.708 0z"/>
         </svg>
         Code
       </button>
-      <button className="toolbar-btn" onClick={insertTableNode} title="Insert Table">
+      <button className="toolbar-btn" onClick={insertTableNode} disabled={!formattingEnabled} title="Insert Table">
         <svg viewBox="0 0 16 16" fill="currentColor">
           <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
         </svg>
         Table
       </button>
-      <button className="toolbar-btn" onClick={insertMathInline} title="Inline Math">
+      <button className="toolbar-btn" onClick={insertMathInline} disabled={!formattingEnabled} title="Inline Math">
         $…$
       </button>
-      <button className="toolbar-btn" onClick={insertMathBlock} title="Math Block">
+      <button className="toolbar-btn" onClick={insertMathBlock} disabled={!formattingEnabled} title="Math Block">
         $$…$$
       </button>
-      <button className="toolbar-btn" onClick={insertHR} title="Horizontal Rule">
+      <button className="toolbar-btn" onClick={insertHR} disabled={!formattingEnabled} title="Horizontal Rule">
         —
       </button>
 

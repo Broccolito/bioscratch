@@ -1,9 +1,12 @@
 # Bioscratch macOS Notarization
 
-Credentials are stored in `notarization_credentials.env` (gitignored). Source it before running any commands:
+Credentials are stored in `notarization_credentials.env` (gitignored). **Do not source it directly** — the unquoted parentheses in `SIGNING_IDENTITY` break zsh. Load credentials with `grep`/`cut` instead:
 
 ```bash
-source notarization/notarization_credentials.env
+export APPLE_ID=$(grep '^APPLE_ID=' notarization/notarization_credentials.env | cut -d= -f2)
+export APPLE_APP_SPECIFIC_PASSWORD=$(grep '^APPLE_APP_SPECIFIC_PASSWORD=' notarization/notarization_credentials.env | cut -d= -f2)
+export APPLE_TEAM_ID=$(grep '^APPLE_TEAM_ID=' notarization/notarization_credentials.env | cut -d= -f2)
+export SIGNING_IDENTITY=$(grep '^SIGNING_IDENTITY=' notarization/notarization_credentials.env | cut -d= -f2-)
 ```
 
 ## Prerequisites
@@ -34,11 +37,16 @@ source notarization/notarization_credentials.env
 
 ## Build
 
+Set the version once at the top — everything below uses it:
+
+```bash
+export VERSION=0.1.1   # ← update this each release
+export PATH="/opt/homebrew/opt/rustup/bin:/opt/homebrew/bin:$PATH"
+```
+
 From `app/`:
 
 ```bash
-export PATH="/opt/homebrew/opt/rustup/bin:/opt/homebrew/bin:$PATH"
-
 # Apple Silicon
 npm run tauri build -- --target aarch64-apple-darwin
 
@@ -54,13 +62,13 @@ Artifacts land in `app/src-tauri/target/<arch>/release/bundle/`.
 codesign --deep --force --verify --verbose \
   --sign "$SIGNING_IDENTITY" \
   --options runtime \
-  --entitlements notarization_entitlements.plist \
+  --entitlements notarization/notarization_entitlements.plist \
   app/src-tauri/target/aarch64-apple-darwin/release/bundle/macos/Bioscratch.app
 
 codesign --deep --force --verify --verbose \
   --sign "$SIGNING_IDENTITY" \
   --options runtime \
-  --entitlements notarization_entitlements.plist \
+  --entitlements notarization/notarization_entitlements.plist \
   app/src-tauri/target/x86_64-apple-darwin/release/bundle/macos/Bioscratch.app
 ```
 
@@ -69,9 +77,9 @@ codesign --deep --force --verify --verbose \
 Repeat for each architecture (`aarch64` / `x86_64`):
 
 ```bash
-ARCH=aarch64   # or x86_64
+ARCH=aarch64   # then repeat with x86_64
 APP_PATH="app/src-tauri/target/${ARCH}-apple-darwin/release/bundle/macos/Bioscratch.app"
-DMG_PATH="app/src-tauri/target/${ARCH}-apple-darwin/release/bundle/dmg/Bioscratch_0.1.0_${ARCH}.dmg"
+DMG_PATH="app/src-tauri/target/${ARCH}-apple-darwin/release/bundle/dmg/Bioscratch_${VERSION}_${ARCH}.dmg"
 
 # Notarize the .app
 ditto -c -k --keepParent "$APP_PATH" /tmp/Bioscratch_${ARCH}.zip
@@ -96,16 +104,23 @@ xcrun notarytool submit "$DMG_PATH" \
 xcrun stapler staple "$DMG_PATH"
 ```
 
+Note: Tauri names the Intel DMG with `_x64` (not `_x86_64`), so the actual Intel DMG path is:
+`app/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/Bioscratch_${VERSION}_x64.dmg`
+
 ## Publish to GitHub
 
 ```bash
-# Delete existing assets and re-upload notarized DMGs
-gh release delete-asset v0.1.0 Bioscratch_0.1.0_aarch64.dmg --yes
-gh release delete-asset v0.1.0 Bioscratch_0.1.0_x64.dmg --yes
+# Push commit and tag
+git push origin main
+git tag v${VERSION}
+git push origin v${VERSION}
 
-gh release upload v0.1.0 \
-  app/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Bioscratch_0.1.0_aarch64.dmg \
-  app/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/Bioscratch_0.1.0_x64.dmg
+# Create release and upload both DMGs
+gh release create v${VERSION} \
+  --title "Bioscratch ${VERSION}" \
+  --notes "See commit history for changes." \
+  "app/src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/Bioscratch_${VERSION}_aarch64.dmg" \
+  "app/src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/Bioscratch_${VERSION}_x64.dmg"
 ```
 
 ## Entitlements

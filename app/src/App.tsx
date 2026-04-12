@@ -1017,6 +1017,8 @@ const App: React.FC = () => {
       )}
       <Toolbar
         view={viewRef.current}
+        hasDocument={tabs.length > 0}
+        fileMode={fileMode}
         onNew={handleNew}
         onOpen={handleOpen}
         onSave={handleSave}

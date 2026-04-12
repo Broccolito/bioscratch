@@ -80,6 +80,13 @@ body {
   color: var(--text-primary);
 }
 
+.toolbar-btn:disabled,
+.toolbar-btn:disabled:hover {
+  opacity: 0.35;
+  cursor: default;
+  background: transparent;
+}
+
 .toolbar-btn:active, .toolbar-btn.active {
   background: var(--toolbar-btn-active);
   color: var(--text-primary);
@@ -113,6 +120,11 @@ body {
 .toolbar-select:focus {
   border-color: var(--accent);
   color: var(--text-primary);
+}
+
+.toolbar-select:disabled {
+  opacity: 0.35;
+  cursor: default;
 }
 
 /* ---- Export dropdown ---- */
