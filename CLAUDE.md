@@ -2,6 +2,10 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Commit Rules
+
+**Never add `Co-Authored-By` lines to commit messages in this repo.** A `commit-msg` hook in `.githooks/commit-msg` enforces this and will reject any commit containing a `Co-Authored-By: Claude ...` line.
+
 ## Commands
 
 All commands run from the `app/` directory:
