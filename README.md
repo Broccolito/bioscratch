@@ -4,7 +4,7 @@
 
 <p align="center">A What You See Is What You Get (WYSIWYG) Markdown editor built for researchers, data scientists, and AI engineers — for humans and agents alike.</p>
 
-<p align="center"><strong><a href="https://github.com/Broccolito/bioscratch/releases">Download</a></strong> · <strong><a href="https://github.com/Broccolito/bioscratch/issues">Report a Bug</a></strong></p>
+<p align="center"><strong><a href="https://broccolito.github.io/bioscratch-landing/">Website</a></strong> · <strong><a href="https://github.com/Broccolito/bioscratch/releases">Download</a></strong> · <strong><a href="https://github.com/Broccolito/bioscratch/issues">Report a Bug</a></strong></p>
 
 ## Why Bioscratch?
 

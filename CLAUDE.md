@@ -34,9 +34,9 @@ ProseMirror — WYSIWYG editing, schema, plugins, serialization
 ### Frontend (`app/src/`)
 
 - **`App.tsx`** — root orchestrator: tab state, file open/save, autosave polling, file-change polling, drag-drop coordination
-- **`components/EditorSurface.tsx`** — mounts the single shared `EditorView` and houses custom ProseMirror node views (`MathInlineView`, `MathBlockView`, `MermaidBlockView`). Note: all NodeViews live here, not in `schema.ts`
+- **`components/`** — `EditorSurface.tsx` (mounts the single shared `EditorView`, houses all NodeViews: `MathInlineView`, `MathBlockView`, `MermaidBlockView`; NodeViews live here, not in `schema.ts`), `SearchBar.tsx`, `StatusBar.tsx`, `RecoveryDialog.tsx` (autosave recovery modal), `LargeFileDialog.tsx`, `UpdateDialog.tsx` (auto-update UI)
 - **`editor/schema.ts`** — ProseMirror schema: all nodes (headings, lists, task lists, code blocks, tables, math, images) and marks
-- **`editor/plugins/`** — keymap, inputRules (Markdown shortcuts), history, search, dropImage, highlight, imageRender (Typora-style image decoration), mermaidPlugin (cursor-active decoration for Mermaid blocks), codeOnlyPlugin (non-Markdown file editing mode)
+- **`editor/plugins/`** — keymap, inputRules (Markdown shortcuts), history, search, dropImage, highlight, imageRender (Typora-style image decoration), mermaidPlugin (cursor-active decoration for Mermaid blocks), codeOnlyPlugin (non-Markdown file editing mode), markdownPaste (intercepts plain-text pastes in markdown mode and parses them as Markdown)
 - **`editor/serialization/`** — bidirectional Markdown ↔ ProseMirror doc via unified/remark ecosystem
 - **`hooks/`** — `useDocumentState` (filePath/dirty/content state + load/save logic), `useAutosave` (30s polling), `useRecentFiles` (recent file list via Tauri), `useTheme` (localStorage + CSS var application)
 - **`lib/`** — `themeLoader.ts` (YAML → CSS vars), `export.ts` (HTML export), `stats.ts` (word/char counts), `math.ts` (KaTeX helpers), `imagePaths.ts` (path resolution for local images)
@@ -80,6 +80,10 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 **PDF export** — `export_pdf_pandoc` in lib.rs shells out to Pandoc with a generated temp HTML file and resolves relative image paths before conversion. Requires Pandoc installed on the host.
 
 **User themes** — In addition to the 32 built-in YAML themes in `app/src/themes/`, users can import custom YAML theme files via `handleImportTheme()` in `App.tsx`. Custom themes are stored in `{app_data_dir}/user_themes/` via `save_user_theme` and listed/deleted via the corresponding Tauri commands. `themeLoader.ts` merges built-in (`BUILTIN_THEME_RAWS`) and user themes at runtime.
+
+## Version Management
+
+Version is declared in two places that must stay in sync: `app/package.json` (`"version"`) and `app/src-tauri/Cargo.toml` (`version = "..."`). The landing page at [broccolito.github.io/bioscratch-landing](https://broccolito.github.io/bioscratch-landing/) and its source at `/Users/wgu/Desktop/bioscratch-landing` also hardcode the version in download links — update those on release too.
 
 ## TypeScript Configuration
 
