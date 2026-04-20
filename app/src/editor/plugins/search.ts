@@ -104,19 +104,15 @@ export function navigateSearch(
   const prev = searchPluginKey.getState(state);
   if (!prev || prev.matches.length === 0) return;
 
-  let newIndex =
+  const newIndex =
     (prev.currentIndex + direction + prev.matches.length) % prev.matches.length;
 
   const newSearchState: SearchState = { ...prev, currentIndex: newIndex };
-  const tr = state.tr.setMeta(searchPluginKey, newSearchState);
-  dispatch(tr);
-
-  // Scroll to match
   const match = prev.matches[newIndex];
+
+  let tr = state.tr.setMeta(searchPluginKey, newSearchState);
   if (match) {
-    const selTr = state.tr.setSelection(
-      TextSelection.create(state.doc, match.from)
-    );
-    dispatch(selTr);
+    tr = tr.setSelection(TextSelection.create(state.doc, match.from)).scrollIntoView();
   }
+  dispatch(tr);
 }

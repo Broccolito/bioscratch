@@ -186,23 +186,29 @@ function serializeTaskItem(item: ProseMirrorNode, prefix: string): string {
   return result;
 }
 
+// Serialize a single table cell's content. hard_break nodes become <br> so that
+// multi-line cell content round-trips correctly through the GFM format.
+function serializeCellContent(cell: ProseMirrorNode): string {
+  const parts: string[] = [];
+  cell.forEach((block) => {
+    let s = "";
+    block.forEach((child) => {
+      s += child.type.name === "hard_break" ? "<br>" : serializeInline(child);
+    });
+    parts.push(s.trim());
+  });
+  return parts.filter(Boolean).join("<br>");
+}
+
 function serializeTable(node: ProseMirrorNode): string {
   const rows: string[][] = [];
-  let isFirstRow = true;
 
   node.forEach((row) => {
     const cells: string[] = [];
     row.forEach((cell) => {
-      let cellContent = "";
-      cell.forEach((block) => {
-        cellContent += serializeInlineContent(block);
-      });
-      cells.push(cellContent.trim());
+      cells.push(serializeCellContent(cell));
     });
     rows.push(cells);
-    if (isFirstRow) {
-      isFirstRow = false;
-    }
   });
 
   if (rows.length === 0) return "";

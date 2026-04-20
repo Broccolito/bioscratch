@@ -11,8 +11,9 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 All commands run from the `app/` directory:
 
 ```bash
+npm install            # Also runs `prepare`, which sets core.hooksPath to .githooks
 npm run tauri dev      # Start dev server (Vite on :1420 + Tauri window)
-npm run tauri build    # Production build
+npm run tauri build    # Production build (artifacts in app/src-tauri/target/<arch>/release/bundle/)
 npm run dev            # Vite frontend only (no Tauri shell)
 npm run build          # TypeScript check + Vite bundle
 ```
@@ -44,6 +45,8 @@ ProseMirror — WYSIWYG editing, schema, plugins, serialization
 ### Rust backend (`app/src-tauri/src/lib.rs`)
 
 Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`read_recent_files`, `save_recent_files`), `export_html`, `export_pdf_pandoc`, `open_url`, `open_new_window`, `get_app_data_dir`, `get_initial_file`, `list_user_themes`, `save_user_theme`, `delete_user_theme`, `check_for_updates`, `download_and_install`, `quit_app`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
+
+**Tauri security** — CSP is disabled (`"csp": null` in `tauri.conf.json`) to allow inline styles and KaTeX's dynamic rendering. Do not re-enable without auditing the entire rendering pipeline.
 
 **macOS Open With / file association** — `lib.rs` handles macOS `RunEvent::Opened` to capture files passed before the JS bridge is ready, storing them in a `Mutex<Option<String>>`. The frontend retrieves them via `get_initial_file()` on startup. An `extra-info.plist` in `app/src-tauri/` prevents `NSDocumentController` from intercepting file opens and triggering document restoration (which would break the app's own file handling).
 

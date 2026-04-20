@@ -80,6 +80,10 @@ function convertInline(
 
     case "html": {
       const n = node as { type: "html"; value: string };
+      // <br> written by serializeCellContent should round-trip as a hard break
+      if (/^<br\s*\/?>$/i.test(n.value.trim())) {
+        return [schema.nodes.hard_break.create()];
+      }
       return [schema.text(n.value, marks as any)];
     }
 

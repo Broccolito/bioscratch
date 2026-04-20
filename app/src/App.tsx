@@ -48,6 +48,7 @@ interface StoredTab {
   editorState: EditorState | null;
   fileMode: FileMode;
   codeLanguage: string;
+  scrollTop: number;
 }
 
 let nextTabId = 1;
@@ -304,6 +305,7 @@ const App: React.FC = () => {
   // ---- Save current tab's EditorState into storage ----
   const stashActiveTab = useCallback(() => {
     const view = viewRef.current;
+    const scrollEl = document.querySelector(".editor-scroll-area") as HTMLElement | null;
     storedTabsRef.current.set(activeTabId, {
       id: activeTabId,
       filePath,
@@ -312,6 +314,7 @@ const App: React.FC = () => {
       editorState: view ? view.state : null,
       fileMode,
       codeLanguage,
+      scrollTop: scrollEl?.scrollTop ?? 0,
     });
   }, [activeTabId, filePath, dirty, content, fileMode, codeLanguage]);
 
@@ -357,6 +360,7 @@ const App: React.FC = () => {
       // Stash the currently active tab before adding any new ones
       const curId = activeTabIdRef.current;
       if (curId) {
+        const scrollEl = document.querySelector(".editor-scroll-area") as HTMLElement | null;
         storedTabsRef.current.set(curId, {
           id: curId,
           filePath: filePathRef.current,
@@ -365,6 +369,7 @@ const App: React.FC = () => {
           editorState: view ? view.state : null,
           fileMode: fileModeRef.current,
           codeLanguage: codeLanguageRef.current,
+          scrollTop: scrollEl?.scrollTop ?? 0,
         });
       }
 
@@ -386,6 +391,7 @@ const App: React.FC = () => {
           editorState: makeEditorStateForContent(content, mode, lang, plugins),
           fileMode: mode,
           codeLanguage: lang,
+          scrollTop: 0,
         });
       }
 
@@ -416,6 +422,8 @@ const App: React.FC = () => {
       const activeState = makeEditorStateForContent(activeContent, activeMode, activeLang, plugins);
       if (view) {
         view.updateState(activeState);
+        const scrollEl = document.querySelector(".editor-scroll-area") as HTMLElement | null;
+        if (scrollEl) scrollEl.scrollTop = 0;
       }
       const stats = getDocStats(activeState.doc);
       setWordCount(stats.words);
@@ -470,6 +478,7 @@ const App: React.FC = () => {
     (tabId: string) => {
       const view = viewRef.current;
       if (!view) return;
+      const scrollEl = document.querySelector(".editor-scroll-area") as HTMLElement | null;
 
       const stored = storedTabsRef.current.get(tabId);
       if (stored) {
@@ -479,6 +488,7 @@ const App: React.FC = () => {
           stored.editorState ??
           makeEditorStateForContent(stored.content, mode, lang, view.state.plugins);
         view.updateState(state);
+        if (scrollEl) scrollEl.scrollTop = stored.scrollTop ?? 0;
         setFilePath(stored.filePath);
         setContent(stored.content);
         setDirty(stored.dirty);
@@ -491,6 +501,7 @@ const App: React.FC = () => {
         // Brand new tab — empty markdown document
         const emptyState = makeEmptyEditorState(view.state.plugins);
         view.updateState(emptyState);
+        if (scrollEl) scrollEl.scrollTop = 0;
         setFilePath(null);
         setContent("");
         setDirty(false);
@@ -528,6 +539,8 @@ const App: React.FC = () => {
       const emptyState = makeEmptyEditorState(view.state.plugins);
       view.updateState(emptyState);
     }
+    const scrollEl = document.querySelector(".editor-scroll-area") as HTMLElement | null;
+    if (scrollEl) scrollEl.scrollTop = 0;
     setFilePath(null);
     setFileMode("markdown");
     setCodeLanguage("");
@@ -618,6 +631,8 @@ const App: React.FC = () => {
       setTabs((prev) => [...prev, { id, filePath: path, dirty: false }]);
       setActiveTabId(id);
       if (view) view.updateState(newState);
+      const scrollEl = document.querySelector(".editor-scroll-area") as HTMLElement | null;
+      if (scrollEl) scrollEl.scrollTop = 0;
       setFilePath(path);
       setFileMode(mode);
       setCodeLanguage(language);

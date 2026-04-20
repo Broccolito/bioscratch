@@ -14,6 +14,7 @@ import { buildHighlightPlugin } from "../editor/plugins/highlight";
 import { buildMermaidPlugin } from "../editor/plugins/mermaidPlugin";
 import { buildCodeOnlyPlugin } from "../editor/plugins/codeOnlyPlugin";
 import { buildMarkdownPastePlugin } from "../editor/plugins/markdownPaste";
+import { buildTableControlsPlugin } from "../editor/plugins/tableControls";
 import { FileMode } from "../lib/fileMode";
 import mermaid from "mermaid";
 import { baseKeymap } from "prosemirror-commands";
@@ -53,6 +54,10 @@ class MathInlineView implements NodeView {
     this.dom.appendChild(this.span);
 
     this.renderMath();
+
+    this.dom.addEventListener("mousedown", (e) => {
+      e.preventDefault(); // prevent browser text-selection within KaTeX DOM
+    });
 
     this.dom.addEventListener("click", (e) => {
       e.stopPropagation();
@@ -114,6 +119,7 @@ class MathInlineView implements NodeView {
     this.dom.removeChild(this.input);
     this.input = null;
     this.span.style.display = "";
+    this.view.focus();
   }
 
   update(node: ProseMirrorNode) {
@@ -126,6 +132,7 @@ class MathInlineView implements NodeView {
   }
 
   stopEvent(event: Event) {
+    if (event.type === "mousedown" || event.type === "dblclick") return true;
     return this.isEditing && (event.type === "keydown" || event.type === "keyup" || event.type === "keypress" || event.type === "input");
   }
 
@@ -510,10 +517,11 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
       buildMarkdownPastePlugin(fileModeRef),
       buildImageRenderPlugin(filePathRef),
       buildMermaidPlugin(),
-      buildCodeOnlyPlugin(),
+      buildCodeOnlyPlugin(fileModeRef),
       buildSearchPlugin(),
       columnResizing(),
       tableEditing(),
+      buildTableControlsPlugin(),
       buildHighlightPlugin(),
     ];
 

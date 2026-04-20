@@ -36,6 +36,10 @@ const SearchBar: React.FC<SearchBarProps> = ({ view, onClose }) => {
     if (!view) return;
     navigateSearch(dir, view.state, view.dispatch);
     setNavTick((t) => t + 1);
+    requestAnimationFrame(() => {
+      const el = view.dom.querySelector(".search-highlight-current");
+      if (el) el.scrollIntoView({ block: "center", inline: "nearest" });
+    });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

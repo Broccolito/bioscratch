@@ -141,6 +141,26 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
   return false;
 };
 
+// Inside a table cell, Enter inserts a hard break rather than splitting the paragraph.
+// This keeps cell content self-contained and serialises cleanly as <br>.
+const enterInTableCell: Command = (state, dispatch) => {
+  const { $head, empty } = state.selection;
+  if (!empty) return false;
+  for (let d = $head.depth; d > 0; d--) {
+    const name = $head.node(d).type.name;
+    if (name === "table_cell" || name === "table_header") {
+      if (dispatch) {
+        dispatch(
+          state.tr.replaceSelectionWith(schema.nodes.hard_break.create()).scrollIntoView()
+        );
+      }
+      return true;
+    }
+    if (name === "doc") break;
+  }
+  return false;
+};
+
 // Toggle checked state on a task_list_item when cursor is inside it.
 export const toggleTaskItem: Command = (state, dispatch) => {
   const { $head } = state.selection;
@@ -215,8 +235,9 @@ export function buildKeymap(
     return true;
   });
 
-  // Enter: first check markdown block starters, then list item split
+  // Enter: table cells first (hard break), then markdown triggers, then list split
   keys["Enter"] = chainCommands(
+    enterInTableCell,
     enterForMarkdownBlocks,
     splitListItem(schema.nodes.list_item),
     splitListItem(schema.nodes.task_list_item)
@@ -232,6 +253,60 @@ export function buildKeymap(
     goToNextCell(-1)
   );
 
+  // ArrowUp at first line of code_block or math_block: insert paragraph before and move there
+  const exitBlockUp: Command = (state, dispatch) => {
+    const { $head, empty } = state.selection;
+    if (!empty) return false;
+
+    const parent = $head.parent;
+    const grandParent = $head.node($head.depth - 1);
+
+    if (parent.type === schema.nodes.code_block) {
+      const text = parent.textContent;
+      const offset = $head.parentOffset;
+      // If there's a newline before the cursor, we're not on the first line
+      if (text.slice(0, offset).includes("\n")) return false;
+      if (dispatch) {
+        const before = $head.before($head.depth);
+        const tr = state.tr;
+        if (before === 0) {
+          tr.insert(0, schema.nodes.paragraph.create());
+          tr.setSelection(TextSelection.near(tr.doc.resolve(1)));
+        } else {
+          tr.setSelection(TextSelection.near(state.doc.resolve(before - 1), -1));
+        }
+        dispatch(tr.scrollIntoView());
+      }
+      return true;
+    }
+
+    if (
+      grandParent &&
+      (grandParent.type === schema.nodes.math_block ||
+        parent.type === schema.nodes.math_block)
+    ) {
+      const blockDepth = parent.type === schema.nodes.math_block
+        ? $head.depth
+        : $head.depth - 1;
+      if (dispatch) {
+        const before = $head.before(blockDepth);
+        const tr = state.tr;
+        if (before === 0) {
+          tr.insert(0, schema.nodes.paragraph.create());
+          tr.setSelection(TextSelection.near(tr.doc.resolve(1)));
+        } else {
+          tr.setSelection(TextSelection.near(state.doc.resolve(before - 1), -1));
+        }
+        dispatch(tr.scrollIntoView());
+      }
+      return true;
+    }
+
+    return false;
+  };
+
+  keys["ArrowUp"] = exitBlockUp;
+
   // ArrowDown at last line of code_block or math_block: insert paragraph after and move there
   const exitBlockDown: Command = (state, dispatch) => {
     const { $head, empty } = state.selection;
@@ -245,8 +320,9 @@ export function buildKeymap(
       const text = parent.textContent;
       const offset = $head.parentOffset;
       const afterCursor = text.slice(offset);
-      // If there's another newline after the cursor, let normal navigation handle it
-      if (afterCursor.includes("\n")) return false;
+      // Strip one trailing newline (remark adds one to code block content) before checking
+      const relevantAfter = afterCursor.endsWith("\n") ? afterCursor.slice(0, -1) : afterCursor;
+      if (relevantAfter.includes("\n")) return false;
       if (dispatch) {
         const after = $head.after($head.depth); // position after the code_block
         const tr = state.tr;

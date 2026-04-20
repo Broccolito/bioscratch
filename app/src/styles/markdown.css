@@ -226,6 +226,50 @@
   font-size: 1.04em;
 }
 
+/* ---- Table row/column controls ---- */
+.table-ctrl-btn {
+  position: fixed;
+  z-index: 1000;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 1.5px solid var(--border-color, #d4ccc0);
+  background: var(--bg-editor, #fafafa);
+  color: var(--text-secondary, #666);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-family: Arial, sans-serif;
+  user-select: none;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.10);
+  transition: background 0.12s, color 0.12s, border-color 0.12s, transform 0.1s;
+  pointer-events: auto;
+}
+
+.table-ctrl-plus:hover {
+  background: #2563eb;
+  border-color: #2563eb;
+  color: #fff;
+  transform: scale(1.15);
+}
+
+.table-ctrl-minus:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
+  transform: scale(1.15);
+}
+
+[data-color-scheme="dark"] .table-ctrl-btn {
+  background: var(--bg-editor, #1e1e1e);
+  border-color: var(--border-color, #444);
+  color: var(--text-secondary, #aaa);
+}
+
 /* ---- Placeholder text ---- */
 .ProseMirror p.is-empty:first-child::before {
   content: attr(data-placeholder);
