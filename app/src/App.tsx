@@ -98,6 +98,10 @@ const App: React.FC = () => {
   const { theme, setTheme } = useTheme(userThemeVars);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
+  const [fontScale, setFontScale] = useState<number>(() => {
+    const saved = localStorage.getItem("bioscratch-font-scale");
+    return saved ? Math.max(60, Math.min(200, parseInt(saved, 10))) : 100;
+  });
   const { addRecentFile } = useRecentFiles();
 
   // Load user themes on mount
@@ -110,6 +114,25 @@ const App: React.FC = () => {
       setUserThemeVars(map);
     });
   }, []);
+
+  // Startup update check — runs once, 3s after mount so it never delays app load.
+  // Silently ignores network errors so offline users see no disruption.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      invoke<{ is_update_available: boolean }>("check_for_updates")
+        .then(({ is_update_available }) => {
+          if (is_update_available) setUpdateDialogOpen(true);
+        })
+        .catch(() => { /* network unavailable — skip silently */ });
+    }, 3000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Apply font scale via CSS zoom on the html element
+  useEffect(() => {
+    document.documentElement.style.zoom = String(fontScale / 100);
+    localStorage.setItem("bioscratch-font-scale", String(fontScale));
+  }, [fontScale]);
 
   // Import a YAML theme file from disk
   const handleImportTheme = useCallback(async () => {
@@ -915,6 +938,9 @@ const App: React.FC = () => {
         case "theme":       setThemePickerOpen(true); break;
         case "check-updates": setUpdateDialogOpen(true); break;
         case "new-window":  handleNewWindowRef.current(); break;
+        case "font-larger":  setFontScale(s => Math.min(200, s + 10)); break;
+        case "font-smaller": setFontScale(s => Math.max(60, s - 10)); break;
+        case "font-reset":   setFontScale(100); break;
       }
     });
     return () => { promise.then((fn) => fn()); };
@@ -1008,6 +1034,15 @@ const App: React.FC = () => {
           ? (idx - 1 + currentTabs.length) % currentTabs.length
           : (idx + 1) % currentTabs.length;
         handleSelectTabRef.current(currentTabs[nextIdx].id);
+      } else if (mod && (e.key === "=" || e.key === "+")) {
+        e.preventDefault();
+        setFontScale(s => Math.min(200, s + 10));
+      } else if (mod && e.key === "-") {
+        e.preventDefault();
+        setFontScale(s => Math.max(60, s - 10));
+      } else if (mod && e.key === "0") {
+        e.preventDefault();
+        setFontScale(100);
       } else if (e.key === "Escape" && searchVisible) {
         setSearchVisible(false);
       }
@@ -1015,7 +1050,7 @@ const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, handleOpen, handleNew, handleNewWindow, handleCloseTab, handleSelectTab, activeTabId, searchVisible]);
+  }, [handleSave, handleOpen, handleNew, handleNewWindow, handleCloseTab, handleSelectTab, activeTabId, searchVisible, setFontScale]);
 
   return (
     <div className="app-container">

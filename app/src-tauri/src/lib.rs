@@ -3,6 +3,8 @@ use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 use serde::{Deserialize, Serialize};
 
+mod dev_bridge;
+
 // Static storage so the pending file path is always accessible — even if
 // RunEvent::Opened fires before setup() has registered Tauri managed state.
 static PENDING_FILE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
@@ -320,6 +322,10 @@ async fn open_new_window(app: tauri::AppHandle, file_path: Option<String>) -> Re
         .inner_size(900.0, 680.0)
         .center()
         .resizable(true)
+        .initialization_script(
+            "document.addEventListener('contextmenu',\
+             function(e){e.preventDefault();},{capture:true});"
+        )
         .build()
         .map_err(|e| e.to_string())?;
     Ok(())
@@ -518,9 +524,13 @@ pub fn run() {
                 .build()?;
 
             // ── View menu ─────────────────────────────────────────────────
-            let theme_item = MenuItem::with_id(app, "theme", "Theme…", true, None::<&str>)?;
+            let theme_item   = MenuItem::with_id(app, "theme",        "Theme…",              true, None::<&str>)?;
+            let sep_v1       = PredefinedMenuItem::separator(app)?;
+            let font_larger  = MenuItem::with_id(app, "font-larger",  "Increase Font Size",  true, Some("CmdOrCtrl+="))?;
+            let font_smaller = MenuItem::with_id(app, "font-smaller", "Decrease Font Size",  true, Some("CmdOrCtrl+-"))?;
+            let font_reset   = MenuItem::with_id(app, "font-reset",   "Actual Size",         true, Some("CmdOrCtrl+0"))?;
             let view_menu = SubmenuBuilder::new(app, "View")
-                .items(&[&theme_item])
+                .items(&[&theme_item, &sep_v1, &font_larger, &font_smaller, &font_reset])
                 .build()?;
 
             // ── Window menu ───────────────────────────────────────────────
@@ -546,6 +556,27 @@ pub fn run() {
                 .build()?;
 
             app.set_menu(menu)?;
+
+            if cfg!(debug_assertions) {
+                if let Err(e) = dev_bridge::start_bridge(app.handle()).map(|_| ()) {
+                    eprintln!("Warning: Failed to start dev bridge: {e}");
+                }
+            }
+
+            // Create the main window here so we can attach an initialization
+            // script. initialization_script becomes a WKUserScript injected at
+            // atDocumentStart — the only reliable way to suppress WKWebView's
+            // native macOS context menu before it fires.
+            use tauri::{WebviewUrl, WebviewWindowBuilder};
+            WebviewWindowBuilder::new(app, "main", WebviewUrl::App("/".into()))
+                .title("Bioscratch")
+                .inner_size(1200.0, 900.0)
+                .min_inner_size(800.0, 500.0)
+                .initialization_script(
+                    "document.addEventListener('contextmenu',\
+                     function(e){e.preventDefault();},{capture:true});"
+                )
+                .build()?;
 
         app.on_menu_event(|app_handle, event| {
                 match event.id().as_ref() {
@@ -604,6 +635,7 @@ pub fn run() {
             download_and_install,
             quit_app,
             get_initial_file,
+            dev_bridge::__dev_bridge_result,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
