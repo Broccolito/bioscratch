@@ -19,7 +19,10 @@ export function buildMermaidPlugin(): Plugin {
           if (node.attrs.language !== "mermaid") return false;
 
           const nodeEnd = pos + node.nodeSize;
-          if ($head.pos > pos && $head.pos <= nodeEnd) {
+          // nodeEnd is the position *after* the block; a cursor there belongs to
+          // the following block, so use a strict upper bound to avoid keeping the
+          // source visible when the caret has already left the diagram.
+          if ($head.pos > pos && $head.pos < nodeEnd) {
             decos.push(
               Decoration.node(pos, nodeEnd, {}, { mermaidActive: true })
             );

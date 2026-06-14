@@ -1,67 +1,98 @@
 import { Node as ProseMirrorNode, Mark } from "prosemirror-model";
 
-function serializeInline(node: ProseMirrorNode): string {
-  if (node.type.name === "text") {
-    let text = node.text || "";
+// Escape characters that would otherwise be re-parsed as Markdown syntax on the
+// next import, so that literal text like "*not italic*" or "[x]" round-trips.
+// Applied to plain text only — never inside inline code (backticks already make
+// the content literal) or to text that is itself a code span.
+function escapeMarkdownText(text: string): string {
+  return text
+    // Inline emphasis / code / strike delimiters, anywhere. Brackets are NOT
+    // escaped: images are stored as literal "![alt](src)" text and escaping the
+    // brackets would break them, while literal "[text]" stays literal text on
+    // re-import anyway (only "[text](url)" becomes a link).
+    .replace(/([\\`*_~])/g, "\\$1")
+    // "<" only when it could begin an HTML tag or autolink.
+    .replace(/<(?=[a-zA-Z/!?])/g, "\\<")
+    // "#", ">" and list markers are only special at the start of a line.
+    .replace(/^(\s*)([#>])/gm, "$1\\$2")
+    .replace(/^(\s*)([-+])(\s)/gm, "$1\\$2$3")
+    .replace(/^(\s*\d+)([.)])(\s)/gm, "$1\\$2$3");
+}
 
-    // Apply marks from outermost to innermost
-    const marks = [...node.marks];
+// Opening delimiter for a mark.
+function markOpen(mark: Mark): string {
+  switch (mark.type.name) {
+    case "bold": return "**";
+    case "italic": return "*";
+    case "strikethrough": return "~~";
+    case "code": return "`";
+    case "link": return "[";
+    default: return "";
+  }
+}
 
-    // Sort marks for consistent output
-    let result = text;
-
-    // We'll apply marks by wrapping
-    for (let i = marks.length - 1; i >= 0; i--) {
-      const mark = marks[i];
-      result = applyMark(mark, result, text);
+// Closing delimiter for a mark (links carry their target on close).
+function markClose(mark: Mark): string {
+  switch (mark.type.name) {
+    case "bold": return "**";
+    case "italic": return "*";
+    case "strikethrough": return "~~";
+    case "code": return "`";
+    case "link": {
+      const { href, title } = mark.attrs;
+      const titlePart = title ? ` "${title}"` : "";
+      return `](${href}${titlePart})`;
     }
-
-    return result;
+    default: return "";
   }
+}
 
-  if (node.type.name === "hard_break") {
-    return "  \n";
-  }
-
+// Serialize a single non-text inline atom (image / math / hard break).
+function serializeAtomInline(node: ProseMirrorNode, hardBreak: string): string {
+  if (node.type.name === "hard_break") return hardBreak;
   if (node.type.name === "image") {
     const { src, alt, title } = node.attrs;
     const titlePart = title ? ` "${title}"` : "";
     return `![${alt || ""}](${src}${titlePart})`;
   }
-
-  if (node.type.name === "math_inline") {
-    return `$${node.attrs.math}$`;
-  }
-
+  if (node.type.name === "math_inline") return `$${node.attrs.math}$`;
   return "";
 }
 
-function applyMark(mark: Mark, content: string, _rawText: string): string {
-  switch (mark.type.name) {
-    case "bold":
-      return `**${content}**`;
-    case "italic":
-      return `*${content}*`;
-    case "code":
-      return `\`${content}\``;
-    case "link": {
-      const { href, title } = mark.attrs;
-      const titlePart = title ? ` "${title}"` : "";
-      return `[${content}](${href}${titlePart})`;
+// Serialize a sequence of inline nodes, opening/closing marks across adjacent
+// nodes so a shared mark isn't repeatedly closed and reopened. This keeps e.g.
+// bold around inline code as **`code`** instead of the **`code`****…** doubling
+// that escalates on every round-trip.
+function serializeInlineSeq(parent: ProseMirrorNode, hardBreak: string): string {
+  let result = "";
+  const active: Mark[] = [];
+  const closeFrom = (i: number) => {
+    for (let k = active.length - 1; k >= i; k--) result += markClose(active[k]);
+    active.length = i;
+  };
+  parent.forEach((child) => {
+    const marks = child.type.name === "text" ? child.marks : Mark.none;
+    // Keep the longest prefix of marks that is already open, in order.
+    let keep = 0;
+    while (keep < active.length && keep < marks.length && active[keep].eq(marks[keep])) keep++;
+    closeFrom(keep);
+    for (let k = keep; k < marks.length; k++) {
+      result += markOpen(marks[k]);
+      active.push(marks[k]);
     }
-    case "strikethrough":
-      return `~~${content}~~`;
-    default:
-      return content;
-  }
+    if (child.type.name === "text") {
+      const hasCode = marks.some((m) => m.type.name === "code");
+      result += hasCode ? (child.text || "") : escapeMarkdownText(child.text || "");
+    } else {
+      result += serializeAtomInline(child, hardBreak);
+    }
+  });
+  closeFrom(0);
+  return result;
 }
 
 function serializeInlineContent(node: ProseMirrorNode): string {
-  let result = "";
-  node.forEach((child) => {
-    result += serializeInline(child);
-  });
-  return result;
+  return serializeInlineSeq(node, "  \n");
 }
 
 function serializeBlock(node: ProseMirrorNode, indent: string = ""): string {
@@ -83,14 +114,14 @@ function serializeBlock(node: ProseMirrorNode, indent: string = ""): string {
       node.forEach((child) => {
         inner += serializeBlock(child, "");
       });
-      // Prefix each line with "> "
-      const lines = inner.split("\n");
-      return (
-        lines
-          .map((line) => (line.trim() === "" ? ">" : `> ${line}`))
-          .join("\n")
-          .replace(/>\s*\n\n$/, "\n") + "\n"
-      );
+      // Trim the trailing block spacing, then prefix every line with "> "
+      // (empty lines become a bare ">"). Emitting exactly one blank line after
+      // keeps the output idempotent across repeated round-trips.
+      const lines = inner.replace(/\n+$/, "").split("\n");
+      const quoted = lines
+        .map((line) => (line.trim() === "" ? ">" : `> ${line}`))
+        .join("\n");
+      return quoted + "\n\n";
     }
 
     case "bullet_list": {
@@ -109,7 +140,11 @@ function serializeBlock(node: ProseMirrorNode, indent: string = ""): string {
       let result = "";
       let order = node.attrs.order || 1;
       node.forEach((item) => {
-        result += serializeListItem(item, `${order}. `);
+        if (item.type.name === "task_list_item") {
+          result += serializeTaskItem(item, `${order}. `);
+        } else {
+          result += serializeListItem(item, `${order}. `);
+        }
         order++;
       });
       return result + "\n";
@@ -191,22 +226,24 @@ function serializeTaskItem(item: ProseMirrorNode, prefix: string): string {
 function serializeCellContent(cell: ProseMirrorNode): string {
   const parts: string[] = [];
   cell.forEach((block) => {
-    let s = "";
-    block.forEach((child) => {
-      s += child.type.name === "hard_break" ? "<br>" : serializeInline(child);
-    });
-    parts.push(s.trim());
+    parts.push(serializeInlineSeq(block, "<br>").trim());
   });
-  return parts.filter(Boolean).join("<br>");
+  // Escape pipes so cell content can't break the table column structure.
+  return parts.filter(Boolean).join("<br>").replace(/\|/g, "\\|");
 }
 
 function serializeTable(node: ProseMirrorNode): string {
   const rows: string[][] = [];
+  const align: (string | null)[] = [];
 
-  node.forEach((row) => {
+  node.forEach((row, _o, rowIndex) => {
     const cells: string[] = [];
-    row.forEach((cell) => {
+    row.forEach((cell, _co, colIndex) => {
       cells.push(serializeCellContent(cell));
+      // Take column alignment from the first row that declares it.
+      if (rowIndex === 0 || align[colIndex] == null) {
+        align[colIndex] = cell.attrs.align ?? align[colIndex] ?? null;
+      }
     });
     rows.push(cells);
   });
@@ -239,9 +276,17 @@ function serializeTable(node: ProseMirrorNode): string {
     );
   };
 
+  // GFM alignment separators: ":--" left, ":-:" center, "--:" right.
+  const sepCell = (w: number, a: string | null): string => {
+    const width = Math.max(w, a === "center" ? 5 : 3);
+    if (a === "center") return ":" + "-".repeat(width - 2) + ":";
+    if (a === "left") return ":" + "-".repeat(width - 1);
+    if (a === "right") return "-".repeat(width - 1) + ":";
+    return "-".repeat(width);
+  };
   const separator =
     "| " +
-    widths.map((w) => "-".repeat(w)).join(" | ") +
+    widths.map((w, i) => sepCell(w, align[i] ?? null)).join(" | ") +
     " |";
 
   let result = formatRow(paddedRows[0]) + "\n";

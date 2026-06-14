@@ -1,10 +1,40 @@
 import { Schema } from "prosemirror-model";
 import { tableNodes } from "prosemirror-tables";
 
+// Neutralize URL schemes that can execute script when a link is activated.
+// CSP is disabled, so a "javascript:"/"data:" href in a rendered anchor would
+// be a live XSS sink if ever navigated.
+function sanitizeHref(href: string | null): string {
+  const u = (href || "").trim();
+  const lower = u.toLowerCase();
+  if (
+    lower.startsWith("javascript:") ||
+    lower.startsWith("data:") ||
+    lower.startsWith("vbscript:")
+  ) {
+    return "#";
+  }
+  return u;
+}
+
 const tableNodeSpecs = tableNodes({
   tableGroup: "block",
   cellContent: "block+",
-  cellAttributes: {},
+  cellAttributes: {
+    // GFM column alignment (left | center | right). Stored per cell and
+    // rendered as text-align so imported alignment is visible and round-trips.
+    align: {
+      default: null,
+      getFromDOM(dom) {
+        return (dom as HTMLElement).style.textAlign || null;
+      },
+      setDOMAttr(value, attrs) {
+        if (value) {
+          attrs.style = `${(attrs.style as string) || ""}text-align:${value};`;
+        }
+      },
+    },
+  },
 });
 
 export const schema = new Schema({
@@ -52,7 +82,7 @@ export const schema = new Schema({
 
     bullet_list: {
       group: "block",
-      content: "list_item+",
+      content: "(list_item | task_list_item)+",
       parseDOM: [{ tag: "ul" }],
       toDOM() {
         return ["ul", 0];
@@ -61,7 +91,7 @@ export const schema = new Schema({
 
     ordered_list: {
       group: "block",
-      content: "list_item+",
+      content: "(list_item | task_list_item)+",
       attrs: { order: { default: 1 } },
       parseDOM: [
         {
@@ -296,7 +326,7 @@ export const schema = new Schema({
       ],
       toDOM(node) {
         const { href, title } = node.attrs;
-        const attrs: Record<string, string> = { href };
+        const attrs: Record<string, string> = { href: sanitizeHref(href) };
         if (title) attrs.title = title;
         return ["a", attrs, 0];
       },

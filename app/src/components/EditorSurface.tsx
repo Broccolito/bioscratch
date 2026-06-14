@@ -33,7 +33,7 @@ import "highlight.js/styles/github.css";
 import "katex/dist/katex.min.css";
 
 // ---- Math Inline NodeView ----
-class MathInlineView implements NodeView {
+export class MathInlineView implements NodeView {
   dom: HTMLElement;
   private span: HTMLElement;
   private input: HTMLInputElement | null = null;
@@ -146,7 +146,7 @@ class MathInlineView implements NodeView {
 }
 
 // ---- Math Block NodeView ----
-class MathBlockView implements NodeView {
+export class MathBlockView implements NodeView {
   dom: HTMLElement;
   private rendered: HTMLElement;
   private textarea: HTMLTextAreaElement | null = null;
@@ -250,14 +250,27 @@ function escapeMermaidError(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Initialize once at module load (static import avoids Vite pre-bundle issues)
-mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "loose" });
+/** Reject URL schemes that can execute script when opened in the webview. */
+function isSafeUrl(url: string): boolean {
+  const u = url.trim().toLowerCase();
+  return !(
+    u.startsWith("javascript:") ||
+    u.startsWith("data:") ||
+    u.startsWith("vbscript:")
+  );
+}
+
+// Initialize once at module load (static import avoids Vite pre-bundle issues).
+// securityLevel "strict" makes Mermaid sanitize diagram labels/HTML — required
+// because CSP is disabled and documents may come from untrusted sources, so a
+// label like A["<img src=x onerror=...>"] must NOT be injected as live HTML.
+mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict" });
 
 // ---- Mermaid Block NodeView ----
 // Two states driven by mermaidPlugin decorations:
 //   Inactive  → source section collapsed (height 0), only rendered diagram shown
 //   Active    → source section visible above, live-updating rendered diagram below
-class MermaidBlockView implements NodeView {
+export class MermaidBlockView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
   private preview: HTMLElement;
@@ -356,7 +369,7 @@ class MermaidBlockView implements NodeView {
 }
 
 // ---- Code Block NodeView ----
-class CodeBlockView implements NodeView {
+export class CodeBlockView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
   private langLabel: HTMLElement;
@@ -408,7 +421,7 @@ class CodeBlockView implements NodeView {
 
 // ---- Task List Item NodeView ----
 // Renders a clickable checkbox that toggles the checked attribute.
-class TaskListItemView implements NodeView {
+export class TaskListItemView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
   private checkbox: HTMLInputElement;
@@ -643,17 +656,22 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
     if (existing) existing.remove();
 
     const href = anchor.getAttribute("href") || "";
+    const safeHref = isSafeUrl(href) ? href : "#";
     const tooltip = document.createElement("div");
     tooltip.className = "link-tooltip";
 
     const urlSpan = document.createElement("a");
     urlSpan.className = "link-tooltip-url";
     urlSpan.textContent = href;
-    urlSpan.href = href;
+    urlSpan.href = safeHref;
     urlSpan.target = "_blank";
     urlSpan.rel = "noopener noreferrer";
     urlSpan.addEventListener("click", async (ev) => {
       ev.preventDefault();
+      if (!isSafeUrl(href)) {
+        tooltip.remove();
+        return;
+      }
       try {
         const { invoke } = await import("@tauri-apps/api/core");
         await invoke("open_url", { url: href });

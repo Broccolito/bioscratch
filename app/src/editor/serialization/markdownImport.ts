@@ -9,6 +9,23 @@ const processor = unified().use(remarkParse).use(remarkGfm).use(remarkMath);
 
 type MdastNode = Content | Root | PhrasingContent;
 
+// Link/image reference definitions ([id]: url "title"), collected up-front so
+// reference-style links/images can be resolved to real links during conversion.
+let currentDefinitions: Record<string, { url: string; title: string | null }> = {};
+
+function collectDefinitions(node: any): void {
+  if (!node || typeof node !== "object") return;
+  if (node.type === "definition" && node.identifier) {
+    currentDefinitions[String(node.identifier).toLowerCase()] = {
+      url: node.url || "",
+      title: node.title ?? null,
+    };
+  }
+  if (Array.isArray(node.children)) {
+    for (const child of node.children) collectDefinitions(child);
+  }
+}
+
 function convertInlineChildren(
   nodes: PhrasingContent[],
   schema: Schema,
@@ -78,6 +95,29 @@ function convertInline(
       return [schema.text(`![${n.alt ?? ""}](${n.url}${titlePart})`)];
     }
 
+    case "linkReference": {
+      // Reference-style link [text][id] / [text][] / [id]. Resolve via the
+      // collected definitions; fall back to plain text if the ref is unknown.
+      const n = node as { type: "linkReference"; identifier: string; children: PhrasingContent[] };
+      const def = currentDefinitions[String(n.identifier).toLowerCase()];
+      if (def) {
+        const linkMark = schema.marks.link.create({ href: def.url, title: def.title });
+        return convertInlineChildren(n.children, schema, [...marks, linkMark]);
+      }
+      return convertInlineChildren(n.children, schema, marks);
+    }
+
+    case "imageReference": {
+      // Reference-style image ![alt][id]. Resolve to the image-as-text form.
+      const n = node as { type: "imageReference"; identifier: string; alt: string | null };
+      const def = currentDefinitions[String(n.identifier).toLowerCase()];
+      if (def) {
+        const titlePart = def.title ? ` "${def.title}"` : "";
+        return [schema.text(`![${n.alt ?? ""}](${def.url}${titlePart})`, marks as any)];
+      }
+      return n.alt ? [schema.text(n.alt, marks as any)] : [];
+    }
+
     case "html": {
       const n = node as { type: "html"; value: string };
       // <br> written by serializeCellContent should round-trip as a hard break
@@ -140,25 +180,15 @@ function convertBlock(node: MdastNode, schema: Schema): ProseMirrorNode | ProseM
       const n = node as { type: "list"; ordered: boolean | null; start: number | null; children: Content[] };
       const isOrdered = !!n.ordered;
 
-      // Check if it's a task list
-      const isTaskList = n.children.some(
-        (item: any) => item.type === "listItem" && item.checked !== null && item.checked !== undefined
-      );
-
-      if (isTaskList) {
-        const items = n.children.map((item: any) => {
-          const checked = item.checked === true;
-          const blocks = convertBlocks(item.children as MdastNode[], schema);
-          if (blocks.length === 0) blocks.push(schema.nodes.paragraph.create());
-          return schema.nodes.task_list_item.create({ checked }, blocks);
-        });
-        // Wrap in bullet_list for task lists
-        return schema.nodes.bullet_list.create(null, items);
-      }
-
+      // Convert each item independently: an item with a `checked` flag becomes a
+      // task_list_item, others stay plain list_items. The schema allows both
+      // inside a (bullet|ordered)_list, so mixed lists round-trip correctly.
       const items = n.children.map((item: any) => {
         const blocks = convertBlocks(item.children as MdastNode[], schema);
         if (blocks.length === 0) blocks.push(schema.nodes.paragraph.create());
+        if (item.checked !== null && item.checked !== undefined) {
+          return schema.nodes.task_list_item.create({ checked: item.checked === true }, blocks);
+        }
         return schema.nodes.list_item.create(null, blocks);
       });
 
@@ -184,15 +214,17 @@ function convertBlock(node: MdastNode, schema: Schema): ProseMirrorNode | ProseM
     }
 
     case "table": {
-      const n = node as { type: "table"; children: TableRow[] };
+      const n = node as { type: "table"; align?: (string | null)[]; children: TableRow[] };
+      const align = n.align || [];
       const rows = n.children.map((row: TableRow, rowIndex: number) => {
-        const cells = row.children.map((cell: any) => {
+        const cells = row.children.map((cell: any, colIndex: number) => {
           const inlineNodes = convertInlineChildren(cell.children || [], schema);
           const para = schema.nodes.paragraph.create(null, inlineNodes.length ? inlineNodes : []);
+          const cellAttrs = align[colIndex] ? { align: align[colIndex] } : null;
           if (rowIndex === 0) {
-            return schema.nodes.table_header.create(null, [para]);
+            return schema.nodes.table_header.create(cellAttrs, [para]);
           }
-          return schema.nodes.table_cell.create(null, [para]);
+          return schema.nodes.table_cell.create(cellAttrs, [para]);
         });
         return schema.nodes.table_row.create(null, cells);
       });
@@ -239,6 +271,11 @@ function convertBlocks(nodes: MdastNode[], schema: Schema): ProseMirrorNode[] {
 
 export function markdownToDoc(markdown: string, schema: Schema): ProseMirrorNode {
   const tree = processor.parse(markdown) as Root;
+
+  // Collect link/image reference definitions before converting, so
+  // reference-style links/images can be resolved wherever they appear.
+  currentDefinitions = {};
+  collectDefinitions(tree);
 
   let blocks = convertBlocks(tree.children as MdastNode[], schema);
 
