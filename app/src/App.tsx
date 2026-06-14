@@ -837,6 +837,15 @@ const App: React.FC = () => {
       : (stored?.content ?? "");
     const tabDirty = tabId === activeTabId ? dirty : (stored?.dirty ?? false);
 
+    // A detached window can only be spawned around a file path. An untitled tab
+    // has no file on disk to hand off, so detaching it would silently discard
+    // its content (the tab is closed with skipDirtyCheck afterwards). Refuse to
+    // detach untitled tabs and leave them in place.
+    if (!tabFilePath) {
+      setDraggingTabId(null);
+      return;
+    }
+
     // Save dirty content to disk so the new window can read it
     if (tabDirty && tabFilePath) {
       try {

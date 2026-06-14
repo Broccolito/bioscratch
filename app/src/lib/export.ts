@@ -1,6 +1,16 @@
 import { invoke } from "@tauri-apps/api/core";
 import DOMPurify from "dompurify";
 
+/** Escape text for safe interpolation into HTML markup (e.g. <title>). */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function buildHtmlBody(): string {
   const editorEl = document.querySelector(".ProseMirror");
   if (!editorEl) return "";
@@ -32,7 +42,7 @@ function buildHtmlDocument(title: string, bodyHtml: string): string {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${title}</title>
+<title>${escapeHtml(title)}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
 <style>

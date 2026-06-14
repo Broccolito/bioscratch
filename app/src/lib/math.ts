@@ -1,5 +1,15 @@
 import katex from "katex";
 
+/** Escape HTML so raw LaTeX in the error fallback can't inject markup.
+ *  The result is assigned via innerHTML by callers and CSP is disabled. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 export function renderMath(latex: string, displayMode: boolean = false): string {
   try {
     return katex.renderToString(latex, {
@@ -8,7 +18,7 @@ export function renderMath(latex: string, displayMode: boolean = false): string 
       output: "htmlAndMathml",
     });
   } catch (e) {
-    return `<span class="math-error">${latex}</span>`;
+    return `<span class="math-error">${escapeHtml(latex)}</span>`;
   }
 }
 

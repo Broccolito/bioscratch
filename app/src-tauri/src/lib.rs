@@ -482,8 +482,10 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init());
 
-    #[cfg(feature = "debug-bridge")]
-    let builder = builder.plugin(tauri_plugin_debug_bridge::init());
+    // Note: the agent debug bridge is the in-tree `dev_bridge` module (started
+    // below under `cfg!(debug_assertions)`), NOT the external
+    // `tauri-plugin-debug-bridge` crate, whose auth protocol is incompatible
+    // with `tauri-agent-tools`.
 
     builder
         .setup(|app| {
