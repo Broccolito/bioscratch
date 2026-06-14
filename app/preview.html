@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Bioscratch Preview</title>
+    <style>
+      html, body { margin: 0; padding: 0; background: var(--bg-editor, #fafaf8); }
+      /* Mirror the editor surface: centered column with comfortable padding. */
+      #preview-root {
+        min-height: 100vh;
+        background: var(--bg-editor, #fafaf8);
+        color: var(--text-primary, #2b2620);
+      }
+      #preview-root .ProseMirror {
+        max-width: 820px;
+        margin: 0 auto;
+        padding: 32px 40px 64px;
+        outline: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="preview-root" class="bioscratch-preview"></div>
+    <script type="module" src="/src/preview/main.tsx"></script>
+  </body>
+</html>

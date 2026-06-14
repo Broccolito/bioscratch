@@ -1,14 +1,14 @@
 {
   "name": "app",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
+    "build:preview": "vite build --config vite.preview.config.ts",
     "preview": "vite preview",
     "tauri": "tauri",
-    "tauri:debug": "tauri dev -- --features debug-bridge",
     "prepare": "git config core.hooksPath .githooks || true"
   },
   "dependencies": {

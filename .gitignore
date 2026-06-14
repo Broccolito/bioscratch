@@ -5,3 +5,7 @@
 # Notarization credentials — never commit these
 notarization/*.p12
 notarization/notarization_credentials.env
+
+# CodeGraph runtime state (BioRouter index)
+.codegraph
+.biorouter/

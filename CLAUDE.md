@@ -16,7 +16,21 @@ npm run tauri dev      # Start dev server (Vite on :1420 + Tauri window)
 npm run tauri build    # Production build (artifacts in app/src-tauri/target/<arch>/release/bundle/)
 npm run dev            # Vite frontend only (no Tauri shell)
 npm run build          # TypeScript check + Vite bundle
+npm run build:preview  # Build the read-only Quick Look preview bundle → dist-preview/
 ```
+
+## macOS Quick Look extension
+
+Pressing the spacebar on a `.md` file in Finder shows a Bioscratch-rendered preview via a bundled Quick Look Preview Extension.
+
+- **Preview page** — `app/preview.html` + `app/src/preview/main.tsx` render the file read-only using the *same* schema, serialization, NodeViews and CSS as the editor (NodeView classes are `export`ed from `EditorSurface.tsx`), so the preview is visually identical to opening the file. Built standalone with `vite.preview.config.ts` (`base: "./"` for `file://` loading) into `dist-preview/`.
+- **Extension** — `app/src-tauri/quicklook/` holds `PreviewViewController.swift` (a `QLPreviewingController` that loads `dist-preview/preview.html` in a `WKWebView` and injects the file contents as `window.__QL_MARKDOWN__`), `Info.plist`, and `Extension.entitlements`.
+- **Build/embed** — `app/scripts/build-quicklook.sh [path/to/Bioscratch.app]` builds the preview, compiles the `.appex` (`swiftc … -Xlinker -e -Xlinker _NSExtensionMain`), signs it, and embeds it in the app. Run it after `npm run tauri build`. Set `BIOSCRATCH_SIGN_ID` to a Developer ID hash (defaults to ad-hoc `-`).
+- **Non-obvious requirements** (otherwise the preview is blank or never registers):
+  1. The extension binary needs `com.apple.security.app-sandbox` (in `Extension.entitlements`) or PlugInKit won't register it.
+  2. The `WKWebView` must set `allowFileAccessFromFileURLs`/`allowUniversalAccessFromFileURLs`, or the ES-module preview bundle is CORS-blocked over `file://` and renders blank.
+  3. Sign inside-out (appex first with its entitlements, then the app **without** `--deep`) so the appex keeps its entitlements.
+  4. Must be Developer-ID signed (not ad-hoc) for the system to load it; the app must be in `/Applications` and registered with `lsregister`.
 
 There is no test runner. The `tests/fixtures/` directory contains Markdown files for manual testing: `basic.md`, `code.md`, `math.md`, `table.md`, `mixed.md`, `images.md`. Image fixtures use `tests/fixtures/img/` as their asset directory.
 

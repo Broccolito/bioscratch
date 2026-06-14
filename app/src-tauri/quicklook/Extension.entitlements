@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Quick Look preview extensions must run sandboxed. -->
+  <key>com.apple.security.app-sandbox</key>
+  <true/>
+  <!-- Read access to the file the user is previewing. -->
+  <key>com.apple.security.files.user-selected.read-only</key>
+  <true/>
+  <!-- Allow loading remote images referenced by the Markdown. -->
+  <key>com.apple.security.network.client</key>
+  <true/>
+</dict>
+</plist>
