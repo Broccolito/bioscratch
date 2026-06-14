@@ -3,6 +3,8 @@ import { invoke } from "@tauri-apps/api/core";
 // Built-in theme raw YAML imports
 import lightRaw from "../themes/light.yaml?raw";
 import darkRaw from "../themes/dark.yaml?raw";
+import biorouterLightRaw from "../themes/biorouter_light.yaml?raw";
+import biorouterDarkRaw from "../themes/biorouter_dark.yaml?raw";
 import spotifyLightRaw from "../themes/spotify_light.yaml?raw";
 import spotifyDarkRaw from "../themes/spotify_dark.yaml?raw";
 import githubLightRaw from "../themes/github_light.yaml?raw";
@@ -59,6 +61,8 @@ function parseYaml(text: string): Record<string, string> {
 export const BUILTIN_THEME_RAWS: [string, string][] = [
   ["light", lightRaw],
   ["dark", darkRaw],
+  ["biorouter_light", biorouterLightRaw],
+  ["biorouter_dark", biorouterDarkRaw],
   ["spotify_light", spotifyLightRaw],
   ["spotify_dark", spotifyDarkRaw],
   ["github_light", githubLightRaw],
@@ -100,13 +104,22 @@ export function isDarkTheme(name: ThemeName): boolean {
   return name === "dark" || name.endsWith("_dark");
 }
 
-/** Apply theme vars to :root as CSS custom properties. */
+// CSS custom-property names: letters, digits, dashes, underscores only.
+const SAFE_KEY = /^[A-Za-z0-9_-]+$/;
+// Reject values that could exfiltrate data or break the rendering pipeline.
+// (CSP is disabled, so a stray url()/import in a user-imported theme is a real
+//  tracking/exfiltration vector even though CSS cannot execute JS.)
+const UNSAFE_VALUE = /url\s*\(|expression\s*\(|javascript:|@import|[<>{};]/i;
+
+/** Apply theme vars to :root as CSS custom properties. Values are validated so
+ *  that user-imported themes cannot inject tracking pixels or break out. */
 export function applyTheme(name: ThemeName, vars: Record<string, string>): void {
   const root = document.documentElement;
   root.setAttribute("data-theme", name);
   root.setAttribute("data-color-scheme", isDarkTheme(name) ? "dark" : "light");
   for (const [key, value] of Object.entries(vars)) {
     if (key === "name") continue;
+    if (!SAFE_KEY.test(key) || UNSAFE_VALUE.test(value)) continue;
     root.style.setProperty(`--${key}`, value);
   }
 }

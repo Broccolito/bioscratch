@@ -1,0 +1,36 @@
+# Bioscratch – Biorouter Dark Theme
+# Warm charcoal surfaces with a glowing terracotta accent, the dark counterpart
+# of the BioRouter design language.
+name: Biorouter Dark
+
+# Background
+bg-app: "#1b1815"
+bg-toolbar: "#231f1a"
+bg-editor: "#1f1b18"
+bg-statusbar: "#1b1815"
+
+# Text
+text-primary: "#ede6da"
+text-secondary: "#b3a999"
+text-muted: "#7a7062"
+
+# Structure
+border-color: "#38322a"
+border-subtle: "#2a251f"
+
+# Accent – warm terracotta, brightened for dark surfaces
+accent: "#e08259"
+accent-hover: "#cf6d47"
+accent-bg: "rgba(224, 130, 89, 0.14)"
+
+# Interactive states
+toolbar-btn-hover: "#2d2820"
+toolbar-btn-active: "#38322a"
+
+# Shadow – deep, soft
+shadow-sm: "0 1px 3px rgba(0, 0, 0, 0.35)"
+shadow-md: "0 8px 24px rgba(0, 0, 0, 0.45)"
+
+# Code
+code-bg: "#231f1a"
+code-inline-bg: "rgba(224, 130, 89, 0.12)"

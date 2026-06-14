@@ -1,0 +1,35 @@
+# Bioscratch – Biorouter Light Theme
+# Warm cream surfaces with a terracotta accent, matching the BioRouter design.
+name: Biorouter Light
+
+# Background
+bg-app: "#faf8f3"
+bg-toolbar: "#f4f0e6"
+bg-editor: "#ffffff"
+bg-statusbar: "#faf8f3"
+
+# Text
+text-primary: "#2a2520"
+text-secondary: "#7a736c"
+text-muted: "#b6ae93"
+
+# Structure
+border-color: "#ece5cf"
+border-subtle: "#f1ece0"
+
+# Accent – terracotta
+accent: "#cf6d47"
+accent-hover: "#ba6240"
+accent-bg: "rgba(207, 109, 71, 0.10)"
+
+# Interactive states
+toolbar-btn-hover: "#f4f0e6"
+toolbar-btn-active: "#ece5cf"
+
+# Shadow – warm, soft
+shadow-sm: "0 1px 3px rgba(32, 25, 15, 0.06)"
+shadow-md: "0 8px 24px rgba(32, 25, 15, 0.10)"
+
+# Code
+code-bg: "#f4f0e6"
+code-inline-bg: "rgba(207, 109, 71, 0.08)"

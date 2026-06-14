@@ -147,20 +147,24 @@ const Toolbar: React.FC<ToolbarProps> = ({
     <div className="toolbar">
       {/* File operations */}
       <button className="toolbar-btn" onClick={onNew} title="New Tab (⌘T)">
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M9.5 1H3.5A1.5 1.5 0 0 0 2 2.5v11A1.5 1.5 0 0 0 3.5 15h9a1.5 1.5 0 0 0 1.5-1.5V5.5L9.5 1zm0 1.5 3 3H9.5V2.5zM8.75 9.75H9.5v.75A2 2 0 0 1 7.5 12.5h-.5v-.75h.5a1.25 1.25 0 0 0 1.25-1.25v-.75zm-2.5 0H7v.75A2 2 0 0 1 5 12.5h-.5v-.75H5a1.25 1.25 0 0 0 1.25-1.25v-.75z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
+          <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/>
+          <path d="M12 11v6"/><path d="M9 14h6"/>
         </svg>
         New
       </button>
       <button className="toolbar-btn" onClick={onOpen} title="Open (Ctrl+O)">
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z"/>
         </svg>
         Open
       </button>
       <button className="toolbar-btn" onClick={onSave} disabled={!fileOpsEnabled} title="Save (Ctrl+S)">
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M2 1a1 1 0 0 0-1 1v12a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V2a1 1 0 0 0-1-1H9.5a1 1 0 0 0-1 1v7.293l2.646-2.647a.5.5 0 0 1 .708.708l-3.5 3.5a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L7.5 9.293V2a2 2 0 0 1 2-2H14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2a2 2 0 0 1 2-2h2.5a.5.5 0 0 1 0 1H2z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M15.2 3a2 2 0 0 1 1.4.6l3.8 3.8a2 2 0 0 1 .6 1.4V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/>
+          <path d="M17 21v-7a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v7"/>
+          <path d="M7 3v4a1 1 0 0 0 1 1h7"/>
         </svg>
         Save
       </button>
@@ -175,8 +179,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
           title="Export document"
         >
           Export
-          <svg viewBox="0 0 16 16" fill="currentColor" width="9" height="9" style={{ marginLeft: 1 }}>
-            <path d="M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z"/>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" width="9" height="9" style={{ marginLeft: 2 }}>
+            <path d="m6 9 6 6 6-6"/>
           </svg>
         </button>
         {exportMenuOpen && (
@@ -185,8 +189,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
               className="export-menu-item"
               onClick={() => { onExportHtml(); setExportMenuOpen(false); }}
             >
-              <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13">
-                <path d="M5.854 4.854a.5.5 0 1 0-.708-.708l-3.5 3.5a.5.5 0 0 0 0 .708l3.5 3.5a.5.5 0 0 0 .708-.708L2.707 8l3.147-3.146zm4.292 0a.5.5 0 0 1 .708-.708l3.5 3.5a.5.5 0 0 1 0 .708l-3.5 3.5a.5.5 0 0 1-.708-.708L13.293 8l-3.147-3.146z"/>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+                <path d="m16 18 6-6-6-6"/><path d="m8 6-6 6 6 6"/>
               </svg>
               Export as HTML
             </button>
@@ -194,9 +198,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
               className="export-menu-item"
               onClick={() => { onExportPdf(); setExportMenuOpen(false); }}
             >
-              <svg viewBox="0 0 16 16" fill="currentColor" width="13" height="13">
-                <path d="M14 14V4.5L9.5 0H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2zM9.5 3A1.5 1.5 0 0 0 11 4.5h2V14a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1h5.5v2z"/>
-                <path d="M4.603 14.087a.81.81 0 0 1-.438-.42c-.195-.388-.13-.776.08-1.102.198-.307.526-.568.897-.787a7.68 7.68 0 0 1 1.482-.645 19.697 19.697 0 0 0 1.062-2.227 7.269 7.269 0 0 1-.43-1.295c-.086-.4-.119-.796-.046-1.136.075-.354.274-.672.65-.823.192-.077.4-.12.602-.077a.7.7 0 0 1 .477.365c.088.164.12.356.127.538.007.188-.012.396-.047.614-.084.51-.27 1.134-.52 1.794a10.954 10.954 0 0 0 .98 1.686 5.753 5.753 0 0 1 1.334.05c.364.066.734.195.96.465.12.144.193.32.2.518.007.192-.047.382-.138.563a1.04 1.04 0 0 1-.354.416.856.856 0 0 1-.51.138c-.331-.014-.654-.196-.933-.417a5.712 5.712 0 0 1-.911-.95 11.651 11.651 0 0 0-1.997.406 11.307 11.307 0 0 1-1.02 1.51c-.292.35-.609.656-.927.787a.793.793 0 0 1-.58.029zm1.379-1.901c-.166.076-.32.156-.459.238-.328.194-.541.383-.647.547-.094.145-.096.25-.04.361.01.022.02.036.026.044a.266.266 0 0 0 .035-.012c.137-.056.355-.235.635-.572a8.18 8.18 0 0 0 .45-.606zm1.64-1.33a12.71 12.71 0 0 1 1.01-.193 11.744 11.744 0 0 1-.51-.858 20.801 20.801 0 0 1-.5 1.05zm2.446.45c.15.163.296.3.435.41.24.19.407.253.498.256a.107.107 0 0 0 .07-.015.307.307 0 0 0 .094-.125.436.436 0 0 0 .059-.2.095.095 0 0 0-.026-.063c-.052-.062-.2-.152-.518-.209a3.876 3.876 0 0 0-.612-.053zM8.078 7.8a6.7 6.7 0 0 0 .2-.828c.031-.188.043-.343.038-.465a.613.613 0 0 0-.032-.198.517.517 0 0 0-.145.04c-.087.035-.158.106-.196.283-.04.192-.03.469.046.822.024.111.054.227.09.346z"/>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" width="14" height="14">
+                <path d="M14 3v4a1 1 0 0 0 1 1h4"/>
+                <path d="M17 21H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7l5 5v11a2 2 0 0 1-2 2Z"/>
+                <path d="M9 13h6"/><path d="M9 17h6"/>
               </svg>
               Export as PDF
             </button>
@@ -272,8 +277,9 @@ const Toolbar: React.FC<ToolbarProps> = ({
         disabled={!formattingEnabled}
         title="Bullet List"
       >
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path fillRule="evenodd" d="M2 4a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm3.75-1.5a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5zm0 5a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5zm0 5a.75.75 0 0 0 0 1.5h8.5a.75.75 0 0 0 0-1.5h-8.5zM2 9a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm0 5a1 1 0 1 0 0-2 1 1 0 0 0 0 2z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/>
+          <path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/>
         </svg>
         List
       </button>
@@ -283,9 +289,10 @@ const Toolbar: React.FC<ToolbarProps> = ({
         disabled={!formattingEnabled}
         title="Ordered List"
       >
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path fillRule="evenodd" d="M5 11.5a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5zm0-4a.5.5 0 0 1 .5-.5h9a.5.5 0 0 1 0 1h-9a.5.5 0 0 1-.5-.5z"/>
-          <path d="M1.713 11.865v-.474H2c.217 0 .363-.137.363-.317 0-.185-.158-.31-.361-.31-.223 0-.367.152-.373.31h-.59c.016-.467.373-.787.986-.787.588-.002.954.291.957.703a.595.595 0 0 1-.492.594v.033a.615.615 0 0 1 .569.631c.003.533-.502.8-1.051.8-.656 0-1-.37-1.008-.794h.582c.008.178.186.306.422.309.254 0 .424-.145.422-.35-.002-.195-.155-.348-.414-.348h-.3zm-.004-4.699h-.604v-.035c0-.408.295-.844.958-.844.583 0 .96.326.96.756 0 .389-.257.617-.476.848l-.537.572v.03h1.054V9H1.143v-.395l.957-.99c.138-.142.293-.304.293-.508 0-.18-.147-.32-.342-.32a.33.33 0 0 0-.342.338v.041zM2.564 5h-.635V2.924h-.031l-.598.42v-.567l.629-.443h.635V5z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M10 6h11"/><path d="M10 12h11"/><path d="M10 18h11"/>
+          <path d="M4 5h1v4"/><path d="M4 9h2"/>
+          <path d="M6.5 16.5c0-.8-1.5-1-2-.5"/><path d="M4 19h2.5c0-1-2-1.2-2-2.5"/>
         </svg>
         1. List
       </button>
@@ -295,8 +302,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
         disabled={!formattingEnabled}
         title="Blockquote"
       >
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M12 12a1 1 0 0 0 1-1V8.558a1 1 0 0 0-1-1h-1.388c0-.351.021-.703.062-1.054.062-.372.166-.703.31-.992.145-.29.331-.517.559-.683.227-.186.516-.279.868-.279V3c-.579 0-1.085.124-1.52.372a3.322 3.322 0 0 0-1.085.992 4.92 4.92 0 0 0-.62 1.458A7.712 7.712 0 0 0 9 7.558V11a1 1 0 0 0 1 1h2Zm-6 0a1 1 0 0 0 1-1V8.558a1 1 0 0 0-1-1H4.612c0-.351.021-.703.062-1.054.062-.372.166-.703.31-.992.145-.29.331-.517.559-.683.227-.186.516-.279.868-.279V3c-.579 0-1.085.124-1.52.372a3.322 3.322 0 0 0-1.085.992 4.92 4.92 0 0 0-.62 1.458A7.712 7.712 0 0 0 3 7.558V11a1 1 0 0 0 1 1h2Z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M17 6H9"/><path d="M21 12H9"/><path d="M21 18H9"/><path d="M4 6v12"/>
         </svg>
         Quote
       </button>
@@ -305,14 +312,16 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       {/* Blocks */}
       <button className="toolbar-btn" onClick={insertCodeBlock} disabled={!formattingEnabled} title="Code Block">
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M10.478 1.647a.5.5 0 1 0-.956-.294l-4 13a.5.5 0 0 0 .956.294l4-13zM4.854 4.146a.5.5 0 0 1 0 .708L1.707 8l3.147 3.146a.5.5 0 0 1-.708.708l-3.5-3.5a.5.5 0 0 1 0-.708l3.5-3.5a.5.5 0 0 1 .708 0zm6.292 0a.5.5 0 0 0 0 .708L14.293 8l-3.147 3.146a.5.5 0 0 0 .708.708l3.5-3.5a.5.5 0 0 0 0-.708l-3.5-3.5a.5.5 0 0 0-.708 0z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect width="18" height="18" x="3" y="3" rx="2"/>
+          <path d="m10 9-2 3 2 3"/><path d="m14 9 2 3-2 3"/>
         </svg>
         Code
       </button>
       <button className="toolbar-btn" onClick={insertTableNode} disabled={!formattingEnabled} title="Insert Table">
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M0 2a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V2zm15 2h-4v3h4V4zm0 4h-4v3h4V8zm0 4h-4v3h3a1 1 0 0 0 1-1v-2zm-5 3v-3H6v3h4zm-5 0v-3H1v2a1 1 0 0 0 1 1h3zm-4-4h4V8H1v3zm0-4h4V4H1v3zm5-3v3h4V4H6zm4 4H6v3h4V8z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect width="18" height="18" x="3" y="3" rx="2"/>
+          <path d="M3 9h18"/><path d="M3 15h18"/><path d="M12 3v18"/>
         </svg>
         Table
       </button>
@@ -330,14 +339,17 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       {/* Search & Theme */}
       <button className="toolbar-btn icon-only" onClick={onToggleSearch} title="Search (Ctrl+F)">
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zm-5.44 1.406a5.5 5.5 0 1 1 0-11 5.5 5.5 0 0 1 0 11z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>
         </svg>
       </button>
       <button className="toolbar-btn" onClick={onOpenThemeSelector} title="Select Theme">
-        <svg viewBox="0 0 16 16" fill="currentColor">
-          <path d="M8 5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zm4 3a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3zM5.5 7a1.5 1.5 0 1 1-3 0 1.5 1.5 0 0 1 3 0zm.5 6a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z"/>
-          <path d="M16 8c0 3.15-1.866 2.585-3.567 2.07C11.42 9.763 10.465 9.473 10 10c-.603.683-.475 1.819-.351 2.92C9.826 14.495 9.996 16 8 16a8 8 0 1 1 8-8zm-8 7c.611 0 .654-.171.655-.176.078-.146.124-.464.07-1.119-.014-.168-.037-.37-.061-.591-.052-.464-.112-1.005-.118-1.462-.01-.707.083-1.61.704-2.314.369-.42.842-.63 1.31-.766.357-.104.745-.194 1.107-.279C15.066 8.479 15 8.36 15 8a7 7 0 1 0-7 7z"/>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/>
+          <circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/>
+          <circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/>
+          <circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/>
+          <path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.835-.437-1.125-.29-.289-.438-.652-.438-1.125a1.64 1.64 0 0 1 1.668-1.668h1.996c3.051 0 5.555-2.503 5.555-5.554C21.965 6.012 17.461 2 12 2Z"/>
         </svg>
         Theme
       </button>
