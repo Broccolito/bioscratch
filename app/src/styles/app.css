@@ -175,17 +175,56 @@ body {
   .file-watch-banner,
   .drop-overlay,
   .theme-selector-backdrop,
-  .modal-overlay { display: none !important; }
+  .modal-overlay,
+  .link-tooltip { display: none !important; }
 
   body { overflow: visible; }
 
-  .app-container { display: block; height: auto; }
+  /* Print every background/colour so syntax highlighting, the banner accent,
+     table headers, etc. are faithful to the on-screen rendering. */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html, body { background: #fff !important; }
+
+  .app-container { display: block; height: auto; background: #fff !important; }
 
   .editor-scroll-area {
     overflow: visible;
     height: auto;
     display: block;
+    background: #fff !important;
   }
+
+  /* Use the full page width and drop the on-screen reading-column padding so the
+     printed document flows naturally within the PDF page margins. */
+  .editor-surface {
+    max-width: none !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    min-height: 0 !important;
+    transform: none !important;
+  }
+
+  /* Rubber-band overscroll transform must not offset the print layout. */
+  .editor-surface { transform: none !important; }
+
+  /* YAML banner: show only the rendered banner, never the raw YAML source, and
+     keep it from breaking across a page. */
+  .frontmatter-source-section { display: none !important; }
+  .frontmatter-view .frontmatter-preview { cursor: auto; }
+  .fm-banner { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Mermaid: print the rendered diagram, not the editable source. */
+  .mermaid-source-section { display: none !important; height: 0 !important; }
+  .mermaid-preview { break-inside: avoid; page-break-inside: avoid; }
+
+  /* Avoid awkward splits inside atomic blocks. */
+  pre, blockquote, table, .katex-display, img { break-inside: avoid; }
+  h1, h2, h3, h4, h5, h6 { break-after: avoid; }
 }
 
 /* ---- Tab bar ---- */
@@ -359,9 +398,18 @@ body {
   background: var(--bg-app);
   display: flex;
   justify-content: center;
+  /* Don't stretch the surface to the viewport height — let it grow with its
+     content so the surface's bottom padding actually creates scroll headroom
+     below the last line (otherwise the content overflows a pinned-height box
+     and the last line ends up flush against the bottom edge). */
+  align-items: flex-start;
   /* Elastic (bouncy) overscroll like macOS native */
   overscroll-behavior-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* Leave headroom when the caret / a line is scrolled into view so the last
+     line never hugs the bottom edge of the window. */
+  scroll-padding-bottom: 140px;
+  scroll-padding-top: 24px;
   /* Subtle paper grain feel via layered background */
   background-image:
     radial-gradient(ellipse at 20% 50%, rgba(210, 190, 160, 0.08) 0%, transparent 60%),

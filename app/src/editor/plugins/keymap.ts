@@ -8,6 +8,8 @@ import {
   exitCode,
   joinBackward,
   selectNodeBackward,
+  joinForward,
+  selectNodeForward,
   deleteSelection,
 } from "prosemirror-commands";
 import {
@@ -100,6 +102,33 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
     return false;
   }
 
+  // "---" at the very top of the document → YAML frontmatter banner.
+  // (Anywhere else "---" stays an ordinary thematic break.) The schema only
+  // allows frontmatter as the doc's first child, so this is gated on nodeStart 0.
+  //
+  // macOS "smart dashes" rewrites a typed "---" to an em dash ("—") and "--" to
+  // an en dash ("–"), so normalize those back to plain dashes before matching,
+  // otherwise the trigger never fires for real typing.
+  const dashNormalized = text.replace(/—/g, "---").replace(/–/g, "--");
+  if (nodeStart === 0 && dashNormalized === "---") {
+    if (dispatch) {
+      const template = "title: \ntags: \n";
+      const fmNode = schema.nodes.frontmatter.create(null, schema.text(template));
+      // Keep the doc valid ("frontmatter? block+"): if nothing follows the
+      // paragraph we're replacing, add a trailing empty paragraph in the same step.
+      const hasFollowing = nodeStart + node.nodeSize < state.doc.content.size;
+      const repl = hasFollowing
+        ? [fmNode]
+        : [fmNode, schema.nodes.paragraph.create()];
+      const tr = state.tr.replaceWith(nodeStart, nodeStart + node.nodeSize, repl);
+      // Drop the caret right after "title: " inside the YAML source.
+      const caret = nodeStart + 1 + "title: ".length;
+      tr.setSelection(TextSelection.near(tr.doc.resolve(Math.min(caret, tr.doc.content.size))));
+      dispatch(tr.scrollIntoView());
+    }
+    return true;
+  }
+
   // ``` or ```lang → fenced code block
   const codeMatch = text.match(/^```([a-zA-Z0-9_-]*)$/);
   if (codeMatch) {
@@ -180,6 +209,56 @@ export const toggleTaskItem: Command = (state, dispatch) => {
     }
   }
   return false;
+};
+
+// When the cursor sits inside an empty code block, Backspace/Delete removes the
+// whole block (ProseMirror's default keeps the empty, `defining` code block alive).
+const deleteEmptyCodeBlock: Command = (state, dispatch) => {
+  const { $head, empty } = state.selection;
+  if (!empty) return false;
+  if ($head.parent.type !== schema.nodes.code_block) return false;
+  if ($head.parent.textContent.length > 0) return false;
+
+  if (dispatch) {
+    const depth = $head.depth;
+    const from = $head.before(depth);
+    const to = $head.after(depth);
+    const tr = state.tr;
+    // If the code block is the only block in the document, swap it for an empty
+    // paragraph so the doc stays valid; otherwise delete it and merge upward.
+    if (state.doc.childCount === 1 && depth === 1) {
+      tr.replaceWith(from, to, schema.nodes.paragraph.create());
+      tr.setSelection(TextSelection.near(tr.doc.resolve(from + 1)));
+    } else {
+      tr.delete(from, to);
+      const pos = Math.min(Math.max(0, from - 1), tr.doc.content.size);
+      tr.setSelection(TextSelection.near(tr.doc.resolve(pos), -1));
+    }
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+};
+
+// When the cursor sits inside an empty frontmatter block, Backspace/Delete
+// removes the whole banner (it's the doc's first child, so deleting it leaves
+// the following block as the new top — still valid).
+const deleteEmptyFrontmatter: Command = (state, dispatch) => {
+  const { $head, empty } = state.selection;
+  if (!empty) return false;
+  if ($head.parent.type !== schema.nodes.frontmatter) return false;
+  if ($head.parent.textContent.length > 0) return false;
+
+  if (dispatch) {
+    const depth = $head.depth;
+    const from = $head.before(depth);
+    const to = $head.after(depth);
+    const tr = state.tr.delete(from, to);
+    tr.setSelection(
+      TextSelection.near(tr.doc.resolve(Math.min(from, tr.doc.content.size)), 1)
+    );
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
 };
 
 export function buildKeymap(
@@ -315,8 +394,11 @@ export function buildKeymap(
     const parent = $head.parent;
     const grandParent = $head.node($head.depth - 1);
 
-    // Inside a code_block: only exit when on the last line
-    if (parent.type === schema.nodes.code_block) {
+    // Inside a code_block (or frontmatter): only exit when on the last line
+    if (
+      parent.type === schema.nodes.code_block ||
+      parent.type === schema.nodes.frontmatter
+    ) {
       const text = parent.textContent;
       const offset = $head.parentOffset;
       const afterCursor = text.slice(offset);
@@ -366,9 +448,20 @@ export function buildKeymap(
 
   // Backspace
   keys["Backspace"] = chainCommands(
+    deleteEmptyFrontmatter,
+    deleteEmptyCodeBlock,
     deleteSelection,
     joinBackward,
     selectNodeBackward
+  );
+
+  // Delete (forward delete) — also removes an empty code block under the cursor
+  keys["Delete"] = chainCommands(
+    deleteEmptyFrontmatter,
+    deleteEmptyCodeBlock,
+    deleteSelection,
+    joinForward,
+    selectNodeForward
   );
 
   return keymap(keys);

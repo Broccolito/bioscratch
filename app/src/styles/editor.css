@@ -475,3 +475,134 @@ span.image-inline-widget:hover img {
   text-align: left;
   white-space: pre-wrap;
 }
+
+/* ====================================================================== */
+/* Frontmatter NodeView — YAML rendered as an aesthetic page banner       */
+/* ====================================================================== */
+.frontmatter-view {
+  margin: 0 0 1.5em;
+  cursor: default;
+}
+
+/* Source (raw YAML): collapsed when the caret is elsewhere */
+.frontmatter-view:not(.frontmatter-active) .frontmatter-source-section {
+  height: 0;
+  overflow: hidden;
+  font-size: 0;
+  line-height: 0;
+  padding: 0;
+}
+.frontmatter-view.frontmatter-active .frontmatter-source-section {
+  margin-bottom: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.frontmatter-fence {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 6px 16px;
+  background: var(--code-bg);
+  border-bottom: 1px solid var(--border-subtle);
+  user-select: none;
+}
+.frontmatter-source-section pre {
+  margin: 0;
+  padding: 12px 16px;
+  background: var(--code-bg);
+  overflow-x: auto;
+  border-radius: 0;
+}
+.frontmatter-source-section pre code {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', 'Monaco', monospace;
+  font-size: 0.85em;
+  line-height: 1.6;
+  background: none;
+  padding: 0;
+  border: none;
+  display: block;
+  min-height: 1.6em;
+  white-space: pre-wrap;
+  color: var(--text-primary);
+}
+
+/* ---- The rendered banner ---- */
+.frontmatter-preview { cursor: pointer; }
+
+/* Minimal document masthead — no card, just a header block separated from the
+   body by a hairline rule, matching Bioscratch's clean Typora-like aesthetic. */
+.fm-banner {
+  margin: 0 0 1.2em;
+  padding: 0 0 0.85em;
+  border-bottom: 1px solid var(--border-subtle);
+  min-height: 0.5em;
+}
+.fm-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fm-item {
+  margin: 0;
+}
+
+/* Top-level properties read like headers: flush left, no marker, key emphasized. */
+.fm-list > .fm-item > .fm-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.45em;
+  padding: 0.12em 0;
+  line-height: 1.45;
+}
+.fm-list > .fm-item > .fm-line > .fm-key {
+  font-weight: 600;
+  color: var(--text-primary);
+  font-size: 0.96em;
+  letter-spacing: 0.01em;
+}
+.fm-list > .fm-item > .fm-line > .fm-val {
+  color: var(--text-secondary);
+}
+
+/* Nested values (arrays / maps) indent beneath their header as bullet lines. */
+.fm-nested {
+  list-style: none;
+  margin: 0.1em 0 0.25em;
+  padding-left: 1.1em;
+}
+.fm-nested .fm-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.4em;
+  line-height: 1.5;
+}
+.fm-nested .fm-line::before {
+  content: "•";
+  color: var(--text-muted);
+  flex: none;
+  font-size: 0.7em;
+  line-height: 1.6;
+}
+.fm-nested .fm-key {
+  font-weight: 500;
+  color: var(--text-secondary);
+  font-size: 0.88em;
+}
+
+.fm-key::after {
+  content: ":";
+  color: var(--text-muted);
+  font-weight: 400;
+}
+.fm-val {
+  color: var(--text-primary);
+  font-size: 0.9em;
+  white-space: pre-wrap;
+  word-break: break-word;
+  min-width: 0;
+}

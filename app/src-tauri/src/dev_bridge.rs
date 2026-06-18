@@ -171,6 +171,7 @@ impl tracing::field::Visit for MessageVisitor {
 ///     .with(tracing_subscriber::fmt::layer())
 ///     .init();
 /// ```
+#[allow(dead_code)]
 pub fn create_log_layer(
     buffer: Arc<LogBuffer>,
 ) -> impl tracing_subscriber::Layer<tracing_subscriber::Registry> {
@@ -180,6 +181,7 @@ pub fn create_log_layer(
 /// Spawn a sidecar process with monitored stdout/stderr.
 /// Lines from stdout are logged as "info", lines from stderr as "warn".
 /// Returns the `std::process::Child` handle.
+#[allow(dead_code)]
 pub fn spawn_sidecar_monitored(
     name: &str,
     command: &str,

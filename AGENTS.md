@@ -1,10 +1,10 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Codex (Codex.ai/code) when working with code in this repository.
 
 ## Commit Rules
 
-**Never add `Co-Authored-By` lines to commit messages in this repo.** A `commit-msg` hook in `.githooks/commit-msg` enforces this and will reject any commit containing a `Co-Authored-By: Claude ...` line.
+**Never add `Co-Authored-By` lines to commit messages in this repo.** A `commit-msg` hook in `.githooks/commit-msg` enforces this and will reject any commit containing a `Co-Authored-By: Codex ...` line.
 
 ## Commands
 

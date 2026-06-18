@@ -160,6 +160,13 @@ function serializeBlock(node: ProseMirrorNode, indent: string = ""): string {
       return `$$\n${node.attrs.math}\n$$\n\n`;
     }
 
+    case "frontmatter": {
+      // Emit the raw YAML back between --- fences. textContent is the inner
+      // YAML exactly as the user edited it (no escaping — it is verbatim text).
+      const yaml = node.textContent.replace(/\n+$/, "");
+      return `---\n${yaml}\n---\n\n`;
+    }
+
     case "table": {
       return serializeTable(node) + "\n";
     }

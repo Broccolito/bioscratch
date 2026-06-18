@@ -1,6 +1,6 @@
 [package]
 name = "bioscratch"
-version = "0.3.0"
+version = "0.3.1"
 description = "Bioscratch - WYSIWYG Markdown Editor"
 authors = ["Bioscratch"]
 edition = "2021"
@@ -25,6 +25,14 @@ uuid = { version = "1", features = ["v4"] }
 scopeguard = "1"
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Native macOS HTML→PDF: capture rendered HTML from an offscreen WKWebView using
+# createPDF. These match the objc2 versions already pulled in by wry, so no
+# duplicate crate versions.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6"
+objc2-foundation = "0.3"
+block2 = "0.6"
 
 [profile.release]
 codegen-units = 1

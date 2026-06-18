@@ -269,21 +269,45 @@ async fn export_pdf_pandoc(
         .map(|p| p.to_string_lossy().to_string())
         .unwrap_or_else(|| std::env::temp_dir().to_string_lossy().to_string());
 
-    let output = std::process::Command::new("pandoc")
-        .arg(temp_md.to_str().unwrap_or(""))
+    // Prefer a Bioscratch-managed pandoc (installed via install_pdf_dependencies)
+    // and fall back to whatever is on PATH.
+    let pandoc_bin = resolve_pandoc(&app);
+
+    // Producing a PDF needs a PDF engine. Prefer a LaTeX engine on PATH; otherwise
+    // fall back to a Bioscratch-managed `typst` binary (a single static executable
+    // that needs no further dependencies). If neither is available, signal the
+    // frontend so it can offer an in-app install.
+    let latex = latex_engine_available();
+    let typst = resolve_typst(&app);
+    if !latex && typst.is_none() {
+        // Make sure pandoc itself exists first so we surface the right prompt.
+        if !pandoc_runs(&pandoc_bin) {
+            return Err("PANDOC_NOT_INSTALLED".to_string());
+        }
+        return Err("PDF_ENGINE_NOT_INSTALLED".to_string());
+    }
+
+    let mut cmd = std::process::Command::new(&pandoc_bin);
+    cmd.arg(temp_md.to_str().unwrap_or(""))
         .arg("-o")
         .arg(&output_path)
         .arg("--standalone")
         .arg("--from=markdown-implicit_figures")
-        .arg(format!("--resource-path={}", resource_path))
-        .output()
-        .map_err(|e| {
-            if e.kind() == std::io::ErrorKind::NotFound {
-                "Pandoc not found. Please install it: brew install pandoc".to_string()
-            } else {
-                format!("Failed to run pandoc: {}", e)
-            }
-        })?;
+        .arg(format!("--resource-path={}", resource_path));
+    if !latex {
+        if let Some(typst_bin) = &typst {
+            cmd.arg(format!("--pdf-engine={}", typst_bin.to_string_lossy()));
+        }
+    }
+
+    let output = cmd.output().map_err(|e| {
+        if e.kind() == std::io::ErrorKind::NotFound {
+            // Sentinel the frontend recognises to offer an in-app install.
+            "PANDOC_NOT_INSTALLED".to_string()
+        } else {
+            format!("Failed to run pandoc: {}", e)
+        }
+    })?;
 
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
@@ -291,6 +315,384 @@ async fn export_pdf_pandoc(
     }
 
     Ok(())
+}
+
+#[tauri::command]
+async fn show_pdf_save_dialog(
+    app: tauri::AppHandle,
+    filename: Option<String>,
+) -> Result<Option<String>, String> {
+    use tauri_plugin_dialog::DialogExt;
+    let default_name = filename.unwrap_or_else(|| "document.pdf".to_string());
+    let path = app
+        .dialog()
+        .file()
+        .add_filter("PDF", &["pdf"])
+        .set_file_name(&default_name)
+        .blocking_save_file();
+    Ok(path.map(|p| p.to_string()))
+}
+
+/// Export a fully self-contained HTML document to PDF. The frontend builds the
+/// HTML to mirror exactly what the editor shows (the YAML banner, KaTeX math,
+/// syntax-highlighted code, rendered Mermaid SVG, tables, images), with the
+/// app's own CSS inlined. We render it in an *offscreen* WKWebView — a clean,
+/// block-flow document that paginates correctly — and print it to PDF natively.
+/// No Markdown→LaTeX round-trip, so the output is honest to the HTML.
+#[tauri::command]
+fn export_pdf_html(
+    app: tauri::AppHandle,
+    html: String,
+    output_path: String,
+) -> Result<(), String> {
+    #[cfg(target_os = "macos")]
+    {
+        let (tx, rx) = std::sync::mpsc::channel();
+        let html_owned = html;
+        let out = output_path;
+        app.run_on_main_thread(move || {
+            let res = unsafe { render_html_to_pdf(&html_owned, &out) };
+            let _ = tx.send(res);
+        })
+        .map_err(|e| format!("Could not schedule PDF render: {e}"))?;
+        rx.recv()
+            .map_err(|e| format!("PDF export did not complete: {e}"))?
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (app, html, output_path);
+        Err("PDF export is only supported on macOS.".to_string())
+    }
+}
+
+/// Render `html` in an offscreen WKWebView and capture it to a PDF at
+/// `output_path` using `-[WKWebView createPDFWithConfiguration:completionHandler:]`
+/// (macOS 11+). This API captures the rendered content directly to PDF data —
+/// no print/pagination machinery — so it can't run away, and the output is an
+/// exact, honest reproduction of the HTML. Must run on the main thread.
+#[cfg(target_os = "macos")]
+unsafe fn render_html_to_pdf(html: &str, output_path: &str) -> Result<(), String> {
+    use objc2::runtime::AnyObject;
+    use objc2::{class, msg_send};
+    use objc2_foundation::{NSPoint, NSRect, NSSize, NSString};
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    use std::time::{Duration, Instant};
+
+    let config: *mut AnyObject = msg_send![class!(WKWebViewConfiguration), new];
+    if config.is_null() {
+        return Err("Could not create WKWebViewConfiguration.".to_string());
+    }
+    // 8.5in content width at 96dpi sets the layout/line width; createPDF captures
+    // the full content height regardless of this initial frame height.
+    let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(816.0, 1056.0));
+    let alloc: *mut AnyObject = msg_send![class!(WKWebView), alloc];
+    let webview: *mut AnyObject = msg_send![alloc, initWithFrame: frame, configuration: config];
+    if webview.is_null() {
+        return Err("Could not create the offscreen WebView.".to_string());
+    }
+
+    // Load the self-contained document (CDN assets resolve via absolute URLs).
+    let html_ns = NSString::from_str(html);
+    let nil: *mut AnyObject = std::ptr::null_mut();
+    let _: *mut AnyObject = msg_send![webview, loadHTMLString: &*html_ns, baseURL: nil];
+
+    let run_loop: *mut AnyObject = msg_send![class!(NSRunLoop), currentRunLoop];
+    let mode = NSString::from_str("kCFRunLoopDefaultMode");
+
+    // Wait for the load to finish, then a short settle for fonts/remote images.
+    let start = Instant::now();
+    let mut settle_start: Option<Instant> = None;
+    loop {
+        let date: *mut AnyObject = msg_send![class!(NSDate), dateWithTimeIntervalSinceNow: 0.02f64];
+        let _: bool = msg_send![run_loop, runMode: &*mode, beforeDate: date];
+        let loading: bool = msg_send![webview, isLoading];
+        if !loading {
+            if settle_start.is_none() {
+                settle_start = Some(Instant::now());
+            }
+            if settle_start.unwrap().elapsed() >= Duration::from_millis(600) {
+                break;
+            }
+        } else {
+            settle_start = None;
+        }
+        if start.elapsed() >= Duration::from_secs(12) {
+            break;
+        }
+    }
+
+    // Capture to PDF. The completion handler runs asynchronously on this run loop.
+    let pdf_config: *mut AnyObject = msg_send![class!(WKPDFConfiguration), new];
+
+    let result: Rc<RefCell<Option<Result<Vec<u8>, String>>>> = Rc::new(RefCell::new(None));
+    let result_cb = result.clone();
+    let handler = block2::RcBlock::new(move |data: *mut AnyObject, error: *mut AnyObject| unsafe {
+        if !error.is_null() {
+            let desc: *mut AnyObject = msg_send![error, localizedDescription];
+            *result_cb.borrow_mut() =
+                Some(Err(format!("createPDF failed: {}", nsstring_to_string(desc))));
+            return;
+        }
+        if data.is_null() {
+            *result_cb.borrow_mut() = Some(Err("createPDF returned no data.".to_string()));
+            return;
+        }
+        let len: usize = msg_send![data, length];
+        let bytes: *const u8 = msg_send![data, bytes];
+        let v = if bytes.is_null() || len == 0 {
+            Vec::new()
+        } else {
+            std::slice::from_raw_parts(bytes, len).to_vec()
+        };
+        *result_cb.borrow_mut() = Some(Ok(v));
+    });
+
+    let _: () = msg_send![webview, createPDFWithConfiguration: pdf_config, completionHandler: &*handler];
+
+    // Pump the run loop until the completion handler fires (hard ceiling).
+    let pdf_start = Instant::now();
+    loop {
+        if result.borrow().is_some() {
+            break;
+        }
+        let date: *mut AnyObject = msg_send![class!(NSDate), dateWithTimeIntervalSinceNow: 0.02f64];
+        let _: bool = msg_send![run_loop, runMode: &*mode, beforeDate: date];
+        if pdf_start.elapsed() >= Duration::from_secs(20) {
+            return Err("createPDF timed out.".to_string());
+        }
+    }
+
+    let outcome = result.borrow_mut().take().unwrap();
+    let bytes = outcome?;
+    if bytes.is_empty() {
+        return Err("createPDF produced an empty PDF.".to_string());
+    }
+    std::fs::write(output_path, &bytes).map_err(|e| format!("Could not write PDF: {e}"))?;
+    Ok(())
+}
+
+/// Convert an NSString pointer to a Rust String (best-effort).
+#[cfg(target_os = "macos")]
+unsafe fn nsstring_to_string(s: *mut objc2::runtime::AnyObject) -> String {
+    use objc2::msg_send;
+    if s.is_null() {
+        return String::new();
+    }
+    let utf8: *const std::os::raw::c_char = msg_send![s, UTF8String];
+    if utf8.is_null() {
+        return String::new();
+    }
+    std::ffi::CStr::from_ptr(utf8).to_string_lossy().into_owned()
+}
+
+/// Resolve the pandoc executable to use: a Bioscratch-managed binary in the app
+/// data dir if present, otherwise plain `pandoc` (resolved from PATH at run time).
+fn resolve_pandoc(app: &tauri::AppHandle) -> std::path::PathBuf {
+    if let Ok(dir) = app.path().app_data_dir() {
+        let managed = dir.join("bin").join("pandoc");
+        if managed.exists() {
+            return managed;
+        }
+    }
+    std::path::PathBuf::from("pandoc")
+}
+
+/// Recursively search `dir` for a file named exactly `name`.
+fn find_file_named(dir: &std::path::Path, name: &str) -> Option<std::path::PathBuf> {
+    let entries = fs::read_dir(dir).ok()?;
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            if let Some(found) = find_file_named(&path, name) {
+                return Some(found);
+            }
+        } else if path.file_name().and_then(|n| n.to_str()) == Some(name) {
+            return Some(path);
+        }
+    }
+    None
+}
+
+/// Returns true if the given executable runs successfully with `--version`.
+fn binary_runs(bin: &std::path::Path) -> bool {
+    std::process::Command::new(bin)
+        .arg("--version")
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+/// True if any common LaTeX-based PDF engine is available on PATH.
+fn latex_engine_available() -> bool {
+    ["pdflatex", "xelatex", "lualatex", "tectonic"].iter().any(|e| {
+        std::process::Command::new(e)
+            .arg("--version")
+            .output()
+            .map(|o| o.status.success())
+            .unwrap_or(false)
+    })
+}
+
+/// Returns true if pandoc (managed or on PATH) can be executed.
+fn pandoc_runs(bin: &std::path::Path) -> bool {
+    binary_runs(bin)
+}
+
+/// Resolve a Bioscratch-managed `typst` binary (a self-contained PDF engine) if
+/// one has been installed into the app data dir.
+fn resolve_typst(app: &tauri::AppHandle) -> Option<std::path::PathBuf> {
+    let dir = app.path().app_data_dir().ok()?;
+    let managed = dir.join("bin").join("typst");
+    if managed.exists() {
+        Some(managed)
+    } else {
+        None
+    }
+}
+
+/// True when a full PDF-export toolchain (pandoc + a PDF engine) is ready.
+#[tauri::command]
+async fn pdf_export_ready(app: tauri::AppHandle) -> Result<bool, String> {
+    let has_pandoc = pandoc_runs(&resolve_pandoc(&app));
+    let has_engine = latex_engine_available() || resolve_typst(&app).is_some();
+    Ok(has_pandoc && has_engine)
+}
+
+/// Download `url`, extract it, locate a file named `bin_name`, and install it as
+/// an executable at `bin_dir/bin_name`. Uses only tools that ship with macOS
+/// (`curl`, plus `unzip` or `tar`), so no Homebrew/git/etc. is required.
+fn download_and_extract_binary(
+    url: &str,
+    bin_name: &str,
+    bin_dir: &std::path::Path,
+    is_tar_xz: bool,
+) -> Result<std::path::PathBuf, String> {
+    let archive = std::env::temp_dir().join(format!("bioscratch_dl_{}", bin_name));
+    let extract_dir = std::env::temp_dir().join(format!("bioscratch_extract_{}", bin_name));
+    let _ = fs::remove_dir_all(&extract_dir);
+    fs::create_dir_all(&extract_dir).map_err(|e| e.to_string())?;
+
+    // Download (follow redirects, fail loudly on HTTP errors).
+    let dl = std::process::Command::new("curl")
+        .args([
+            "-L",
+            "--fail",
+            "--silent",
+            "--show-error",
+            "-o",
+            archive.to_str().unwrap_or(""),
+            url,
+        ])
+        .output()
+        .map_err(|e| format!("Failed to start download: {}", e))?;
+    if !dl.status.success() {
+        return Err(format!(
+            "Download failed: {}",
+            String::from_utf8_lossy(&dl.stderr).trim()
+        ));
+    }
+
+    // Extract. macOS `tar` (bsdtar) autodetects xz; `unzip` handles zips.
+    let extract = if is_tar_xz {
+        std::process::Command::new("tar")
+            .args([
+                "-xf",
+                archive.to_str().unwrap_or(""),
+                "-C",
+                extract_dir.to_str().unwrap_or(""),
+            ])
+            .output()
+    } else {
+        std::process::Command::new("unzip")
+            .args([
+                "-o",
+                "-q",
+                archive.to_str().unwrap_or(""),
+                "-d",
+                extract_dir.to_str().unwrap_or(""),
+            ])
+            .output()
+    }
+    .map_err(|e| format!("Failed to extract archive: {}", e))?;
+    if !extract.status.success() {
+        return Err(format!(
+            "Extract failed: {}",
+            String::from_utf8_lossy(&extract.stderr).trim()
+        ));
+    }
+
+    // Locate the binary in the extracted tree and install it.
+    let found = find_file_named(&extract_dir, bin_name)
+        .ok_or_else(|| format!("{} binary not found in downloaded archive", bin_name))?;
+    let dest = bin_dir.join(bin_name);
+    fs::copy(&found, &dest).map_err(|e| format!("Failed to install {}: {}", bin_name, e))?;
+    let _ = std::process::Command::new("chmod")
+        .args(["+x", dest.to_str().unwrap_or("")])
+        .status();
+
+    let _ = fs::remove_file(&archive);
+    let _ = fs::remove_dir_all(&extract_dir);
+    Ok(dest)
+}
+
+/// Download and install the PDF-export toolchain into the app data dir.
+///
+/// Relies only on tools that ship with macOS (`curl`, `unzip`, `tar`, `chmod`),
+/// so it works even with no Homebrew, no git, and no pre-existing pandoc/LaTeX.
+/// Installs pandoc if it is missing, and a self-contained `typst` PDF engine if
+/// no LaTeX engine is present — leaving PDF export fully functional afterward.
+#[tauri::command]
+async fn install_pdf_dependencies(app: tauri::AppHandle) -> Result<String, String> {
+    const PANDOC_VERSION: &str = "3.2";
+    const TYPST_VERSION: &str = "v0.12.0";
+
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let bin_dir = data_dir.join("bin");
+    fs::create_dir_all(&bin_dir).map_err(|e| e.to_string())?;
+
+    let mut installed: Vec<String> = Vec::new();
+
+    // 1. Pandoc — only if it can't already be run (managed or on PATH).
+    if !pandoc_runs(&resolve_pandoc(&app)) {
+        let pandoc_arch = match std::env::consts::ARCH {
+            "aarch64" => "arm64",
+            _ => "x86_64",
+        };
+        let url = format!(
+            "https://github.com/jgm/pandoc/releases/download/{0}/pandoc-{0}-{1}-macOS.zip",
+            PANDOC_VERSION, pandoc_arch
+        );
+        let dest = download_and_extract_binary(&url, "pandoc", &bin_dir, false)?;
+        if !binary_runs(&dest) {
+            return Err("Installed Pandoc failed to run.".to_string());
+        }
+        installed.push("Pandoc".to_string());
+    }
+
+    // 2. A PDF engine — install the self-contained typst binary only if there is
+    //    no LaTeX engine on PATH and no managed typst already present.
+    if !latex_engine_available() && resolve_typst(&app).is_none() {
+        let typst_arch = match std::env::consts::ARCH {
+            "aarch64" => "aarch64-apple-darwin",
+            _ => "x86_64-apple-darwin",
+        };
+        let url = format!(
+            "https://github.com/typst/typst/releases/download/{0}/typst-{1}.tar.xz",
+            TYPST_VERSION, typst_arch
+        );
+        let dest = download_and_extract_binary(&url, "typst", &bin_dir, true)?;
+        if !binary_runs(&dest) {
+            return Err("Installed PDF engine (typst) failed to run.".to_string());
+        }
+        installed.push("PDF engine".to_string());
+    }
+
+    if installed.is_empty() {
+        Ok("PDF tools already installed.".to_string())
+    } else {
+        Ok(format!("Installed {}.", installed.join(" and ")))
+    }
 }
 
 #[tauri::command]
@@ -627,7 +1029,11 @@ pub fn run() {
             delete_autosave,
             export_html,
             show_html_save_dialog,
+            show_pdf_save_dialog,
+            export_pdf_html,
             export_pdf_pandoc,
+            pdf_export_ready,
+            install_pdf_dependencies,
             open_url,
             open_new_window,
             list_user_themes,

@@ -66,6 +66,14 @@ function makeEditorStateFromMarkdown(
   plugins: EditorState["plugins"]
 ): EditorState {
   const doc = markdownToDoc(markdown, schema);
+  if (doc.firstChild?.type === schema.nodes.frontmatter) {
+    const bodyStart = Math.min(doc.firstChild.nodeSize + 1, doc.content.size);
+    return EditorState.create({
+      doc,
+      plugins,
+      selection: TextSelection.near(doc.resolve(bodyStart), 1),
+    });
+  }
   return EditorState.create({ doc, plugins });
 }
 
@@ -982,10 +990,13 @@ const App: React.FC = () => {
   const handleExportPdf = useCallback(async () => {
     const view = viewRef.current;
     if (!view) return;
-    const markdown = docToMarkdown(view.state.doc);
     const filename = filePath?.split("/").pop() || "document.md";
+
+    // PDF is produced by printing the live, rendered WebView to PDF natively —
+    // no Pandoc, LaTeX, or other tooling required, and the output is faithful to
+    // exactly what's on screen (including the YAML banner).
     try {
-      await exportToPdf(markdown, filename, filePath ?? null);
+      await exportToPdf(filename);
     } catch (err) {
       alert(String(err));
     }

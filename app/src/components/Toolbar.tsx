@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { EditorView } from "prosemirror-view";
+import { TextSelection } from "prosemirror-state";
 import { toggleMark, setBlockType, wrapIn } from "prosemirror-commands";
 import { wrapInList } from "prosemirror-schema-list";
 import { schema } from "../editor/schema";
@@ -76,9 +77,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   const insertMathInline = useCallback(() => {
     if (!view) return;
+    const { from } = view.state.selection;
     const node = schema.nodes.math_inline.create({ math: "x^2" });
-    const tr = view.state.tr.replaceSelectionWith(node);
-    view.dispatch(tr);
+    const tr = view.state.tr.replaceSelectionWith(node, false);
+    // Place the cursor immediately after the inserted inline atom so typing
+    // continues on the same line (default selection can land on the next block).
+    const after = Math.min(from + node.nodeSize, tr.doc.content.size);
+    tr.setSelection(TextSelection.create(tr.doc, after));
+    view.dispatch(tr.scrollIntoView());
     view.focus();
   }, [view]);
 
@@ -325,11 +331,21 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </svg>
         Table
       </button>
-      <button className="toolbar-btn" onClick={insertMathInline} disabled={!formattingEnabled} title="Inline Math">
-        $…$
+      <button className="toolbar-btn" onClick={insertMathInline} disabled={!formattingEnabled} title="Inline Math ($…$)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {/* radical √ over a formula, resting on a text baseline → inline math */}
+          <path d="M2 12.5l2.4 4.5L8.5 7H17"/>
+          <line x1="3" y1="21" x2="21" y2="21"/>
+        </svg>
+        Inline
       </button>
-      <button className="toolbar-btn" onClick={insertMathBlock} disabled={!formattingEnabled} title="Math Block">
-        $$…$$
+      <button className="toolbar-btn" onClick={insertMathBlock} disabled={!formattingEnabled} title="Math Block ($$…$$)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          {/* radical √ centered inside a framed block → display math */}
+          <rect x="2.5" y="4.5" width="19" height="15" rx="2"/>
+          <path d="M7 12l1.7 3.5L11.4 8H17"/>
+        </svg>
+        Block
       </button>
       <button className="toolbar-btn" onClick={insertHR} disabled={!formattingEnabled} title="Horizontal Rule">
         —

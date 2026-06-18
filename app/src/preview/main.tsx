@@ -16,11 +16,13 @@ import { schema } from "../editor/schema";
 import { markdownToDoc } from "../editor/serialization/markdownImport";
 import { buildImageRenderPlugin } from "../editor/plugins/imageRender";
 import { buildMermaidPlugin } from "../editor/plugins/mermaidPlugin";
+import { buildFrontmatterPlugin } from "../editor/plugins/frontmatterPlugin";
 import { buildHighlightPlugin } from "../editor/plugins/highlight";
 import {
   MathInlineView,
   MathBlockView,
   MermaidBlockView,
+  FrontmatterView,
   CodeBlockView,
   TaskListItemView,
 } from "../components/EditorSurface";
@@ -71,6 +73,7 @@ function render(): void {
     plugins: [
       buildImageRenderPlugin(filePathRef),
       buildMermaidPlugin(),
+      buildFrontmatterPlugin(),
       buildHighlightPlugin(),
     ],
   });
@@ -85,6 +88,7 @@ function render(): void {
         node.attrs.language === "mermaid"
           ? new MermaidBlockView(node, view, getPos)
           : new CodeBlockView(node),
+      frontmatter: (node, view, getPos) => new FrontmatterView(node, view, getPos),
       task_list_item: (node, view, getPos) => new TaskListItemView(node, view, getPos),
     },
   });

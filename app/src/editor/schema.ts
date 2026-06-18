@@ -40,7 +40,33 @@ const tableNodeSpecs = tableNodes({
 export const schema = new Schema({
   nodes: {
     doc: {
-      content: "block+",
+      // An optional YAML frontmatter banner may lead the document; everything
+      // after it is ordinary block content. frontmatter is intentionally NOT in
+      // the "block" group so it can only appear here, at the very top.
+      content: "frontmatter? block+",
+    },
+
+    // YAML frontmatter ( --- ... --- at the top of a Markdown file ). The raw
+    // YAML lives as the node's text content (like a code block); a NodeView
+    // renders it as an aesthetic banner and exposes the source for editing.
+    frontmatter: {
+      content: "text*",
+      marks: "",
+      code: true,
+      defining: true,
+      isolating: true,
+      parseDOM: [
+        {
+          tag: "div[data-frontmatter]",
+          preserveWhitespace: "full",
+          getAttrs() {
+            return {};
+          },
+        },
+      ],
+      toDOM() {
+        return ["div", { "data-frontmatter": "" }, ["pre", ["code", 0]]];
+      },
     },
 
     paragraph: {

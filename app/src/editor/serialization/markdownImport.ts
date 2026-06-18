@@ -3,9 +3,20 @@ import { unified } from "unified";
 import remarkParse from "remark-parse";
 import remarkGfm from "remark-gfm";
 import remarkMath from "remark-math";
+import remarkFrontmatter from "remark-frontmatter";
 import type { Root, Content, PhrasingContent, TableRow } from "mdast";
 
-const processor = unified().use(remarkParse).use(remarkGfm).use(remarkMath);
+const processor = unified()
+  .use(remarkParse)
+  // Recognize a leading YAML frontmatter block (mdast `yaml` node) instead of a
+  // thematic break + paragraphs. Two fence variants are accepted: the standard
+  // "---\n…\n---", and Pandoc/MkDocs style "---\n…\n..." (closing dots).
+  .use(remarkFrontmatter, [
+    "yaml",
+    { type: "yaml", fence: { open: "---", close: "..." }, anywhere: false },
+  ])
+  .use(remarkGfm)
+  .use(remarkMath);
 
 type MdastNode = Content | Root | PhrasingContent;
 
@@ -213,6 +224,14 @@ function convertBlock(node: MdastNode, schema: Schema): ProseMirrorNode | ProseM
       return schema.nodes.math_block.create({ math: n.value });
     }
 
+    case "yaml": {
+      // Leading YAML frontmatter. Store the raw inner text (without the ---
+      // fences) as the node's content; FrontmatterView renders the banner.
+      const n = node as { type: "yaml"; value: string };
+      const text = n.value ? schema.text(n.value) : null;
+      return schema.nodes.frontmatter.create(null, text ? [text] : []);
+    }
+
     case "table": {
       const n = node as { type: "table"; align?: (string | null)[]; children: TableRow[] };
       const align = n.align || [];
@@ -281,6 +300,13 @@ export function markdownToDoc(markdown: string, schema: Schema): ProseMirrorNode
 
   if (blocks.length === 0) {
     blocks = [schema.nodes.paragraph.create()];
+  }
+
+  // The schema requires at least one block after an optional frontmatter. A
+  // file that is *only* frontmatter would otherwise produce an invalid doc, so
+  // append an empty paragraph for the caret to land in.
+  if (blocks[blocks.length - 1].type === schema.nodes.frontmatter) {
+    blocks.push(schema.nodes.paragraph.create());
   }
 
   return schema.nodes.doc.create(null, blocks);
