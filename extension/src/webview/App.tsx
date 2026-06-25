@@ -56,7 +56,7 @@ const App: React.FC = () => {
   const lastSyncedTextRef = useRef<string>("");
 
   const [theme, setThemeState] = useState<ThemeName>("github_light");
-  const [matchVscode, setMatchVscode] = useState<boolean>(false);
+  const [matchVscode, setMatchVscode] = useState<boolean>(true);
   const [vscodeKind, setVscodeKind] = useState<"light" | "dark" | "high-contrast">("dark");
   const [userThemeVars, setUserThemeVars] = useState<Record<string, Record<string, string>>>({});
   const [themePickerOpen, setThemePickerOpen] = useState(false);

@@ -129,7 +129,7 @@
         },
         "bioscratch.matchVscodeTheme": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "markdownDescription": "Match the active VS Code color theme instead of using the `#bioscratch.theme#` setting."
         },
         "bioscratch.setAsDefaultEditor": {
