@@ -273,7 +273,7 @@
 
     .features-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      grid-template-columns: repeat(3, 1fr);
       gap: 1px;
       background: var(--border);
       border: 1px solid var(--border);
@@ -479,6 +479,7 @@
       .btn-row { flex-direction: column; align-items: stretch; }
       .btn { justify-content: center; }
       .section { padding: 60px 24px; }
+      .features-grid { grid-template-columns: 1fr; }
       .vscode-inner { grid-template-columns: 1fr; gap: 34px; }
       footer { padding: 36px 24px; }
     }
