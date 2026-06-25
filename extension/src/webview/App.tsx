@@ -55,7 +55,7 @@ const App: React.FC = () => {
   // suppress the echo of our own edits and to detect genuine external changes.
   const lastSyncedTextRef = useRef<string>("");
 
-  const [theme, setThemeState] = useState<ThemeName>("light");
+  const [theme, setThemeState] = useState<ThemeName>("github_light");
   const [matchVscode, setMatchVscode] = useState<boolean>(false);
   const [vscodeKind, setVscodeKind] = useState<"light" | "dark" | "high-contrast">("dark");
   const [userThemeVars, setUserThemeVars] = useState<Record<string, Record<string, string>>>({});

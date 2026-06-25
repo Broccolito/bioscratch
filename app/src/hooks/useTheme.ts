@@ -20,7 +20,7 @@ export function useTheme(userThemeVars: Record<string, Record<string, string>> =
   const [theme, setThemeState] = useState<ThemeName>(() => {
     const stored = localStorage.getItem("bioscratch-theme");
     if (stored) return stored;
-    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    return "github_light";
   });
 
   // useLayoutEffect applies before browser paint – no flash.
