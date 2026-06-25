@@ -92,7 +92,7 @@ const hrRule = new InputRule(/^(?:---|\*\*\*|___)\s$/, (state, _match, start) =>
   return tr.setSelection(TextSelection.near(caret));
 });
 
-// ---- Inline mark input rules (Typora-style live conversion) ----------------
+// ---- Inline mark input rules (live conversion) ----------------
 // These make typing **bold**, *italic*, `code`, ~~strike~~ render immediately,
 // matching how the same syntax renders when a file is opened.
 

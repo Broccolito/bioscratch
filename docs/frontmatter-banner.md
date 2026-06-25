@@ -1,7 +1,7 @@
 # YAML Front Matter Banner
 
 Bioscratch renders a leading YAML front-matter block (`--- … ---`) as an
-aesthetic **page banner** instead of raw text — a Typora-style widget that sits
+aesthetic **page banner** instead of raw text — a widget that sits
 alongside images, code blocks and Mermaid diagrams. This document is the
 implementation checklist and reference.
 

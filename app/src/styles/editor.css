@@ -533,7 +533,7 @@ span.image-inline-widget:hover img {
 .frontmatter-preview { cursor: pointer; }
 
 /* Minimal document masthead — no card, just a header block separated from the
-   body by a hairline rule, matching Bioscratch's clean Typora-like aesthetic. */
+   body by a hairline rule, matching Bioscratch's clean aesthetic. */
 .fm-banner {
   margin: 0 0 1.2em;
   padding: 0 0 0.85em;

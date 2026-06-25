@@ -371,7 +371,7 @@ export class MermaidBlockView implements NodeView {
 }
 
 // ---- Frontmatter NodeView ----
-// YAML frontmatter rendered as a Typora-style banner. Driven by
+// YAML frontmatter rendered as a banner. Driven by
 // frontmatterPlugin decorations:
 //   Inactive → source collapsed, only the formatted banner is shown
 //   Active   → editable YAML source visible above, live banner preview below

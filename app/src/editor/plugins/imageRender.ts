@@ -200,7 +200,7 @@ function findInlineImages(paraNode: ProseMirrorNode, paraPos: number): InlineIma
 
 // ---- Plugin -----------------------------------------------------------------
 
-// Typora-style image rendering via ProseMirror decorations.
+// Inline image rendering via ProseMirror decorations.
 //
 // Two rendering modes:
 //

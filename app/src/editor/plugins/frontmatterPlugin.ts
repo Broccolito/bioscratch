@@ -6,7 +6,7 @@ import { schema } from "../schema";
  * Adds a node decoration with spec.frontmatterActive = true when the cursor is
  * inside the frontmatter node. FrontmatterView.update() reads this to toggle
  * between the rendered banner (inactive) and the editable YAML source (active),
- * the same Typora-style toggle used for Mermaid blocks and images.
+ * the same toggle used for Mermaid blocks and images.
  */
 export function buildFrontmatterPlugin(): Plugin {
   return new Plugin({
