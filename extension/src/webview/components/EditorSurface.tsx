@@ -494,6 +494,8 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const surfaceRef = useRef<HTMLDivElement>(null);
 
   // Refs so the once-built ProseMirror view always calls the latest callbacks
   const onSaveRef = useRef(onSave);
@@ -512,6 +514,78 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   useEffect(() => { onOpenLinkRef.current = onOpenLink; }, [onOpenLink]);
   useEffect(() => { resolveSrcRef.current = resolveSrc; }, [resolveSrc]);
   useEffect(() => { fileModeRef.current = fileMode; }, [fileMode]);
+
+  // Rubber-band (spring) overscroll: when the user keeps scrolling past the top
+  // or bottom of the document, nudge the content with a damped offset and let it
+  // spring back, so there's a tactile "you've reached the end" cue — matching the
+  // desktop app. We drive it ourselves because the webview's native elastic
+  // bounce is unreliable here.
+  useEffect(() => {
+    const scrollEl = scrollAreaRef.current;
+    const surface = surfaceRef.current;
+    if (!scrollEl || !surface) return;
+
+    let offset = 0;          // current rubber-band displacement (px)
+    let raf = 0;             // spring-back animation frame
+    let settleTimer = 0;     // fires the release once wheel input pauses
+    const MAX = 110;         // furthest the content can stretch
+    const RESISTANCE = 0.32; // how much each overscroll wheel tick pulls
+
+    const apply = () => {
+      surface.style.transform = offset ? `translateY(${offset}px)` : "";
+    };
+
+    const release = () => {
+      cancelAnimationFrame(raf);
+      const step = () => {
+        offset *= 0.80; // exponential decay back to rest
+        if (Math.abs(offset) < 0.5) {
+          offset = 0;
+          apply();
+          return;
+        }
+        apply();
+        raf = requestAnimationFrame(step);
+      };
+      raf = requestAnimationFrame(step);
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      const atTop = scrollEl.scrollTop <= 0;
+      const atBottom =
+        scrollEl.scrollTop + scrollEl.clientHeight >= scrollEl.scrollHeight - 1;
+      const pastTop = e.deltaY < 0 && atTop;
+      const pastBottom = e.deltaY > 0 && atBottom;
+
+      if (!pastTop && !pastBottom) {
+        // Scrolling back into range: drop any residual stretch immediately.
+        if (offset !== 0 && raf === 0) {
+          offset = 0;
+          apply();
+        }
+        return;
+      }
+
+      // Prevent the (no-op) native scroll and stretch instead.
+      e.preventDefault();
+      cancelAnimationFrame(raf);
+      raf = 0;
+      offset -= e.deltaY * RESISTANCE;
+      offset = Math.max(-MAX, Math.min(MAX, offset));
+      apply();
+
+      clearTimeout(settleTimer);
+      settleTimer = window.setTimeout(release, 64);
+    };
+
+    scrollEl.addEventListener("wheel", onWheel, { passive: false });
+    return () => {
+      scrollEl.removeEventListener("wheel", onWheel);
+      cancelAnimationFrame(raf);
+      clearTimeout(settleTimer);
+      surface.style.transform = "";
+    };
+  }, []);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -547,6 +621,12 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
 
     const view = new EditorView(containerRef.current, {
       state,
+
+      // Keep the caret / active line away from the very bottom (and top) edge
+      // when ProseMirror scrolls it into view, so the line being read or typed
+      // always has a couple of lines of headroom instead of hugging the edge.
+      scrollMargin: { top: 24, right: 0, bottom: 140, left: 0 },
+      scrollThreshold: { top: 24, right: 0, bottom: 140, left: 0 },
 
       // Disable macOS text features that interfere with math notation:
       // - writingsuggestions: disables inline predictions (gray ghost text accepted
@@ -698,8 +778,8 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   };
 
   return (
-    <div className="editor-scroll-area">
-      <div className="editor-surface">
+    <div className="editor-scroll-area" ref={scrollAreaRef}>
+      <div className="editor-surface" ref={surfaceRef}>
         <div
           ref={containerRef}
           onClick={handleEditorClick}

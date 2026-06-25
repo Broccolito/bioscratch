@@ -9,6 +9,9 @@ released together.
 - Default theme is now GitHub Light.
 - "Match VS Code theme" is on by default, so the editor follows your active
   VS Code color theme out of the box.
+- Spring/rubber-band overscroll when scrolling past the top or bottom, plus a
+  couple of lines of breathing room below the last line — matching the desktop
+  app's scroll feel.
 
 ## 0.1.0
 

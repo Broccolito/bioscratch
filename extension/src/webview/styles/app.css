@@ -359,9 +359,18 @@ body {
   background: var(--bg-app);
   display: flex;
   justify-content: center;
+  /* Don't stretch the surface to the viewport height — let it grow with its
+     content so the surface's bottom padding actually creates scroll headroom
+     below the last line (otherwise the content overflows a pinned-height box
+     and the last line ends up flush against the bottom edge). */
+  align-items: flex-start;
   /* Elastic (bouncy) overscroll like macOS native */
   overscroll-behavior-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* Leave headroom when the caret / a line is scrolled into view so the last
+     line never hugs the bottom edge of the window. */
+  scroll-padding-bottom: 140px;
+  scroll-padding-top: 24px;
   /* Subtle paper grain feel via layered background */
   background-image:
     radial-gradient(ellipse at 20% 50%, rgba(210, 190, 160, 0.08) 0%, transparent 60%),
