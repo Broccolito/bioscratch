@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.1
+
+Version aligned with the Bioscratch desktop app, which ships at the same version.
+From this release the VS Code extension and the desktop editor are versioned and
+released together.
+
+- Default theme is now GitHub Light.
+- "Match VS Code theme" is on by default, so the editor follows your active
+  VS Code color theme out of the box.
+
 ## 0.1.0
 
 First release. Bioscratch WYSIWYG Markdown as a VS Code custom editor.
