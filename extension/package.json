@@ -1,0 +1,190 @@
+{
+  "name": "bioscratch",
+  "displayName": "Bioscratch",
+  "description": "A WYSIWYG Markdown editor for VS Code with live KaTeX math, Mermaid diagrams, syntax highlighting, tables, images, and 32 themes.",
+  "version": "0.1.0",
+  "publisher": "bioscratch",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Broccolito/bioscratch"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Visualization",
+    "Formatters",
+    "Other"
+  ],
+  "keywords": [
+    "markdown",
+    "wysiwyg",
+    "preview",
+    "katex",
+    "mermaid"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "contributes": {
+    "customEditors": [
+      {
+        "viewType": "bioscratch.markdownEditor",
+        "displayName": "Bioscratch",
+        "selector": [
+          {
+            "filenamePattern": "*.md"
+          },
+          {
+            "filenamePattern": "*.markdown"
+          }
+        ],
+        "priority": "default"
+      }
+    ],
+    "commands": [
+      {
+        "command": "bioscratch.find",
+        "title": "Bioscratch: Find in Document",
+        "category": "Bioscratch"
+      },
+      {
+        "command": "bioscratch.exportHtml",
+        "title": "Bioscratch: Export to HTML",
+        "category": "Bioscratch"
+      },
+      {
+        "command": "bioscratch.selectTheme",
+        "title": "Bioscratch: Select Theme",
+        "category": "Bioscratch"
+      },
+      {
+        "command": "bioscratch.toggleMatchVscode",
+        "title": "Bioscratch: Toggle Match VS Code Theme",
+        "category": "Bioscratch"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "bioscratch.find",
+        "key": "ctrl+f",
+        "mac": "cmd+f",
+        "when": "activeCustomEditorId == bioscratch.markdownEditor"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        { "command": "bioscratch.find", "when": "activeCustomEditorId == bioscratch.markdownEditor" },
+        { "command": "bioscratch.exportHtml", "when": "activeCustomEditorId == bioscratch.markdownEditor" },
+        { "command": "bioscratch.selectTheme", "when": "activeCustomEditorId == bioscratch.markdownEditor" },
+        { "command": "bioscratch.toggleMatchVscode", "when": "activeCustomEditorId == bioscratch.markdownEditor" }
+      ]
+    },
+    "configuration": {
+      "title": "Bioscratch",
+      "properties": {
+        "bioscratch.theme": {
+          "type": "string",
+          "default": "light",
+          "enum": [
+            "light", "dark",
+            "github_light", "github_dark",
+            "spotify_light", "spotify_dark",
+            "ibm_light", "ibm_dark",
+            "material_light", "material_dark",
+            "atlassian_light", "atlassian_dark",
+            "microsoft_light", "microsoft_dark",
+            "apple_light", "apple_dark",
+            "medium_light", "medium_dark",
+            "twitter_light", "twitter_dark",
+            "ant_light", "ant_dark",
+            "ubuntu_light", "ubuntu_dark",
+            "nasa_light", "nasa_dark",
+            "audi_light", "audi_dark",
+            "bbc_light", "bbc_dark",
+            "mailchimp_light", "mailchimp_dark"
+          ],
+          "enumDescriptions": [
+            "Light", "Dark",
+            "GitHub Light", "GitHub Dark",
+            "Spotify Light", "Spotify Dark",
+            "IBM Light", "IBM Dark",
+            "Material Light", "Material Dark",
+            "Atlassian Light", "Atlassian Dark",
+            "Microsoft Light", "Microsoft Dark",
+            "Apple Light", "Apple Dark",
+            "Medium Light", "Medium Dark",
+            "Twitter Light", "Twitter Dark",
+            "Ant Light", "Ant Dark",
+            "Ubuntu Light", "Ubuntu Dark",
+            "NASA Light", "NASA Dark",
+            "Audi Light", "Audi Dark",
+            "BBC Light", "BBC Dark",
+            "Mailchimp Light", "Mailchimp Dark"
+          ],
+          "markdownDescription": "The Bioscratch theme used to render documents. Ignored when `#bioscratch.matchVscodeTheme#` is on. You can also pick a theme, including imported custom themes, from the in-editor theme picker."
+        },
+        "bioscratch.matchVscodeTheme": {
+          "type": "boolean",
+          "default": false,
+          "markdownDescription": "Match the active VS Code color theme instead of using the `#bioscratch.theme#` setting."
+        },
+        "bioscratch.setAsDefaultEditor": {
+          "type": "boolean",
+          "default": true,
+          "markdownDescription": "Open Markdown files in Bioscratch by default. When on, Bioscratch registers itself as the default editor for `.md` files the first time it runs. Turn this off, or change the association under `#workbench.editorAssociations#`, to use the plain text editor or another editor instead."
+        },
+        "bioscratch.editDebounceMs": {
+          "type": "number",
+          "default": 200,
+          "minimum": 0,
+          "maximum": 2000,
+          "markdownDescription": "Delay in milliseconds before edits are written back to the document. Lower values sync faster, higher values write to the document less often."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "vscode:prepublish": "npm run typecheck && npm run build",
+    "package": "vsce package --no-dependencies",
+    "publish": "vsce publish --no-dependencies"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.0.5",
+    "@types/node": "^20.14.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.2.1",
+    "dompurify": "^3.3.3",
+    "esbuild": "^0.24.0",
+    "highlight.js": "^11.11.1",
+    "katex": "^0.16.45",
+    "mermaid": "^11.14.0",
+    "prosemirror-commands": "^1.7.1",
+    "prosemirror-dropcursor": "^1.8.2",
+    "prosemirror-gapcursor": "^1.4.1",
+    "prosemirror-inputrules": "^1.5.1",
+    "prosemirror-keymap": "^1.2.3",
+    "prosemirror-model": "^1.25.4",
+    "prosemirror-schema-basic": "^1.2.4",
+    "prosemirror-schema-list": "^1.5.1",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-tables": "^1.8.5",
+    "prosemirror-view": "^1.41.8",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "remark-parse": "^11.0.0",
+    "remark-stringify": "^11.0.0",
+    "typescript": "~5.8.3",
+    "unified": "^11.0.5"
+  }
+}

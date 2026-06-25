@@ -1,0 +1,27 @@
+# Bioscratch – Spotify Light Theme
+name: Spotify Light
+
+bg-app: "#f0f0f0"
+bg-toolbar: "#ffffff"
+bg-editor: "#ffffff"
+bg-statusbar: "#e8e8e8"
+
+text-primary: "#191414"
+text-secondary: "#535353"
+text-muted: "#b3b3b3"
+
+border-color: "#dcdcdc"
+border-subtle: "#ebebeb"
+
+accent: "#1db954"
+accent-hover: "#1aa34a"
+accent-bg: "rgba(29, 185, 84, 0.08)"
+
+toolbar-btn-hover: "#f5f5f5"
+toolbar-btn-active: "#e8e8e8"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.08)"
+shadow-md: "0 2px 8px rgba(0, 0, 0, 0.12)"
+
+code-bg: "#f5f5f5"
+code-inline-bg: "rgba(0, 0, 0, 0.06)"

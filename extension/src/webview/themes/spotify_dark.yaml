@@ -1,0 +1,27 @@
+# Bioscratch – Spotify Dark Theme
+name: Spotify Dark
+
+bg-app: "#121212"
+bg-toolbar: "#181818"
+bg-editor: "#181818"
+bg-statusbar: "#0a0a0a"
+
+text-primary: "#ffffff"
+text-secondary: "#b3b3b3"
+text-muted: "#535353"
+
+border-color: "#282828"
+border-subtle: "#1f1f1f"
+
+accent: "#1db954"
+accent-hover: "#1ed760"
+accent-bg: "rgba(29, 185, 84, 0.12)"
+
+toolbar-btn-hover: "#282828"
+toolbar-btn-active: "#3e3e3e"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.40)"
+shadow-md: "0 2px 8px rgba(0, 0, 0, 0.60)"
+
+code-bg: "#282828"
+code-inline-bg: "rgba(255, 255, 255, 0.10)"

@@ -1,0 +1,27 @@
+# Bioscratch – NASA Dark Theme (Space)
+name: NASA Dark
+
+bg-app: "#0a0e1a"
+bg-toolbar: "#111827"
+bg-editor: "#111827"
+bg-statusbar: "#060910"
+
+text-primary: "#d8e4f0"
+text-secondary: "#8a9bb0"
+text-muted: "#4a5670"
+
+border-color: "#1e2d48"
+border-subtle: "#141f35"
+
+accent: "#4d8bc4"
+accent-hover: "#6ea8e0"
+accent-bg: "rgba(77, 139, 196, 0.12)"
+
+toolbar-btn-hover: "#1a2540"
+toolbar-btn-active: "#1e2d48"
+
+shadow-sm: "0 1px 3px rgba(0, 0, 0, 0.50)"
+shadow-md: "0 4px 12px rgba(0, 0, 0, 0.70)"
+
+code-bg: "#0d1525"
+code-inline-bg: "rgba(255, 255, 255, 0.08)"

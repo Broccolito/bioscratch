@@ -1,0 +1,27 @@
+# Bioscratch – Atlassian Light Theme
+name: Atlassian Light
+
+bg-app: "#f4f5f7"
+bg-toolbar: "#ffffff"
+bg-editor: "#ffffff"
+bg-statusbar: "#ebecf0"
+
+text-primary: "#172b4d"
+text-secondary: "#5e6c84"
+text-muted: "#97a0af"
+
+border-color: "#dfe1e6"
+border-subtle: "#f4f5f7"
+
+accent: "#0052cc"
+accent-hover: "#0043a8"
+accent-bg: "rgba(0, 82, 204, 0.08)"
+
+toolbar-btn-hover: "#ebecf0"
+toolbar-btn-active: "#dfe1e6"
+
+shadow-sm: "0 1px 2px rgba(23, 43, 77, 0.08)"
+shadow-md: "0 4px 8px rgba(23, 43, 77, 0.15)"
+
+code-bg: "#f4f5f7"
+code-inline-bg: "rgba(9, 30, 66, 0.06)"

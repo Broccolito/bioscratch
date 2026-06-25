@@ -1,0 +1,27 @@
+# Bioscratch – Twitter Light Theme
+name: Twitter Light
+
+bg-app: "#f7f9f9"
+bg-toolbar: "#ffffff"
+bg-editor: "#ffffff"
+bg-statusbar: "#eff3f4"
+
+text-primary: "#0f1419"
+text-secondary: "#536471"
+text-muted: "#8b98a5"
+
+border-color: "#cfd9de"
+border-subtle: "#eff3f4"
+
+accent: "#1d9bf0"
+accent-hover: "#1a8cd8"
+accent-bg: "rgba(29, 155, 240, 0.08)"
+
+toolbar-btn-hover: "#eff3f4"
+toolbar-btn-active: "#e7edf0"
+
+shadow-sm: "0 1px 3px rgba(0, 0, 0, 0.08)"
+shadow-md: "0 4px 12px rgba(0, 0, 0, 0.12)"
+
+code-bg: "#eff3f4"
+code-inline-bg: "rgba(0, 0, 0, 0.05)"

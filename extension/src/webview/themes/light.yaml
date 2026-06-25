@@ -1,0 +1,35 @@
+# Bioscratch – Light Theme
+# Clean paper-like light theme
+name: Light
+
+# Background
+bg-app: "#eceae6"
+bg-toolbar: "#f5f4f0"
+bg-editor: "#fafaf8"
+bg-statusbar: "#eceae6"
+
+# Text
+text-primary: "#2b2620"
+text-secondary: "#6e645a"
+text-muted: "#a09588"
+
+# Structure
+border-color: "#d4ccc0"
+border-subtle: "#e0d9cf"
+
+# Accent – muted steel blue
+accent: "#4a6580"
+accent-hover: "#324a60"
+accent-bg: "rgba(74, 101, 128, 0.08)"
+
+# Interactive states
+toolbar-btn-hover: "#e8e2d8"
+toolbar-btn-active: "#d9d1c6"
+
+# Shadow – warm, soft
+shadow-sm: "0 1px 2px rgba(40, 30, 20, 0.06)"
+shadow-md: "0 2px 8px rgba(40, 30, 20, 0.10)"
+
+# Code
+code-bg: "#f0eeea"
+code-inline-bg: "rgba(60, 50, 35, 0.055)"

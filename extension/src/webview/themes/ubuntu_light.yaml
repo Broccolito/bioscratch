@@ -1,0 +1,27 @@
+# Bioscratch – Ubuntu Light Theme
+name: Ubuntu Light
+
+bg-app: "#f0eeec"
+bg-toolbar: "#ffffff"
+bg-editor: "#ffffff"
+bg-statusbar: "#e8e6e4"
+
+text-primary: "#3c3939"
+text-secondary: "#666360"
+text-muted: "#a8a5a2"
+
+border-color: "#d8d6d4"
+border-subtle: "#eeebe8"
+
+accent: "#e95420"
+accent-hover: "#c4420a"
+accent-bg: "rgba(233, 84, 32, 0.08)"
+
+toolbar-btn-hover: "#eae8e5"
+toolbar-btn-active: "#dddad7"
+
+shadow-sm: "0 1px 2px rgba(0, 0, 0, 0.08)"
+shadow-md: "0 2px 8px rgba(0, 0, 0, 0.12)"
+
+code-bg: "#f3f1ef"
+code-inline-bg: "rgba(60, 57, 57, 0.06)"

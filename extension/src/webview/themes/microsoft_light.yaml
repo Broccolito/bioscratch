@@ -1,0 +1,27 @@
+# Bioscratch – Microsoft Fluent Light Theme
+name: Microsoft Light
+
+bg-app: "#f3f2f1"
+bg-toolbar: "#ffffff"
+bg-editor: "#ffffff"
+bg-statusbar: "#edebe9"
+
+text-primary: "#201f1e"
+text-secondary: "#605e5c"
+text-muted: "#a19f9d"
+
+border-color: "#edebe9"
+border-subtle: "#f3f2f1"
+
+accent: "#0078d4"
+accent-hover: "#106ebe"
+accent-bg: "rgba(0, 120, 212, 0.08)"
+
+toolbar-btn-hover: "#f3f2f1"
+toolbar-btn-active: "#edebe9"
+
+shadow-sm: "0 1.6px 3.6px rgba(0, 0, 0, 0.13)"
+shadow-md: "0 3.2px 7.2px rgba(0, 0, 0, 0.18)"
+
+code-bg: "#f3f2f1"
+code-inline-bg: "rgba(0, 0, 0, 0.05)"

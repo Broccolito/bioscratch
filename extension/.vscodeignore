@@ -1,0 +1,12 @@
+# Source and build tooling — the VSIX ships only the bundled `dist/`.
+src/**
+.vscode/**
+node_modules/**
+esbuild.js
+tsconfig.json
+**/*.map
+**/*.ts
+**/tsconfig.json
+.gitignore
+.eslintrc*
+**/.DS_Store
