@@ -100,7 +100,7 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 
 ## Version Management
 
-Version is declared in two places that must stay in sync: `app/package.json` (`"version"`) and `app/src-tauri/Cargo.toml` (`version = "..."`). The landing page at [broccolito.github.io/bioscratch-landing](https://broccolito.github.io/bioscratch-landing/) and its source at `/Users/wgu/Desktop/bioscratch-landing` also hardcode the version in download links — update those on release too.
+Version is declared in two places that must stay in sync: `app/package.json` (`"version"`) and `app/src-tauri/Cargo.toml` (`version = "..."`). The landing page at [broccolito.github.io/bioscratch](https://broccolito.github.io/bioscratch/) and its source in the `landing/` folder of this repo also hardcode the version in download links — update those on release too. The landing page is deployed to GitHub Pages from `landing/` by `.github/workflows/deploy-landing.yml`.
 
 ## TypeScript Configuration
 

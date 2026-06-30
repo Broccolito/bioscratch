@@ -4,7 +4,9 @@ Landing page for [Bioscratch](https://github.com/Broccolito/bioscratch), a what-
 
 ## Live Site
 
-[https://broccolito.github.io/bioscratch-landing/](https://broccolito.github.io/bioscratch-landing/)
+[https://broccolito.github.io/bioscratch/](https://broccolito.github.io/bioscratch/)
+
+This folder lives inside the main [Bioscratch](https://github.com/Broccolito/bioscratch) repo and is deployed to GitHub Pages by `.github/workflows/deploy-landing.yml`.
 
 ## About Bioscratch
 

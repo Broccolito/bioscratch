@@ -14,7 +14,7 @@ A GitHub Actions workflow (`.github/workflows/no-claude-coauthor.yml`) enforces 
 
 ## Overview
 
-Static landing page for the [Bioscratch](https://github.com/Broccolito/bioscratch) desktop app. No build system — everything is in a single `index.html` with embedded CSS and JS. Deployed to GitHub Pages at [broccolito.github.io/bioscratch-landing](https://broccolito.github.io/bioscratch-landing/).
+Static landing page for the [Bioscratch](https://github.com/Broccolito/bioscratch) desktop app. No build system — everything is in a single `index.html` with embedded CSS and JS. This `landing/` folder lives inside the main Bioscratch repo and is deployed to GitHub Pages at [broccolito.github.io/bioscratch](https://broccolito.github.io/bioscratch/) by `.github/workflows/deploy-landing.yml` (at the repo root) whenever `landing/**` changes on `main`.
 
 ## Commands
 
@@ -26,7 +26,7 @@ python -m http.server 8000   # then open http://localhost:8000
 npx serve .
 ```
 
-Deploy by pushing to `main` — GitHub Pages serves `index.html` automatically.
+Deploy by pushing changes under `landing/**` to `main` — the `.github/workflows/deploy-landing.yml` workflow (at the main repo root) uploads this folder and publishes it to GitHub Pages.
 
 ## Structure
 
