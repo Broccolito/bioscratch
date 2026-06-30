@@ -1,0 +1,28 @@
+name: No Claude co-author
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check-commits:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Check for Claude co-author lines
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            MSGS=$(git log "origin/${{ github.base_ref }}..HEAD" --format="%B")
+          elif [ "${{ github.event.before }}" = "0000000000000000000000000000000000000000" ]; then
+            MSGS=$(git log HEAD -1 --format="%B")
+          else
+            MSGS=$(git log "${{ github.event.before }}..${{ github.sha }}" --format="%B")
+          fi
+          if echo "$MSGS" | grep -iqE "^Co-Authored-By:.*claude"; then
+            echo "::error::Claude Code co-author lines are not allowed in commit messages."
+            exit 1
+          fi
+          echo "OK: no Claude co-author lines found."

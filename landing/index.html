@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Bioscratch — WYSIWYG Markdown Editor</title>
+  <link rel="icon" type="image/png" href="img/logo.png" />
+  <meta name="description" content="A WYSIWYG Markdown editor for researchers, data scientists, and AI engineers. Built for humans and agents alike." />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:          #fafaf8;
+      --bg-alt:      #f4f4f1;
+      --bg-card:     #f7f7f4;
+      --text:        #1a1a1a;
+      --text-mid:    #555;
+      --text-soft:   #999;
+      --border:      #e4e4e0;
+      --btn-dark:    #1a1a1a;
+      --btn-dark-h:  #2e2e2e;
+      --radius:      7px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ─── NAV ─────────────────────────────────────────────── */
+    nav {
+      position: sticky;
+      top: 0;
+      z-index: 200;
+      height: 54px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      background: rgba(250,250,248,0.88);
+      backdrop-filter: blur(14px);
+      -webkit-backdrop-filter: blur(14px);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .nav-brand {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--text);
+      text-decoration: none;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .nav-brand img {
+      width: 24px;
+      height: 24px;
+      object-fit: contain;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 28px;
+      list-style: none;
+    }
+    .nav-links a {
+      font-size: 13px;
+      color: var(--text-mid);
+      text-decoration: none;
+      transition: color 0.18s;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+    }
+    .nav-links a:hover { color: var(--text); }
+
+    .nav-gh {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      line-height: 1;
+    }
+    .nav-gh svg {
+      display: block;
+    }
+
+    /* ─── HERO ────────────────────────────────────────────── */
+    .hero {
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 96px 32px 80px;
+      text-align: center;
+    }
+
+    .hero-logo {
+      width: 88px;
+      height: 88px;
+      object-fit: contain;
+      margin-bottom: 36px;
+      display: block;
+      margin-left: auto;
+      margin-right: auto;
+    }
+
+    .hero-title {
+      font-size: clamp(38px, 5.5vw, 58px);
+      font-weight: 700;
+      letter-spacing: -0.035em;
+      line-height: 1.08;
+      color: var(--text);
+      margin-bottom: 18px;
+    }
+
+    .hero-sub {
+      font-size: 17px;
+      color: var(--text-mid);
+      max-width: 540px;
+      margin: 0 auto 44px;
+      line-height: 1.55;
+    }
+
+    /* ─── THREE PILLARS ───────────────────────────────────── */
+    .pillars {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+      margin-bottom: 52px;
+      text-align: left;
+    }
+
+    .pillar {
+      padding: 22px 20px;
+      border-right: 1px solid var(--border);
+      background: var(--bg-card);
+    }
+    .pillar:last-child { border-right: none; }
+
+    .pillar-num {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      color: var(--text-soft);
+      margin-bottom: 8px;
+      text-transform: uppercase;
+    }
+
+    .pillar-head {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 5px;
+      letter-spacing: -0.01em;
+    }
+
+    .pillar-body {
+      font-size: 12px;
+      color: var(--text-mid);
+      line-height: 1.5;
+    }
+
+    /* ─── BUTTONS ─────────────────────────────────────────── */
+    .btn-row {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+      margin-bottom: 14px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 11px 22px;
+      border-radius: var(--radius);
+      font-family: Arial, sans-serif;
+      font-size: 13.5px;
+      font-weight: 600;
+      text-decoration: none;
+      cursor: pointer;
+      transition: background 0.18s, transform 0.12s;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+    }
+
+    .btn-filled {
+      background: var(--btn-dark);
+      color: #fafaf8;
+    }
+    .btn-filled:hover {
+      background: var(--btn-dark-h);
+      transform: translateY(-1px);
+    }
+
+    .btn-ghost {
+      background: transparent;
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-ghost:hover {
+      background: var(--bg-alt);
+      transform: translateY(-1px);
+    }
+
+    .dl-note {
+      font-size: 12px;
+      color: var(--text-soft);
+      line-height: 1.7;
+    }
+    .dl-note a {
+      color: var(--text-mid);
+      text-underline-offset: 2px;
+    }
+    .dl-note code {
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+    }
+
+    .version-pill {
+      display: inline-block;
+      margin-top: 10px;
+      font-size: 11px;
+      color: var(--text-soft);
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 2px 10px;
+    }
+
+    /* ─── SECTION WRAPPER ─────────────────────────────────── */
+    .section {
+      padding: 80px 48px;
+    }
+    .section-inner {
+      max-width: 940px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 11px;
+      letter-spacing: 0.11em;
+      text-transform: uppercase;
+      color: var(--text-soft);
+      margin-bottom: 10px;
+    }
+    .section-title {
+      font-size: clamp(24px, 3vw, 31px);
+      font-weight: 700;
+      letter-spacing: -0.025em;
+      color: var(--text);
+      margin-bottom: 40px;
+    }
+
+    /* ─── FEATURES ────────────────────────────────────────── */
+    .section-features {
+      background: var(--bg-alt);
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .feat-card {
+      background: var(--bg-alt);
+      padding: 26px 22px;
+      opacity: 0;
+      transform: translateY(10px);
+      transition: opacity 0.42s ease, transform 0.42s ease;
+    }
+    .feat-card.in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .feat-icon {
+      width: 28px;
+      height: 28px;
+      margin-bottom: 14px;
+      stroke: var(--text);
+    }
+
+    .feat-name {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 6px;
+      letter-spacing: -0.015em;
+    }
+    .feat-desc {
+      font-size: 12.5px;
+      color: var(--text-mid);
+      line-height: 1.55;
+    }
+
+    /* ─── DOWNLOAD SECTION ────────────────────────────────── */
+    .section-download {
+      text-align: center;
+    }
+    .platform-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 13px;
+      font-size: 12px;
+      color: var(--text-mid);
+      margin-bottom: 30px;
+    }
+
+    /* ─── FOOTER ──────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 44px 48px;
+      text-align: center;
+    }
+    .footer-inner { max-width: 640px; margin: 0 auto; }
+
+    .footer-contact {
+      font-size: 13.5px;
+      color: var(--text-mid);
+      line-height: 1.65;
+      margin-bottom: 20px;
+    }
+    .footer-contact a {
+      color: var(--text);
+      text-decoration: underline;
+      text-underline-offset: 2px;
+    }
+
+    .footer-links {
+      list-style: none;
+      display: flex;
+      justify-content: center;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+    .footer-links a {
+      font-size: 12px;
+      color: var(--text-soft);
+      text-decoration: none;
+      transition: color 0.18s;
+    }
+    .footer-links a:hover { color: var(--text); }
+
+    .footer-copy {
+      font-size: 11px;
+      color: var(--text-soft);
+    }
+
+    /* ─── VS CODE EXTENSION ───────────────────────────────── */
+    .section-vscode {
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+    }
+    .vscode-inner {
+      display: grid;
+      grid-template-columns: 1.05fr 0.95fr;
+      gap: 52px;
+      align-items: center;
+    }
+    .vscode-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      background: var(--bg-alt);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 4px 13px;
+      font-size: 12px;
+      color: var(--text-mid);
+      margin-bottom: 16px;
+    }
+    .vscode-inner .section-title { margin-bottom: 16px; }
+    .vscode-lead {
+      font-size: 15px;
+      color: var(--text-mid);
+      line-height: 1.6;
+      margin-bottom: 24px;
+    }
+    .vscode-points {
+      list-style: none;
+      display: grid;
+      gap: 12px;
+      margin-bottom: 30px;
+    }
+    .vscode-points li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--text-mid);
+      line-height: 1.5;
+    }
+    .vscode-check {
+      flex: none;
+      width: 16px;
+      height: 16px;
+      margin-top: 2px;
+      stroke: var(--text);
+    }
+    .vscode-points li strong { color: var(--text); font-weight: 700; }
+
+    /* Install card */
+    .install-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px;
+    }
+    .install-head {
+      font-size: 11px;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--text-soft);
+      margin-bottom: 14px;
+    }
+    .install-code {
+      background: var(--btn-dark);
+      color: #f4f4f1;
+      border-radius: 6px;
+      padding: 14px 16px;
+      font-family: "SF Mono", "Menlo", "Consolas", monospace;
+      font-size: 12px;
+      line-height: 1.7;
+      overflow-x: auto;
+      margin-bottom: 16px;
+      white-space: pre;
+    }
+    .install-code .tok-cmd { color: #8fd5a6; }
+    .install-note {
+      font-size: 12.5px;
+      color: var(--text-mid);
+      line-height: 1.55;
+    }
+    .install-note strong { color: var(--text); }
+
+    /* ─── FADE-IN ─────────────────────────────────────────── */
+    .fade {
+      opacity: 0;
+      transform: translateY(14px);
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    .fade.in {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* ─── RESPONSIVE ──────────────────────────────────────── */
+    @media (max-width: 680px) {
+      nav { padding: 0 20px; }
+      .nav-links li:not(:last-child) { display: none; }
+      .hero { padding: 64px 24px 60px; }
+      .pillars { grid-template-columns: 1fr; }
+      .pillar { border-right: none; border-bottom: 1px solid var(--border); }
+      .pillar:last-child { border-bottom: none; }
+      .btn-row { flex-direction: column; align-items: stretch; }
+      .btn { justify-content: center; }
+      .section { padding: 60px 24px; }
+      .features-grid { grid-template-columns: 1fr; }
+      .vscode-inner { grid-template-columns: 1fr; gap: 34px; }
+      footer { padding: 36px 24px; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ════════════════════  NAV  ════════════════════ -->
+<nav>
+  <a href="#" class="nav-brand">
+    <img src="img/logo.png" alt="" aria-hidden="true" />
+    Bioscratch
+  </a>
+  <ul class="nav-links">
+    <li><a href="#features">Features</a></li>
+    <li><a href="#vscode">VS Code</a></li>
+    <li><a href="#download">Download</a></li>
+    <li>
+      <a href="https://github.com/Broccolito/bioscratch" target="_blank" rel="noopener">GitHub</a>
+    </li>
+  </ul>
+</nav>
+
+<!-- ════════════════════  HERO  ════════════════════ -->
+<section class="hero">
+  <img src="img/logo.png" alt="Bioscratch logo" class="hero-logo" />
+
+  <h1 class="hero-title">The Markdown editor for the age of&nbsp;AI.</h1>
+
+  <p class="hero-sub">
+    A what-you-see-is-what-you-get Markdown editor for researchers, data scientists, and AI&nbsp;engineers.
+    Built for humans and agents alike.
+  </p>
+
+  <!-- THREE PILLARS -->
+  <div class="pillars fade">
+    <div class="pillar">
+      <div class="pillar-num">01</div>
+      <div class="pillar-head">Agent &amp; Human Ready</div>
+      <div class="pillar-body">Files stay plain Markdown, readable by any AI model or any person, as-is.</div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-num">02</div>
+      <div class="pillar-head">What You See Is What You Get</div>
+      <div class="pillar-body">No split panes. No preview mode. Headings, tables, and math render as you type. Click to edit.</div>
+    </div>
+    <div class="pillar">
+      <div class="pillar-num">03</div>
+      <div class="pillar-head">Minimal by Design</div>
+      <div class="pillar-body">A distraction-free canvas. Nothing between you and the document.</div>
+    </div>
+  </div>
+
+  <!-- DOWNLOAD CTA -->
+  <div class="btn-row fade">
+    <a href="https://github.com/Broccolito/bioscratch/releases/download/v0.3.1/Bioscratch_0.3.1_aarch64.dmg"
+       class="btn btn-filled">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 16.5l-6-6h4V3h4v7.5h4l-6 6zm-7 3h14v2H5v-2z"/></svg>
+      Apple Silicon
+    </a>
+    <a href="https://github.com/Broccolito/bioscratch/releases/download/v0.3.1/Bioscratch_0.3.1_x64.dmg"
+       class="btn btn-ghost">
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 16.5l-6-6h4V3h4v7.5h4l-6 6zm-7 3h14v2H5v-2z"/></svg>
+      Intel Mac
+    </a>
+  </div>
+
+  <p class="dl-note fade">
+    macOS app &nbsp;·&nbsp; Free &nbsp;·&nbsp; No account required<br>
+    Also available as a <a href="#vscode">VS&nbsp;Code extension</a>
+  </p>
+  <span class="version-pill fade">v0.3.1</span>
+</section>
+
+<!-- ════════════════════  FEATURES  ════════════════════ -->
+<section class="section section-features" id="features">
+  <div class="section-inner">
+    <p class="section-label fade">Features</p>
+    <h2 class="section-title fade">Everything you need. Nothing&nbsp;you&nbsp;don't.</h2>
+
+    <div class="features-grid">
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 6h18M3 12h12M3 18h8"/>
+        </svg>
+        <div class="feat-name">True WYSIWYG</div>
+        <div class="feat-desc">Headings, bold, tables, and task lists render live as you type. Click anywhere to edit raw syntax.</div>
+      </div>
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M3 17l3-6 3 4 3-8 3 10 3-5"/>
+        </svg>
+        <div class="feat-name">Math &amp; Diagrams</div>
+        <div class="feat-desc">KaTeX inline and block math. Mermaid flowcharts and sequence diagrams, rendered live in the editor.</div>
+      </div>
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+        <div class="feat-name">Code Blocks</div>
+        <div class="feat-desc">Syntax highlighting for Python, R, TypeScript, Julia, Go, Rust, and more.</div>
+      </div>
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M12 2v3M12 19v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M2 12h3M19 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12"/>
+        </svg>
+        <div class="feat-name">32+ Themes</div>
+        <div class="feat-desc">Including the new <strong>Biorouter Light &amp; Dark</strong>, plus GitHub, Material, IBM Carbon, NASA, Spotify, and more. Customizable YAML-based theme files.</div>
+      </div>
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="8" height="8" rx="1"/>
+          <rect x="13" y="3" width="8" height="8" rx="1"/>
+          <rect x="3" y="13" width="8" height="8" rx="1"/>
+          <rect x="13" y="13" width="8" height="8" rx="1"/>
+        </svg>
+        <div class="feat-name">Multi-Tab &amp; Multi-Window</div>
+        <div class="feat-desc">Drag tabs to detach into separate windows. Autosave every 30 s. Crash recovery on next open.</div>
+      </div>
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 16l-4-4h3V4h2v8h3l-4 4z"/>
+          <path d="M4 20h16"/>
+        </svg>
+        <div class="feat-name">Export</div>
+        <div class="feat-desc">HTML (self-contained, KaTeX + Mermaid bundled) and PDF via Pandoc with proper typesetting.</div>
+      </div>
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+        <div class="feat-name">File Format Support</div>
+        <div class="feat-desc">Opens .md, .txt, .py, .r, .json, .yaml, .toml, .tex, .sql, .html, .ts, .go, .rs, and more.</div>
+      </div>
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="5" height="4" rx="1"/>
+          <rect x="16" y="3" width="5" height="4" rx="1"/>
+          <rect x="9.5" y="17" width="5" height="4" rx="1"/>
+          <path d="M5.5 7v3.5c0 1 .5 1.5 1.5 1.5h10c1 0 1.5-.5 1.5-1.5V7"/>
+          <line x1="12" y1="11" x2="12" y2="17"/>
+        </svg>
+        <div class="feat-name">Mermaid Diagrams</div>
+        <div class="feat-desc">Visualize workflows, pipelines, and skill maps with live Mermaid diagrams. Great for agents and researchers.</div>
+      </div>
+
+      <div class="feat-card">
+        <svg class="feat-icon" viewBox="0 0 24 24" fill="none" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="16" rx="2"/>
+          <path d="M3 9h18"/>
+          <circle cx="12" cy="14.5" r="2.4"/>
+        </svg>
+        <div class="feat-name">Quick Look Preview <span style="font-size:11px;vertical-align:middle;opacity:.7;">NEW</span></div>
+        <div class="feat-desc">Press the spacebar on any Markdown file in Finder to see a fully rendered Bioscratch preview &mdash; tables, math, code, and diagrams &mdash; without opening the app.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════  VS CODE EXTENSION  ════════════════════ -->
+<section class="section section-vscode" id="vscode">
+  <div class="section-inner vscode-inner">
+
+    <div class="vscode-copy fade">
+      <div class="vscode-badge">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+        For Visual Studio Code
+      </div>
+      <h2 class="section-title">The same editor, right inside VS&nbsp;Code.</h2>
+      <p class="vscode-lead">
+        Bioscratch now ships as a VS&nbsp;Code extension. Open any
+        <code style="font-size:13px">.md</code> file and edit it as a live
+        document — while VS&nbsp;Code keeps full ownership of saving, undo, hot
+        exit, and Git. The file on disk stays clean Markdown.
+      </p>
+      <ul class="vscode-points">
+        <li>
+          <svg class="vscode-check" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>True WYSIWYG</strong> for headings, lists, tables, and links — rendered live, edited in place.</span>
+        </li>
+        <li>
+          <svg class="vscode-check" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>KaTeX math, Mermaid diagrams, and syntax highlighting</strong> render as you type.</span>
+        </li>
+        <li>
+          <svg class="vscode-check" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>Native to your workflow</strong> — VS&nbsp;Code owns save, undo/redo, hot exit, and the dirty indicator.</span>
+        </li>
+        <li>
+          <svg class="vscode-check" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span><strong>30+ themes</strong>, or <strong>Match VS&nbsp;Code theme</strong> to follow your active color theme automatically.</span>
+        </li>
+      </ul>
+      <div class="btn-row" style="justify-content:flex-start;margin-bottom:0;">
+        <a href="https://github.com/Broccolito/bioscratch/releases/download/v0.3.1/bioscratch-0.3.1.vsix"
+           class="btn btn-filled">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 16.5l-6-6h4V3h4v7.5h4l-6 6zm-7 3h14v2H5v-2z"/></svg>
+          Download .vsix
+        </a>
+        <a href="https://github.com/Broccolito/bioscratch/releases/latest"
+           class="btn btn-ghost" target="_blank" rel="noopener">
+          View on GitHub
+        </a>
+      </div>
+    </div>
+
+    <div class="vscode-install fade">
+      <div class="install-card">
+        <div class="install-head">Install</div>
+        <div class="install-code"><span class="tok-cmd">code</span> --install-extension \
+  bioscratch-0.3.1.vsix</div>
+        <p class="install-note">
+          …or open the Command Palette and run
+          <strong>Extensions: Install from VSIX…</strong>, then pick the
+          downloaded file. Bioscratch becomes the default editor for Markdown
+          files — switch back anytime with <strong>Reopen Editor With…</strong>.
+        </p>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- ════════════════════  DOWNLOAD  ════════════════════ -->
+<section class="section section-download" id="download">
+  <div class="section-inner">
+    <p class="section-label fade">Download</p>
+    <h2 class="section-title fade">Available for macOS.</h2>
+
+    <div class="fade">
+      <div class="platform-tag">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/>
+        </svg>
+        macOS · Apple Silicon &amp; Intel
+      </div>
+
+      <div class="btn-row">
+        <a href="https://github.com/Broccolito/bioscratch/releases/download/v0.3.1/Bioscratch_0.3.1_aarch64.dmg"
+           class="btn btn-filled">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 16.5l-6-6h4V3h4v7.5h4l-6 6zm-7 3h14v2H5v-2z"/></svg>
+          Download for Apple Silicon
+        </a>
+        <a href="https://github.com/Broccolito/bioscratch/releases/download/v0.3.1/Bioscratch_0.3.1_x64.dmg"
+           class="btn btn-ghost">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 16.5l-6-6h4V3h4v7.5h4l-6 6zm-7 3h14v2H5v-2z"/></svg>
+          Download for Intel Mac
+        </a>
+      </div>
+
+      <p class="dl-note" style="margin-top:14px;">
+        macOS app &nbsp;·&nbsp; Free &nbsp;·&nbsp; No account required<br>
+        PDF export requires Pandoc &nbsp;<code>brew install pandoc</code><br>
+        Prefer your editor? Get the <a href="#vscode">VS&nbsp;Code extension</a>.<br><br>
+        <a href="https://github.com/Broccolito/bioscratch/releases/tag/v0.3.1" target="_blank" rel="noopener">
+          What&rsquo;s new in v0.3.1 &rarr;
+        </a>
+        &nbsp;·&nbsp;
+        <a href="https://github.com/Broccolito/bioscratch/releases" target="_blank" rel="noopener">
+          All releases
+        </a>
+      </p>
+      <p class="dl-note" id="dl-count-wrap" style="margin-top:6px;margin-bottom:0;opacity:0;transition:opacity .4s ease;">
+        ↓ <span id="dl-total">0</span>&thinsp;total downloads
+      </p>
+      <span class="version-pill">v0.3.1</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════  FOOTER  ════════════════════ -->
+<footer>
+  <div class="footer-inner">
+    <p class="footer-contact">
+      Questions or interested in collaborating?<br>
+      Reach out to <strong>Wanjun Gu</strong> at
+      <a href="mailto:wanjun.gu@ucsf.edu">wanjun.gu@ucsf.edu</a><br><br>
+      Bioscratch is released under the MIT license and will always be free.
+    </p>
+    <ul class="footer-links">
+      <li><a href="https://github.com/Broccolito/bioscratch" target="_blank" rel="noopener">GitHub</a></li>
+      <li><a href="https://github.com/Broccolito/bioscratch/releases" target="_blank" rel="noopener">Releases</a></li>
+      <li><a href="mailto:wanjun.gu@ucsf.edu">Contact</a></li>
+    </ul>
+    <p class="footer-copy">Bioscratch &copy; 2026 &nbsp;·&nbsp; MIT License</p>
+  </div>
+</footer>
+
+<!-- ════════════════════  JS  ════════════════════ -->
+<script>
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.08, rootMargin: '0px 0px -32px 0px' });
+
+  // Stagger feature cards
+  document.querySelectorAll('.feat-card').forEach((card, i) => {
+    setTimeout(() => io.observe(card), i * 55);
+    card.style.transitionDelay = i * 55 + 'ms';
+  });
+
+  // Generic fade elements
+  document.querySelectorAll('.fade').forEach(el => io.observe(el));
+
+  // Real-time download counter
+  (async function() {
+    try {
+      const res = await fetch('https://api.github.com/repos/Broccolito/bioscratch/releases?per_page=100');
+      const releases = await res.json();
+      let n = 0;
+      releases.forEach(rel => rel.assets.forEach(a => n += a.download_count));
+      const el = document.getElementById('dl-total');
+      const wrap = document.getElementById('dl-count-wrap');
+      if (el) el.textContent = n.toLocaleString();
+      if (wrap) wrap.style.opacity = '1';
+    } catch(_) {}
+  })();
+</script>
+
+</body>
+</html>

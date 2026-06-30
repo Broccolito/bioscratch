@@ -1,0 +1,7 @@
+#!/bin/sh
+# Reject commits that contain Claude Code co-author lines.
+if grep -qiE "^Co-Authored-By:.*claude" "$1"; then
+  echo "error: Claude Code co-author lines are not allowed in commit messages." >&2
+  echo "       Remove any 'Co-Authored-By: Claude ...' lines and try again." >&2
+  exit 1
+fi
