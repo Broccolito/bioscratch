@@ -987,7 +987,7 @@ pub fn run() {
                     "learn-more" => {
                         use tauri_plugin_opener::OpenerExt;
                         app_handle.opener()
-                            .open_url("https://broccolito.github.io/bioscratch-landing/", None::<&str>)
+                            .open_url("https://broccolito.github.io/bioscratch/", None::<&str>)
                             .ok();
                     }
                     "github" => {
