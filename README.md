@@ -102,3 +102,7 @@ npm run tauri build    # production .dmg
 ## Developer
 
 Bioscratch is developed and maintained by **Wanjun Gu** at the University of California, San Francisco (UCSF). For questions, feedback, or collaboration, reach out at [wanjun.gu@ucsf.edu](mailto:wanjun.gu@ucsf.edu).
+
+## Contributors
+
+- [Tianlu Zhu](https://github.com/Exynos-8890)
