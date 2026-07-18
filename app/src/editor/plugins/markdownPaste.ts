@@ -22,7 +22,7 @@ export function buildMarkdownPastePlugin(
 ): Plugin {
   return new Plugin({
     props: {
-      handlePaste(view, event) {
+      handlePaste(view, event, defaultSlice) {
         // Only active in markdown mode
         if (fileModeRef.current !== "markdown") return false;
 
@@ -51,9 +51,24 @@ export function buildMarkdownPastePlugin(
           parsedDoc.childCount === 1 &&
           parsedDoc.child(0).type.name === "paragraph";
 
-        const slice = isSingleParagraph
-          ? new Slice(parsedDoc.content, 1, 1)
-          : new Slice(parsedDoc.content, 0, 0);
+        const paragraph = isSingleParagraph ? parsedDoc.child(0) : null;
+        const firstInline = paragraph?.firstChild;
+        const isUnformattedSingleLineText =
+          paragraph?.childCount === 1 &&
+          firstInline?.isText === true &&
+          firstInline.marks.length === 0 &&
+          firstInline.text === text &&
+          !/[\r\n]/.test(text);
+
+        // ProseMirror's default plain-text slice already carries the marks at
+        // the cursor (code, bold, italic, strikethrough, etc.). Reuse it for
+        // truly plain inline text instead of discarding that context when we
+        // parse the clipboard as a standalone Markdown document.
+        const slice = isUnformattedSingleLineText
+          ? defaultSlice
+          : isSingleParagraph
+            ? new Slice(parsedDoc.content, 1, 1)
+            : new Slice(parsedDoc.content, 0, 0);
 
         view.dispatch(view.state.tr.replaceSelection(slice).scrollIntoView());
         return true;
