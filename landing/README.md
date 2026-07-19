@@ -14,8 +14,8 @@ Bioscratch is a desktop Markdown editor built for humans and AI agents alike. Fi
 
 - **GitHub:** [Broccolito/bioscratch](https://github.com/Broccolito/bioscratch)
 - **Releases:** [github.com/Broccolito/bioscratch/releases](https://github.com/Broccolito/bioscratch/releases)
-- **Download (Apple Silicon):** [Bioscratch_0.3.1_aarch64.dmg](https://github.com/Broccolito/bioscratch/releases/download/v0.3.1/Bioscratch_0.3.1_aarch64.dmg)
-- **Download (Intel Mac):** [Bioscratch_0.3.1_x64.dmg](https://github.com/Broccolito/bioscratch/releases/download/v0.3.1/Bioscratch_0.3.1_x64.dmg)
+- **Download (Apple Silicon):** [Bioscratch_0.4.0_aarch64.dmg](https://github.com/Broccolito/bioscratch/releases/download/v0.4.0/Bioscratch_0.4.0_aarch64.dmg)
+- **Download (Intel Mac):** [Bioscratch_0.4.0_x64.dmg](https://github.com/Broccolito/bioscratch/releases/download/v0.4.0/Bioscratch_0.4.0_x64.dmg)
 
 ## Contact
 

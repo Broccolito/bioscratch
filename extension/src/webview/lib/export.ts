@@ -1,6 +1,15 @@
 import DOMPurify from "dompurify";
 import { saveHtml } from "../bridge";
 
+function escapeHtml(value: string): string {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
 function buildHtmlBody(): string {
   const editorEl = document.querySelector(".ProseMirror");
   if (!editorEl) return "";
@@ -8,14 +17,14 @@ function buildHtmlBody(): string {
   // Clone DOM so we can transform it without affecting the live editor
   const clone = editorEl.cloneNode(true) as HTMLElement;
 
-  // Replace .mermaid-block-view elements with <div class="mermaid"> for export.
-  // Mermaid.js (included in the <head>) will re-render them on page load.
+  // Export the already-rendered, sanitized SVG instead of executing Mermaid in
+  // the generated file. This keeps exported documents script-free.
   clone.querySelectorAll(".mermaid-block-view").forEach((block) => {
-    const sourceCode = block.querySelector("code.language-mermaid");
-    if (sourceCode) {
+    const preview = block.querySelector(".mermaid-preview");
+    if (preview) {
       const div = document.createElement("div");
       div.className = "mermaid";
-      div.textContent = sourceCode.textContent || "";
+      div.append(...Array.from(preview.childNodes).map((node) => node.cloneNode(true)));
       block.replaceWith(div);
     }
   });
@@ -32,7 +41,8 @@ function buildHtmlDocument(title: string, bodyHtml: string): string {
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${title}</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com" />
+<title>${escapeHtml(title)}</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
 <style>
@@ -64,11 +74,6 @@ function buildHtmlDocument(title: string, bodyHtml: string): string {
 </head>
 <body>
 ${bodyHtml}
-<script type="module">
-import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
-mermaid.initialize({ startOnLoad: false, theme: 'neutral' });
-await mermaid.run();
-</script>
 </body>
 </html>`;
 }

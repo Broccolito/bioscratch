@@ -25,7 +25,6 @@ function markOpen(mark: Mark): string {
     case "bold": return "**";
     case "italic": return "*";
     case "strikethrough": return "~~";
-    case "code": return "`";
     case "link": return "[";
     default: return "";
   }
@@ -37,7 +36,6 @@ function markClose(mark: Mark): string {
     case "bold": return "**";
     case "italic": return "*";
     case "strikethrough": return "~~";
-    case "code": return "`";
     case "link": {
       const { href, title } = mark.attrs;
       const titlePart = title ? ` "${title}"` : "";
@@ -45,6 +43,24 @@ function markClose(mark: Mark): string {
     }
     default: return "";
   }
+}
+
+// CommonMark code spans use a backtick fence longer than any run inside the
+// content. Padding is required when the content starts/ends with a backtick or
+// has meaningful spaces at both edges, because parsers otherwise consume one
+// leading and trailing space during normalization.
+function serializeCodeSpan(text: string): string {
+  let longestRun = 0;
+  for (const match of text.matchAll(/`+/g)) {
+    longestRun = Math.max(longestRun, match[0].length);
+  }
+  const fence = "`".repeat(Math.max(1, longestRun + 1));
+  const hasSymmetricMeaningfulSpaces =
+    text.startsWith(" ") && text.endsWith(" ") && /[^ ]/.test(text);
+  const needsPadding =
+    text.startsWith("`") || text.endsWith("`") || hasSymmetricMeaningfulSpaces;
+  const content = needsPadding ? ` ${text} ` : text;
+  return `${fence}${content}${fence}`;
 }
 
 // Serialize a single non-text inline atom (image / math / hard break).
@@ -71,7 +87,13 @@ function serializeInlineSeq(parent: ProseMirrorNode, hardBreak: string): string 
     active.length = i;
   };
   parent.forEach((child) => {
-    const marks = child.type.name === "text" ? child.marks : Mark.none;
+    const childMarks = child.type.name === "text" ? child.marks : Mark.none;
+    const hasCode = childMarks.some((mark) => mark.type.name === "code");
+    // A code span is an atomic Markdown construct. Other ProseMirror marks stay
+    // open around it so adjacent bold/link text remains one stable sequence.
+    const marks = hasCode
+      ? childMarks.filter((mark) => mark.type.name !== "code")
+      : childMarks;
     // Keep the longest prefix of marks that is already open, in order.
     let keep = 0;
     while (keep < active.length && keep < marks.length && active[keep].eq(marks[keep])) keep++;
@@ -81,8 +103,9 @@ function serializeInlineSeq(parent: ProseMirrorNode, hardBreak: string): string 
       active.push(marks[k]);
     }
     if (child.type.name === "text") {
-      const hasCode = marks.some((m) => m.type.name === "code");
-      result += hasCode ? (child.text || "") : escapeMarkdownText(child.text || "");
+      result += hasCode
+        ? serializeCodeSpan(child.text || "")
+        : escapeMarkdownText(child.text || "");
     } else {
       result += serializeAtomInline(child, hardBreak);
     }

@@ -99,6 +99,11 @@ npm run tauri build    # production .dmg
 | Diagrams | Mermaid |
 | PDF export | Pandoc |
 
+## Contributors
+
+- **Wanjun Gu** — creator and maintainer
+- **Tianlu Zhu** — contributor
+
 ## Developer
 
 Bioscratch is developed and maintained by **Wanjun Gu** at the University of California, San Francisco (UCSF). For questions, feedback, or collaboration, reach out at [wanjun.gu@ucsf.edu](mailto:wanjun.gu@ucsf.edu).

@@ -15,7 +15,7 @@ import { EditorView } from "prosemirror-view";
 import { schema } from "../editor/schema";
 import { markdownToDoc } from "../editor/serialization/markdownImport";
 import { buildImageRenderPlugin } from "../editor/plugins/imageRender";
-import { buildMermaidPlugin } from "../editor/plugins/mermaidPlugin";
+import { buildMermaidPlugin, isMermaidLanguage } from "../editor/plugins/mermaidPlugin";
 import { buildFrontmatterPlugin } from "../editor/plugins/frontmatterPlugin";
 import { buildHighlightPlugin } from "../editor/plugins/highlight";
 import {
@@ -85,7 +85,7 @@ function render(): void {
       math_inline: (node, view, getPos) => new MathInlineView(node, view, getPos),
       math_block: (node, view, getPos) => new MathBlockView(node, view, getPos),
       code_block: (node, view, getPos) =>
-        node.attrs.language === "mermaid"
+        isMermaidLanguage(node.attrs.language)
           ? new MermaidBlockView(node, view, getPos)
           : new CodeBlockView(node),
       frontmatter: (node, view, getPos) => new FrontmatterView(node, view, getPos),

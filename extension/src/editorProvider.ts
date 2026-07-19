@@ -5,6 +5,23 @@ const USER_THEMES_KEY = "bioscratch.userThemes";
 
 type UserThemes = Record<string, string>;
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function normalizedThemeFilename(filename: string): string | null {
+  const base = path.basename(filename).slice(0, 128);
+  const safe = base.replace(/[^a-zA-Z0-9._-]/g, "_");
+  if (!safe || safe === "." || safe === "..") return null;
+  return /\.ya?ml$/i.test(safe) ? safe : `${safe}.yaml`;
+}
+
+function normalizedHtmlFilename(filename: string): string {
+  const base = path.basename(filename).slice(0, 128) || "document.html";
+  const safe = base.replace(/[^a-zA-Z0-9._ -]/g, "_");
+  return /\.html?$/i.test(safe) ? safe : `${safe}.html`;
+}
+
 function config() {
   return vscode.workspace.getConfiguration("bioscratch");
 }
@@ -93,7 +110,6 @@ export class BioscratchEditorProvider implements vscode.CustomTextEditorProvider
       localResourceRoots: [
         this.context.extensionUri,
         docDir,
-        ...(vscode.workspace.workspaceFolders?.map((f) => f.uri) ?? []),
       ],
     };
     webviewPanel.webview.html = this.getHtml(webviewPanel.webview);
@@ -137,28 +153,35 @@ export class BioscratchEditorProvider implements vscode.CustomTextEditorProvider
       if (this.activePanel === webviewPanel) this.activePanel = null;
     });
 
-    webviewPanel.webview.onDidReceiveMessage(async (msg) => {
+    webviewPanel.webview.onDidReceiveMessage(async (rawMessage: unknown) => {
+      if (!isRecord(rawMessage) || typeof rawMessage.type !== "string") return;
+      const msg = rawMessage;
       switch (msg.type) {
         case "ready":
           post({ type: "init", payload: this.buildInitPayload(document) });
           break;
 
         case "edit":
-          await this.applyEdit(document, msg.text as string);
+          if (typeof msg.text === "string") {
+            await this.applyEdit(document, msg.text);
+          }
           break;
 
         case "resolveImage": {
-          const uri = this.resolveImage(webviewPanel.webview, docDir, msg.src as string);
+          if (typeof msg.src !== "string" || typeof msg.requestId !== "number") break;
+          const uri = this.resolveImage(webviewPanel.webview, docDir, msg.src);
           post({ type: "resolveImageResult", requestId: msg.requestId, uri });
           break;
         }
 
         case "openLink":
-          this.openLink(msg.href as string);
+          if (typeof msg.href === "string") this.openLink(msg.href);
           break;
 
         case "saveHtml":
-          await this.saveHtml(msg.filename as string, msg.html as string, document);
+          if (typeof msg.filename === "string" && typeof msg.html === "string") {
+            await this.saveHtml(msg.filename, msg.html, document);
+          }
           break;
 
         case "undo":
@@ -172,22 +195,30 @@ export class BioscratchEditorProvider implements vscode.CustomTextEditorProvider
         case "setTheme":
           // Settings are the single source of truth; updating them fires
           // onDidChangeConfiguration, which echoes the change to every webview.
-          await config().update("theme", msg.theme, vscode.ConfigurationTarget.Global);
-          await config().update("matchVscodeTheme", false, vscode.ConfigurationTarget.Global);
+          if (typeof msg.theme === "string" && msg.theme.length <= 128) {
+            await config().update("theme", msg.theme, vscode.ConfigurationTarget.Global);
+            await config().update("matchVscodeTheme", false, vscode.ConfigurationTarget.Global);
+          }
           break;
 
         case "setMatchVscode":
-          await config().update("matchVscodeTheme", msg.value, vscode.ConfigurationTarget.Global);
+          if (typeof msg.value === "boolean") {
+            await config().update("matchVscodeTheme", msg.value, vscode.ConfigurationTarget.Global);
+          }
           break;
 
         case "saveUserTheme":
-          await this.saveUserTheme(msg.filename as string, msg.content as string);
-          post({ type: "userThemes", themes: this.listUserThemes() });
+          if (typeof msg.filename === "string" && typeof msg.content === "string") {
+            await this.saveUserTheme(msg.filename, msg.content);
+            post({ type: "userThemes", themes: this.listUserThemes() });
+          }
           break;
 
         case "deleteUserTheme":
-          await this.deleteUserTheme(msg.filename as string);
-          post({ type: "userThemes", themes: this.listUserThemes() });
+          if (typeof msg.filename === "string") {
+            await this.deleteUserTheme(msg.filename);
+            post({ type: "userThemes", themes: this.listUserThemes() });
+          }
           break;
 
         case "importUserTheme": {
@@ -269,7 +300,9 @@ export class BioscratchEditorProvider implements vscode.CustomTextEditorProvider
   // ---- Links -------------------------------------------------------------
   private openLink(href: string): void {
     try {
-      vscode.env.openExternal(vscode.Uri.parse(href));
+      const uri = vscode.Uri.parse(href, true);
+      if (!["https", "http", "mailto"].includes(uri.scheme.toLowerCase())) return;
+      void vscode.env.openExternal(uri);
     } catch {
       /* ignore malformed URLs */
     }
@@ -277,9 +310,10 @@ export class BioscratchEditorProvider implements vscode.CustomTextEditorProvider
 
   // ---- HTML export -------------------------------------------------------
   private async saveHtml(filename: string, html: string, document: vscode.TextDocument): Promise<void> {
+    const safeFilename = normalizedHtmlFilename(filename);
     const defaultUri = vscode.Uri.joinPath(
       vscode.Uri.file(path.dirname(document.uri.fsPath)),
-      filename
+      safeFilename
     );
     const target = await vscode.window.showSaveDialog({
       defaultUri,
@@ -297,14 +331,18 @@ export class BioscratchEditorProvider implements vscode.CustomTextEditorProvider
   }
 
   private async saveUserTheme(filename: string, content: string): Promise<void> {
+    const safeFilename = normalizedThemeFilename(filename);
+    if (!safeFilename) return;
     const map = { ...this.context.globalState.get<UserThemes>(USER_THEMES_KEY, {}) };
-    map[filename] = content;
+    map[safeFilename] = content;
     await this.context.globalState.update(USER_THEMES_KEY, map);
   }
 
   private async deleteUserTheme(filename: string): Promise<void> {
+    const safeFilename = normalizedThemeFilename(filename);
+    if (!safeFilename) return;
     const map = { ...this.context.globalState.get<UserThemes>(USER_THEMES_KEY, {}) };
-    delete map[filename];
+    delete map[safeFilename];
     await this.context.globalState.update(USER_THEMES_KEY, map);
   }
 

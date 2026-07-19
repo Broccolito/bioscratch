@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.4.0
+
+- Fixed inline-code insertion, deletion, replacement, editing, and Markdown
+  paste behavior across desktop and VS Code.
+- Preserved active inline marks when pasting plain text and eliminated malformed
+  backtick serialization at inline-code boundaries.
+- Hardened exported links, math rendering, Mermaid rendering, local file access,
+  update downloads, and the Tauri content security policy.
+- Added editor regression coverage for inline code, paste, serialization,
+  sanitization, tables, math, and Mermaid diagrams.
+- Refreshed Mermaid, DOMPurify, Vite, esbuild, and packaging dependencies.
+- Updated diagram/table editing and application icon assets in the desktop app.
+
 ## 0.3.1
 
 Version aligned with the Bioscratch desktop app, which ships at the same version.

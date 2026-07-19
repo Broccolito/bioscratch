@@ -19,6 +19,7 @@ import {
 import { goToNextCell } from "prosemirror-tables";
 import { schema } from "../schema";
 import { EditorState, TextSelection, Transaction } from "prosemirror-state";
+import { deleteTableWithSecondPress } from "./tableControls";
 
 type Command = (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean;
 
@@ -133,7 +134,7 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
   const codeMatch = text.match(/^```([a-zA-Z0-9_-]*)$/);
   if (codeMatch) {
     if (dispatch) {
-      const language = codeMatch[1] || "";
+      const language = (codeMatch[1] || "").toLowerCase();
       const codeBlock = schema.nodes.code_block.create({ language });
       const tr = state.tr.replaceWith(nodeStart, nodeStart + node.nodeSize, codeBlock);
       // place cursor inside the code block
@@ -448,6 +449,7 @@ export function buildKeymap(
 
   // Backspace
   keys["Backspace"] = chainCommands(
+    deleteTableWithSecondPress,
     deleteEmptyFrontmatter,
     deleteEmptyCodeBlock,
     deleteSelection,
@@ -457,6 +459,7 @@ export function buildKeymap(
 
   // Delete (forward delete) — also removes an empty code block under the cursor
   keys["Delete"] = chainCommands(
+    deleteTableWithSecondPress,
     deleteEmptyFrontmatter,
     deleteEmptyCodeBlock,
     deleteSelection,

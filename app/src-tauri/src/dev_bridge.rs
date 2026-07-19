@@ -161,7 +161,7 @@ impl tracing::field::Visit for MessageVisitor {
 /// Create a tracing layer that captures logs into the given buffer.
 /// Use this if you already have a tracing subscriber and want to add log capture.
 ///
-/// ```rust
+/// ```rust,ignore
 /// use tracing_subscriber::layer::SubscriberExt;
 /// use tracing_subscriber::util::SubscriberInitExt;
 ///
@@ -268,8 +268,7 @@ pub fn __dev_bridge_result(
 /// Returns the port number and log buffer on success.
 /// The log buffer can be used with `spawn_sidecar_monitored()` to capture sidecar output.
 pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
-    let server =
-        Server::http("127.0.0.1:0").map_err(|e| format!("Failed to start bridge: {e}"))?;
+    let server = Server::http("127.0.0.1:0").map_err(|e| format!("Failed to start bridge: {e}"))?;
     let port = server
         .server_addr()
         .to_ip()
@@ -352,8 +351,7 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
             // Read body
             let mut body = String::new();
             if let Err(_) = request.as_reader().read_to_string(&mut body) {
-                let _ =
-                    request.respond(Response::from_string("Bad request").with_status_code(400));
+                let _ = request.respond(Response::from_string("Bad request").with_status_code(400));
                 continue;
             }
 
@@ -399,11 +397,7 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
                     continue;
                 }
 
-                let windows: Vec<String> = app_handle
-                    .webview_windows()
-                    .keys()
-                    .cloned()
-                    .collect();
+                let windows: Vec<String> = app_handle.webview_windows().keys().cloned().collect();
 
                 let resp = DescribeResponse {
                     pid: Some(std::process::id()),
@@ -487,8 +481,7 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
                         let json = serde_json::to_string(&resp).unwrap();
                         let header =
                             Header::from_bytes("Content-Type", "application/json").unwrap();
-                        let _ =
-                            request.respond(Response::from_string(json).with_header(header));
+                        let _ = request.respond(Response::from_string(json).with_header(header));
                         break;
                     }
 
@@ -496,9 +489,8 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
                     if elapsed >= deadline {
                         // Timeout — clean up and respond with 504
                         results.remove(&request_id);
-                        let _ = request.respond(
-                            Response::from_string("Eval timeout").with_status_code(504),
-                        );
+                        let _ = request
+                            .respond(Response::from_string("Eval timeout").with_status_code(504));
                         break;
                     }
 
@@ -509,9 +501,8 @@ pub fn start_bridge(app: &AppHandle) -> Result<(u16, Arc<LogBuffer>), String> {
 
                     if timeout_result.timed_out() && !results.contains_key(&request_id) {
                         results.remove(&request_id);
-                        let _ = request.respond(
-                            Response::from_string("Eval timeout").with_status_code(504),
-                        );
+                        let _ = request
+                            .respond(Response::from_string("Eval timeout").with_status_code(504));
                         break;
                     }
                 }

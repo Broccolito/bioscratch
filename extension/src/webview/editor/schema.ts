@@ -1,6 +1,19 @@
 import { Schema } from "prosemirror-model";
 import { tableNodes } from "prosemirror-tables";
 
+function sanitizeHref(href: string | null): string {
+  const value = (href || "").trim();
+  const lower = value.toLowerCase();
+  if (
+    lower.startsWith("javascript:") ||
+    lower.startsWith("data:") ||
+    lower.startsWith("vbscript:")
+  ) {
+    return "#";
+  }
+  return value;
+}
+
 const tableNodeSpecs = tableNodes({
   tableGroup: "block",
   cellContent: "block+",
@@ -296,7 +309,7 @@ export const schema = new Schema({
       ],
       toDOM(node) {
         const { href, title } = node.attrs;
-        const attrs: Record<string, string> = { href };
+        const attrs: Record<string, string> = { href: sanitizeHref(href) };
         if (title) attrs.title = title;
         return ["a", attrs, 0];
       },

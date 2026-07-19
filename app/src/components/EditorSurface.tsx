@@ -11,7 +11,7 @@ import { buildDropImagePlugin } from "../editor/plugins/dropImage";
 import { buildImageRenderPlugin } from "../editor/plugins/imageRender";
 import { buildSearchPlugin } from "../editor/plugins/search";
 import { buildHighlightPlugin } from "../editor/plugins/highlight";
-import { buildMermaidPlugin } from "../editor/plugins/mermaidPlugin";
+import { buildMermaidPlugin, isMermaidLanguage } from "../editor/plugins/mermaidPlugin";
 import { buildFrontmatterPlugin } from "../editor/plugins/frontmatterPlugin";
 import { buildCodeOnlyPlugin } from "../editor/plugins/codeOnlyPlugin";
 import { buildMarkdownPastePlugin } from "../editor/plugins/markdownPaste";
@@ -263,9 +263,8 @@ function isSafeUrl(url: string): boolean {
 }
 
 // Initialize once at module load (static import avoids Vite pre-bundle issues).
-// securityLevel "strict" makes Mermaid sanitize diagram labels/HTML — required
-// because CSP is disabled and documents may come from untrusted sources, so a
-// label like A["<img src=x onerror=...>"] must NOT be injected as live HTML.
+// Strict mode is defense in depth with CSP: documents are untrusted and Mermaid
+// labels/configuration must never become active HTML.
 mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict" });
 
 // ---- Mermaid Block NodeView ----
@@ -276,14 +275,48 @@ export class MermaidBlockView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
   private preview: HTMLElement;
+  private editButton: HTMLButtonElement;
   private node: ProseMirrorNode;
+  private view: EditorView;
+  private getPos: () => number | undefined;
   private renderTimeout: ReturnType<typeof setTimeout> | null = null;
+  private renderVersion = 0;
 
-  constructor(node: ProseMirrorNode, view: EditorView, getPos: () => number | undefined) {
+  constructor(
+    node: ProseMirrorNode,
+    view: EditorView,
+    getPos: () => number | undefined,
+    outerDeco: readonly any[] = []
+  ) {
     this.node = node;
+    this.view = view;
+    this.getPos = getPos;
 
     this.dom = document.createElement("div");
     this.dom.className = "mermaid-block-view";
+
+    // A persistent, explicit source toggle keeps rendered and empty diagrams
+    // discoverable without relying on a hidden click target.
+    const toolbar = document.createElement("div");
+    toolbar.className = "mermaid-toolbar";
+    toolbar.contentEditable = "false";
+    const label = document.createElement("span");
+    label.className = "mermaid-toolbar-label";
+    label.textContent = "Mermaid diagram";
+    this.editButton = document.createElement("button");
+    this.editButton.type = "button";
+    this.editButton.className = "mermaid-edit-button";
+    this.editButton.addEventListener("mousedown", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (this.dom.classList.contains("mermaid-active")) {
+        this.closeSource();
+      } else {
+        this.openSource();
+      }
+    });
+    toolbar.append(label, this.editButton);
+    this.dom.appendChild(toolbar);
 
     // Source section — contains contentDOM (ProseMirror manages text here).
     // Collapsed via CSS when .mermaid-active is absent.
@@ -304,28 +337,63 @@ export class MermaidBlockView implements NodeView {
     // Click on preview → move cursor into the block (makes source visible)
     this.preview.addEventListener("mousedown", (e) => {
       e.preventDefault();
-      const pos = getPos();
-      if (pos !== undefined) {
-        const state = view.state;
-        view.dispatch(
-          state.tr.setSelection(TextSelection.near(state.doc.resolve(pos + 1)))
-        );
-        view.focus();
-      }
+      this.openSource();
     });
 
+    this.setActive(outerDeco.some((d) => (d.spec as any)?.mermaidActive));
     this.renderDiagram(node.textContent);
   }
 
+  private setActive(active: boolean) {
+    this.dom.classList.toggle("mermaid-active", active);
+    this.editButton.textContent = active ? "Done" : "Edit source";
+    this.editButton.title = active
+      ? "Hide Mermaid source and show the rendered diagram"
+      : "Edit Mermaid source";
+    this.editButton.setAttribute("aria-label", this.editButton.title);
+  }
+
+  private openSource() {
+    const pos = this.getPos();
+    if (pos === undefined) return;
+    const currentNode = this.view.state.doc.nodeAt(pos);
+    if (!currentNode || currentNode.type !== this.node.type) return;
+
+    const target = Math.min(pos + 1, this.view.state.doc.content.size);
+    this.view.dispatch(
+      this.view.state.tr
+        .setSelection(TextSelection.near(this.view.state.doc.resolve(target)))
+        .scrollIntoView()
+    );
+    this.view.focus();
+  }
+
+  private closeSource() {
+    const pos = this.getPos();
+    if (pos === undefined) return;
+    const currentNode = this.view.state.doc.nodeAt(pos);
+    if (!currentNode || currentNode.type !== this.node.type) return;
+
+    const tr = this.view.state.tr;
+    let after = pos + currentNode.nodeSize;
+    if (after >= tr.doc.content.size) {
+      tr.insert(after, schema.nodes.paragraph.create());
+      after += 1;
+    }
+    tr.setSelection(TextSelection.near(tr.doc.resolve(after), 1));
+    this.view.dispatch(tr.scrollIntoView());
+    this.view.focus();
+  }
+
   update(node: ProseMirrorNode, outerDeco: readonly any[]) {
-    if (node.type !== this.node.type) return false;
+    if (node.type !== this.node.type || !isMermaidLanguage(node.attrs.language)) return false;
 
     const contentChanged = node.textContent !== this.node.textContent;
     this.node = node;
 
     // mermaidPlugin sets spec.mermaidActive when cursor is inside this block
     const nowActive = outerDeco.some((d) => (d.spec as any)?.mermaidActive);
-    this.dom.classList.toggle("mermaid-active", nowActive);
+    this.setActive(nowActive);
 
     if (contentChanged) {
       this.scheduleRender(node.textContent);
@@ -340,9 +408,10 @@ export class MermaidBlockView implements NodeView {
   }
 
   async renderDiagram(source: string) {
+    const version = ++this.renderVersion;
     const trimmed = source.trim();
     if (!trimmed) {
-      this.preview.innerHTML = '<div class="mermaid-empty">Start typing a Mermaid diagram above</div>';
+      this.preview.innerHTML = '<div class="mermaid-empty">No Mermaid code yet — choose “Edit source” to start</div>';
       return;
     }
     // Use a hidden off-screen container so mermaid can measure and clean up reliably
@@ -352,21 +421,25 @@ export class MermaidBlockView implements NodeView {
     try {
       const id = `mermaid-${Date.now()}-${Math.random().toString(36).slice(2)}`;
       const { svg } = await mermaid.render(id, trimmed, container);
-      this.preview.innerHTML = svg;
+      if (version === this.renderVersion) this.preview.innerHTML = svg;
     } catch (err: any) {
-      this.preview.innerHTML = `<div class="mermaid-error">${escapeMermaidError(String(err?.message ?? err ?? "Diagram error"))}</div>`;
+      if (version === this.renderVersion) {
+        this.preview.innerHTML = `<div class="mermaid-error">${escapeMermaidError(String(err?.message ?? err ?? "Diagram error"))}</div>`;
+      }
     } finally {
-      document.body.removeChild(container);
+      container.remove();
     }
   }
 
   ignoreMutation(mutation: MutationRecord | { type: "selection"; target: Node }) {
-    // Don't let ProseMirror react to preview DOM changes (SVG injection)
-    return this.preview.contains(mutation.target as Node);
+    // ProseMirror owns only contentDOM. The toolbar and injected SVG preview
+    // are NodeView chrome and must not be parsed back into the document.
+    return !this.contentDOM.contains(mutation.target as Node);
   }
 
   destroy() {
     if (this.renderTimeout) clearTimeout(this.renderTimeout);
+    this.renderVersion += 1;
   }
 }
 
@@ -740,9 +813,9 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
           new MathInlineView(node, view, getPos),
         math_block: (node, view, getPos) =>
           new MathBlockView(node, view, getPos),
-        code_block: (node, view, getPos) =>
-          node.attrs.language === "mermaid"
-            ? new MermaidBlockView(node, view, getPos)
+        code_block: (node, view, getPos, decorations) =>
+          isMermaidLanguage(node.attrs.language)
+            ? new MermaidBlockView(node, view, getPos, decorations)
             : new CodeBlockView(node),
         frontmatter: (node, view, getPos) =>
           new FrontmatterView(node, view, getPos),

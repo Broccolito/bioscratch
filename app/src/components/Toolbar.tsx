@@ -101,6 +101,11 @@ const Toolbar: React.FC<ToolbarProps> = ({
     exec(setBlockType(schema.nodes.code_block, { language: "" }));
   }, [view, exec]);
 
+  const insertMermaidBlock = useCallback(() => {
+    if (!view) return;
+    exec(setBlockType(schema.nodes.code_block, { language: "mermaid" }));
+  }, [view, exec]);
+
   const insertTableNode = useCallback(() => {
     if (!view) return;
     {
@@ -323,6 +328,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
           <path d="m10 9-2 3 2 3"/><path d="m14 9 2 3-2 3"/>
         </svg>
         Code
+      </button>
+      <button className="toolbar-btn" onClick={insertMermaidBlock} disabled={!formattingEnabled} title="Insert Mermaid Diagram">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="4" width="6" height="5" rx="1"/>
+          <rect x="15" y="15" width="6" height="5" rx="1"/>
+          <path d="M9 6.5h3a3 3 0 0 1 3 3V15"/>
+          <path d="m12.5 12.5 2.5 2.5 2.5-2.5"/>
+        </svg>
+        Diagram
       </button>
       <button className="toolbar-btn" onClick={insertTableNode} disabled={!formattingEnabled} title="Insert Table">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

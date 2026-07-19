@@ -1,67 +1,105 @@
 import { Node as ProseMirrorNode, Mark } from "prosemirror-model";
 
-function serializeInline(node: ProseMirrorNode): string {
-  if (node.type.name === "text") {
-    let text = node.text || "";
+function escapeMarkdownText(text: string): string {
+  return text
+    .replace(/([\\`*_~])/g, "\\$1")
+    .replace(/<(?=[a-zA-Z/!?])/g, "\\<")
+    .replace(/^(\s*)([#>])/gm, "$1\\$2")
+    .replace(/^(\s*)([-+])(\s)/gm, "$1\\$2$3")
+    .replace(/^(\s*\d+)([.)])(\s)/gm, "$1\\$2$3");
+}
 
-    // Apply marks from outermost to innermost
-    const marks = [...node.marks];
+function markOpen(mark: Mark): string {
+  switch (mark.type.name) {
+    case "bold": return "**";
+    case "italic": return "*";
+    case "strikethrough": return "~~";
+    case "link": return "[";
+    default: return "";
+  }
+}
 
-    // Sort marks for consistent output
-    let result = text;
-
-    // We'll apply marks by wrapping
-    for (let i = marks.length - 1; i >= 0; i--) {
-      const mark = marks[i];
-      result = applyMark(mark, result, text);
+function markClose(mark: Mark): string {
+  switch (mark.type.name) {
+    case "bold": return "**";
+    case "italic": return "*";
+    case "strikethrough": return "~~";
+    case "link": {
+      const { href, title } = mark.attrs;
+      const titlePart = title ? ` "${title}"` : "";
+      return `](${href}${titlePart})`;
     }
-
-    return result;
+    default: return "";
   }
+}
 
-  if (node.type.name === "hard_break") {
-    return "  \n";
+function serializeCodeSpan(text: string): string {
+  let longestRun = 0;
+  for (const match of text.matchAll(/`+/g)) {
+    longestRun = Math.max(longestRun, match[0].length);
   }
+  const fence = "`".repeat(Math.max(1, longestRun + 1));
+  const hasSymmetricMeaningfulSpaces =
+    text.startsWith(" ") && text.endsWith(" ") && /[^ ]/.test(text);
+  const needsPadding =
+    text.startsWith("`") || text.endsWith("`") || hasSymmetricMeaningfulSpaces;
+  const content = needsPadding ? ` ${text} ` : text;
+  return `${fence}${content}${fence}`;
+}
 
+function serializeAtomInline(node: ProseMirrorNode, hardBreak: string): string {
+  if (node.type.name === "hard_break") return hardBreak;
   if (node.type.name === "image") {
     const { src, alt, title } = node.attrs;
     const titlePart = title ? ` "${title}"` : "";
     return `![${alt || ""}](${src}${titlePart})`;
   }
-
-  if (node.type.name === "math_inline") {
-    return `$${node.attrs.math}$`;
-  }
-
+  if (node.type.name === "math_inline") return `$${node.attrs.math}$`;
   return "";
 }
 
-function applyMark(mark: Mark, content: string, _rawText: string): string {
-  switch (mark.type.name) {
-    case "bold":
-      return `**${content}**`;
-    case "italic":
-      return `*${content}*`;
-    case "code":
-      return `\`${content}\``;
-    case "link": {
-      const { href, title } = mark.attrs;
-      const titlePart = title ? ` "${title}"` : "";
-      return `[${content}](${href}${titlePart})`;
+function serializeInlineSeq(parent: ProseMirrorNode, hardBreak: string): string {
+  let result = "";
+  const active: Mark[] = [];
+  const closeFrom = (index: number) => {
+    for (let i = active.length - 1; i >= index; i--) result += markClose(active[i]);
+    active.length = index;
+  };
+
+  parent.forEach((child) => {
+    const childMarks = child.type.name === "text" ? child.marks : Mark.none;
+    const hasCode = childMarks.some((mark) => mark.type.name === "code");
+    const marks = hasCode
+      ? childMarks.filter((mark) => mark.type.name !== "code")
+      : childMarks;
+    let keep = 0;
+    while (
+      keep < active.length &&
+      keep < marks.length &&
+      active[keep].eq(marks[keep])
+    ) {
+      keep++;
     }
-    case "strikethrough":
-      return `~~${content}~~`;
-    default:
-      return content;
-  }
+    closeFrom(keep);
+    for (let i = keep; i < marks.length; i++) {
+      result += markOpen(marks[i]);
+      active.push(marks[i]);
+    }
+
+    if (child.type.name === "text") {
+      result += hasCode
+        ? serializeCodeSpan(child.text || "")
+        : escapeMarkdownText(child.text || "");
+    } else {
+      result += serializeAtomInline(child, hardBreak);
+    }
+  });
+  closeFrom(0);
+  return result;
 }
 
 function serializeInlineContent(node: ProseMirrorNode): string {
-  let result = "";
-  node.forEach((child) => {
-    result += serializeInline(child);
-  });
-  return result;
+  return serializeInlineSeq(node, "  \n");
 }
 
 function serializeBlock(node: ProseMirrorNode, indent: string = ""): string {
@@ -191,11 +229,7 @@ function serializeTaskItem(item: ProseMirrorNode, prefix: string): string {
 function serializeCellContent(cell: ProseMirrorNode): string {
   const parts: string[] = [];
   cell.forEach((block) => {
-    let s = "";
-    block.forEach((child) => {
-      s += child.type.name === "hard_break" ? "<br>" : serializeInline(child);
-    });
-    parts.push(s.trim());
+    parts.push(serializeInlineSeq(block, "<br>").trim());
   });
   return parts.filter(Boolean).join("<br>");
 }

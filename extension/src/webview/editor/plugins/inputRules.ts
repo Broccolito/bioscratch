@@ -1,4 +1,6 @@
 import { inputRules, InputRule, wrappingInputRule, textblockTypeInputRule } from "prosemirror-inputrules";
+import { TextSelection } from "prosemirror-state";
+import { MarkType } from "prosemirror-model";
 import { schema } from "../schema";
 
 // Heading input rules: # , ## , etc.
@@ -34,41 +36,98 @@ const orderedListRule = wrappingInputRule(
 const codeBlockRule = textblockTypeInputRule(
   /^```([a-zA-Z0-9_-]*)\s$/,
   schema.nodes.code_block,
-  (match) => ({ language: match[1] || "" })
+  (match) => ({ language: (match[1] || "").toLowerCase() })
 );
 
-// Task list: "- [ ] " or "- [x] "
+// Task list: "- [ ] " or "- [x] " typed all at once (e.g. via paste-then-type).
+// During normal typing the bullet rule fires first on "- ", so the in-list rule
+// below handles converting an existing bullet item into a task item.
 const taskListRule = new InputRule(
-  /^\s*-\s\[([x ])\]\s$/,
+  /^\s*-\s\[([ xX])\]\s$/,
   (state, match, start, end) => {
-    const checked = match[1] === "x";
+    const checked = match[1].toLowerCase() === "x";
     const { tr } = state;
     const $start = state.doc.resolve(start);
-
     const range = $start.blockRange();
     if (!range) return null;
-
     const para = schema.nodes.paragraph.create();
     const item = schema.nodes.task_list_item.create({ checked }, [para]);
     const listNode = schema.nodes.bullet_list.create(null, [item]);
-
-    tr.replaceWith(range.start - 1, end, listNode);
+    tr.replaceWith(range.start, end, listNode);
     return tr;
   }
 );
 
-// Horizontal rule: "---" + space
-const hrRule = new InputRule(/^---\s$/, (state, _match, start, end) => {
-  const { tr } = state;
+// Convert an existing bullet list item into a task item when "[ ] " / "[x] "
+// is typed at its start.
+const taskInListRule = new InputRule(
+  /^\[([ xX])\]\s$/,
+  (state, match, start, end) => {
+    const $start = state.doc.resolve(start);
+    if ($start.depth < 2) return null;
+    const itemDepth = $start.depth - 1;
+    const itemNode = $start.node(itemDepth);
+    if (itemNode.type !== schema.nodes.list_item) return null;
+    if ($start.index(itemDepth) !== 0) return null;
+    const checked = match[1].toLowerCase() === "x";
+    const itemPos = $start.before(itemDepth);
+    const tr = state.tr.delete(start, end);
+    tr.setNodeMarkup(itemPos, schema.nodes.task_list_item, { checked });
+    return tr;
+  }
+);
+
+// Horizontal rule: "---" + space. Leave a paragraph after it for the caret.
+const hrRule = new InputRule(/^(?:---|\*\*\*|___)\s$/, (state, _match, start) => {
   const $start = state.doc.resolve(start);
   const range = $start.blockRange();
   if (!range) return null;
-  tr.replaceWith(range.start - 1, end, schema.nodes.horizontal_rule.create());
-  return tr;
+  const hr = schema.nodes.horizontal_rule.create();
+  const para = schema.nodes.paragraph.create();
+  const tr = state.tr.replaceWith(range.start, range.end, [hr, para]);
+  const caret = tr.doc.resolve(range.start + hr.nodeSize + 1);
+  return tr.setSelection(TextSelection.near(caret));
 });
 
-// Inline math is handled by the Enter key (see keymap.ts).
-// No immediate conversion on closing $, letting the user complete the expression first.
+// ---- Inline mark input rules (live conversion) ---------------------------
+
+function markInputRule(regexp: RegExp, markType: MarkType) {
+  return new InputRule(regexp, (state, match, start, end) => {
+    const $start = state.doc.resolve(start);
+    if ($start.parent.type.spec.code) return null;
+
+    const captured = match[match.length - 1];
+    if (!captured) return null;
+
+    const tr = state.tr;
+    const textStart = start + match[0].indexOf(captured);
+    const textEnd = textStart + captured.length;
+
+    // A text-input event can contain multiple characters (IME, dictation,
+    // text replacement, or automation). Pending characters are included in
+    // the regex match but are not yet in `state.doc`; handle that case with an
+    // atomic replacement so mark ranges never extend past the document.
+    if (textEnd > end) {
+      const activeMarks = state.storedMarks ?? state.selection.$from.marks();
+      const outputMarks = markType.create().addToSet(activeMarks);
+      tr.replaceWith(start, end, state.schema.text(captured, outputMarks));
+      tr.removeStoredMark(markType);
+      return tr;
+    }
+
+    if (textEnd < end) tr.delete(textEnd, end);
+    if (textStart > start) tr.delete(start, textStart);
+    const markEnd = start + captured.length;
+    tr.addMark(start, markEnd, markType.create());
+    tr.removeStoredMark(markType);
+    return tr;
+  });
+}
+
+const boldStarRule = markInputRule(/\*\*([^*]+)\*\*$/, schema.marks.bold);
+const italicStarRule = markInputRule(/(?<!\*)\*([^*]+)\*$/, schema.marks.italic);
+const codeRule = markInputRule(/`([^`]+)`$/, schema.marks.code);
+const strikeRule = markInputRule(/~~([^~]+)~~$/, schema.marks.strikethrough);
 
 // Markdown link: [text](url) — converts as soon as any character is typed after the closing )
 // Negative lookbehind (?<!!) prevents matching inside image syntax ![alt](url)
@@ -93,11 +152,16 @@ export function buildInputRules() {
       headingRule(5),
       headingRule(6),
       blockquoteRule,
+      taskListRule,
       bulletListRule,
       orderedListRule,
       codeBlockRule,
-      taskListRule,
+      taskInListRule,
       hrRule,
+      boldStarRule,
+      italicStarRule,
+      codeRule,
+      strikeRule,
       linkRule,
     ],
   });

@@ -248,8 +248,18 @@ function escapeMermaidError(s: string): string {
   return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 }
 
-// Initialize once at module load (static import avoids Vite pre-bundle issues)
-mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "loose" });
+function isSafeUrl(url: string): boolean {
+  const value = url.trim().toLowerCase();
+  return !(
+    value.startsWith("javascript:") ||
+    value.startsWith("data:") ||
+    value.startsWith("vbscript:")
+  );
+}
+
+// Documents are untrusted input. Strict mode prevents Mermaid labels and
+// configuration directives from becoming active HTML in the webview.
+mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "strict" });
 
 // ---- Mermaid Block NodeView ----
 // Two states driven by mermaidPlugin decorations:
@@ -744,18 +754,19 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
     if (existing) existing.remove();
 
     const href = anchor.getAttribute("href") || "";
+    const safeHref = isSafeUrl(href) ? href : "#";
     const tooltip = document.createElement("div");
     tooltip.className = "link-tooltip";
 
     const urlSpan = document.createElement("a");
     urlSpan.className = "link-tooltip-url";
-    urlSpan.textContent = href;
-    urlSpan.href = href;
+    urlSpan.textContent = safeHref;
+    urlSpan.href = safeHref;
     urlSpan.target = "_blank";
     urlSpan.rel = "noopener noreferrer";
     urlSpan.addEventListener("click", (ev) => {
       ev.preventDefault();
-      onOpenLinkRef.current(href);
+      if (isSafeUrl(href)) onOpenLinkRef.current(href);
       tooltip.remove();
     });
 

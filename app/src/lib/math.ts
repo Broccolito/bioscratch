@@ -1,7 +1,6 @@
 import katex from "katex";
 
-/** Escape HTML so raw LaTeX in the error fallback can't inject markup.
- *  The result is assigned via innerHTML by callers and CSP is disabled. */
+/** Escape HTML so raw LaTeX in the error fallback can't inject markup. */
 function escapeHtml(s: string): string {
   return s
     .replace(/&/g, "&amp;")

@@ -2,8 +2,7 @@ import { Schema } from "prosemirror-model";
 import { tableNodes } from "prosemirror-tables";
 
 // Neutralize URL schemes that can execute script when a link is activated.
-// CSP is disabled, so a "javascript:"/"data:" href in a rendered anchor would
-// be a live XSS sink if ever navigated.
+// This remains necessary even with CSP because links are forwarded to the OS.
 function sanitizeHref(href: string | null): string {
   const u = (href || "").trim();
   const lower = u.toLowerCase();
@@ -15,6 +14,25 @@ function sanitizeHref(href: string | null): string {
     return "#";
   }
   return u;
+}
+
+function codeLanguageFromDom(dom: Node): string {
+  const pre = dom as HTMLElement;
+  const code = pre.matches("code") ? pre : pre.querySelector("code");
+  if (!code) return "";
+
+  const explicit =
+    code.getAttribute("data-language") ||
+    code.getAttribute("data-lang") ||
+    pre.getAttribute("data-language") ||
+    pre.getAttribute("data-lang");
+  if (explicit) return explicit.trim();
+
+  for (const className of Array.from(code.classList)) {
+    const match = className.match(/^(?:language|lang)-(.+)$/i);
+    if (match) return match[1].trim();
+  }
+  return "";
 }
 
 const tableNodeSpecs = tableNodes({
@@ -178,10 +196,7 @@ export const schema = new Schema({
           tag: "pre",
           preserveWhitespace: "full",
           getAttrs(dom) {
-            const el = dom as HTMLElement;
-            const code = el.querySelector("code");
-            const lang = code?.className.replace("language-", "") || "";
-            return { language: lang };
+            return { language: codeLanguageFromDom(dom) };
           },
         },
       ],

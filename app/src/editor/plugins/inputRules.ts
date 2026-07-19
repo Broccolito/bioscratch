@@ -36,7 +36,7 @@ const orderedListRule = wrappingInputRule(
 const codeBlockRule = textblockTypeInputRule(
   /^```([a-zA-Z0-9_-]*)\s$/,
   schema.nodes.code_block,
-  (match) => ({ language: match[1] || "" })
+  (match) => ({ language: (match[1] || "").toLowerCase() })
 );
 
 // Task list: "- [ ] " or "- [x] " typed all at once (e.g. via paste-then-type).
@@ -108,6 +108,21 @@ function markInputRule(regexp: RegExp, markType: MarkType) {
     const tr = state.tr;
     const textStart = start + match[0].indexOf(captured);
     const textEnd = textStart + captured.length;
+
+    // `handleTextInput` may deliver more than one character at a time (IME,
+    // dictation, text replacement, or browser automation). In that case part
+    // of the regex match is still pending input and is not present in
+    // `state.doc`, so deleting delimiters and marking by the future positions
+    // would run past the document. Replace the matched range atomically with
+    // the captured text and its active marks instead.
+    if (textEnd > end) {
+      const activeMarks = state.storedMarks ?? state.selection.$from.marks();
+      const outputMarks = markType.create().addToSet(activeMarks);
+      tr.replaceWith(start, end, state.schema.text(captured, outputMarks));
+      tr.removeStoredMark(markType);
+      return tr;
+    }
+
     // Remove trailing delimiter, then leading delimiter.
     if (textEnd < end) tr.delete(textEnd, end);
     if (textStart > start) tr.delete(start, textStart);

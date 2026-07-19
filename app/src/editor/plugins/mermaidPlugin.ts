@@ -2,6 +2,10 @@ import { Plugin } from "prosemirror-state";
 import { Decoration, DecorationSet } from "prosemirror-view";
 import { schema } from "../schema";
 
+export function isMermaidLanguage(language: unknown): boolean {
+  return typeof language === "string" && language.trim().toLowerCase() === "mermaid";
+}
+
 /**
  * Adds a node decoration with spec.mermaidActive = true when the cursor is
  * inside a mermaid code_block. MermaidBlockView.update() reads this to toggle
@@ -16,7 +20,7 @@ export function buildMermaidPlugin(): Plugin {
 
         state.doc.descendants((node, pos) => {
           if (node.type !== schema.nodes.code_block) return true;
-          if (node.attrs.language !== "mermaid") return false;
+          if (!isMermaidLanguage(node.attrs.language)) return false;
 
           const nodeEnd = pos + node.nodeSize;
           // nodeEnd is the position *after* the block; a cursor there belongs to

@@ -1,15 +1,67 @@
+use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::{Mutex, OnceLock};
 use tauri::{Emitter, Manager};
-use serde::{Deserialize, Serialize};
+use tauri_plugin_fs::FsExt;
 
 mod dev_bridge;
 
 // Static storage so the pending file path is always accessible — even if
 // RunEvent::Opened fires before setup() has registered Tauri managed state.
 static PENDING_FILE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
+static AUTHORIZED_FILES: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+
 fn pending_file_storage() -> &'static Mutex<Option<String>> {
     PENDING_FILE.get_or_init(|| Mutex::new(None))
+}
+
+fn authorized_files() -> &'static Mutex<HashSet<PathBuf>> {
+    AUTHORIZED_FILES.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn normalized_access_path(path: &Path) -> Result<PathBuf, String> {
+    if !path.is_absolute() {
+        return Err("File access requires an absolute path".to_string());
+    }
+    if path.exists() {
+        return fs::canonicalize(path).map_err(|e| e.to_string());
+    }
+    let parent = path.parent().ok_or("Invalid file path")?;
+    let filename = path.file_name().ok_or("Invalid file path")?;
+    let canonical_parent = fs::canonicalize(parent).map_err(|e| e.to_string())?;
+    Ok(canonical_parent.join(filename))
+}
+
+fn authorize_document_path(app: &tauri::AppHandle, path: &Path) -> Result<PathBuf, String> {
+    let normalized = normalized_access_path(path)?;
+    authorized_files()
+        .lock()
+        .map_err(|_| "File access lock failed")?
+        .insert(normalized.clone());
+
+    // Local images are resolved by the fs plugin. Grant only the selected
+    // document's directory instead of every file below the user's home folder.
+    if let Some(parent) = normalized.parent() {
+        app.fs_scope()
+            .allow_directory(parent, true)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(normalized)
+}
+
+fn require_authorized_path(path: &str) -> Result<PathBuf, String> {
+    let normalized = normalized_access_path(Path::new(path))?;
+    let allowed = authorized_files()
+        .lock()
+        .map_err(|_| "File access lock failed")?
+        .contains(&normalized);
+    if allowed {
+        Ok(normalized)
+    } else {
+        Err("File access was not authorized by a user selection".to_string())
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -26,12 +78,14 @@ pub struct UserTheme {
 
 #[tauri::command]
 async fn read_file(path: String) -> Result<String, String> {
-    fs::read_to_string(&path).map_err(|e| e.to_string())
+    let path = require_authorized_path(&path)?;
+    fs::read_to_string(path).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn write_file(path: String, content: String) -> Result<(), String> {
-    fs::write(&path, content).map_err(|e| e.to_string())
+    let path = require_authorized_path(&path)?;
+    fs::write(path, content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -40,19 +94,135 @@ async fn show_open_dialog(app: tauri::AppHandle) -> Result<Option<String>, Strin
     let path = app
         .dialog()
         .file()
-        .add_filter("Text files", &[
-            "md","markdown","txt","text","csv","tsv","xml","json","json5","yaml","yml","toml","ini","env","cfg","conf","config",
-            "html","htm","css","scss","sass","less","js","jsx","ts","tsx","mjs","cjs","vue","svelte","astro",
-            "c","h","cpp","cc","cxx","hpp","hxx","cs","java","kt","kts","scala","swift","m","mm","zig","v",
-            "py","pyw","rb","rbw","lua","pl","pm","php","sh","bash","zsh","fish","ps1","psm1","bat","cmd",
-            "r","rmd","jl","f","f90","f95","for",
-            "rs","go","ex","exs","erl","hrl","hs","lhs","ml","mli","fs","fsx","fsi","clj","cljs","cljc","lisp","el","vim",
-            "dockerfile","makefile","cmake","gradle","properties","plist","tf","tfvars","hcl","nix","cabal",
-            "tex","rst","adoc","org","wiki",
-            "sql","graphql","gql","proto","thrift","log","diff","patch",
-        ])
+        .add_filter(
+            "Text files",
+            &[
+                "md",
+                "markdown",
+                "txt",
+                "text",
+                "csv",
+                "tsv",
+                "xml",
+                "json",
+                "json5",
+                "yaml",
+                "yml",
+                "toml",
+                "ini",
+                "env",
+                "cfg",
+                "conf",
+                "config",
+                "html",
+                "htm",
+                "css",
+                "scss",
+                "sass",
+                "less",
+                "js",
+                "jsx",
+                "ts",
+                "tsx",
+                "mjs",
+                "cjs",
+                "vue",
+                "svelte",
+                "astro",
+                "c",
+                "h",
+                "cpp",
+                "cc",
+                "cxx",
+                "hpp",
+                "hxx",
+                "cs",
+                "java",
+                "kt",
+                "kts",
+                "scala",
+                "swift",
+                "m",
+                "mm",
+                "zig",
+                "v",
+                "py",
+                "pyw",
+                "rb",
+                "rbw",
+                "lua",
+                "pl",
+                "pm",
+                "php",
+                "sh",
+                "bash",
+                "zsh",
+                "fish",
+                "ps1",
+                "psm1",
+                "bat",
+                "cmd",
+                "r",
+                "rmd",
+                "jl",
+                "f",
+                "f90",
+                "f95",
+                "for",
+                "rs",
+                "go",
+                "ex",
+                "exs",
+                "erl",
+                "hrl",
+                "hs",
+                "lhs",
+                "ml",
+                "mli",
+                "fs",
+                "fsx",
+                "fsi",
+                "clj",
+                "cljs",
+                "cljc",
+                "lisp",
+                "el",
+                "vim",
+                "dockerfile",
+                "makefile",
+                "cmake",
+                "gradle",
+                "properties",
+                "plist",
+                "tf",
+                "tfvars",
+                "hcl",
+                "nix",
+                "cabal",
+                "tex",
+                "rst",
+                "adoc",
+                "org",
+                "wiki",
+                "sql",
+                "graphql",
+                "gql",
+                "proto",
+                "thrift",
+                "log",
+                "diff",
+                "patch",
+            ],
+        )
         .blocking_pick_file();
-    Ok(path.map(|p| p.to_string()))
+    match path {
+        Some(p) => {
+            let path = p.to_string();
+            authorize_document_path(&app, Path::new(&path))?;
+            Ok(Some(path))
+        }
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -66,7 +236,14 @@ async fn show_save_dialog(app: tauri::AppHandle) -> Result<Option<String>, Strin
         .add_filter("All files", &["*"])
         .set_file_name("blank.md")
         .blocking_save_file();
-    Ok(path.map(|p| p.to_string()))
+    match path {
+        Some(p) => {
+            let path = p.to_string();
+            authorize_document_path(&app, Path::new(&path))?;
+            Ok(Some(path))
+        }
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -79,28 +256,26 @@ async fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 async fn read_recent_files(app: tauri::AppHandle) -> Result<Vec<String>, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let recent_path = data_dir.join("recent_files.json");
     if recent_path.exists() {
         let content = fs::read_to_string(&recent_path).map_err(|e| e.to_string())?;
-        serde_json::from_str(&content).map_err(|e| e.to_string())
+        let files: Vec<String> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
+        for file in &files {
+            let _ = authorize_document_path(&app, Path::new(file));
+        }
+        Ok(files)
     } else {
         Ok(vec![])
     }
 }
 
 #[tauri::command]
-async fn save_recent_files(
-    app: tauri::AppHandle,
-    files: Vec<String>,
-) -> Result<(), String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+async fn save_recent_files(app: tauri::AppHandle, files: Vec<String>) -> Result<(), String> {
+    for file in &files {
+        require_authorized_path(file)?;
+    }
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     let recent_path = data_dir.join("recent_files.json");
     let content = serde_json::to_string(&files).map_err(|e| e.to_string())?;
@@ -108,42 +283,21 @@ async fn save_recent_files(
 }
 
 #[tauri::command]
-async fn save_autosave(
-    app: tauri::AppHandle,
-    key: String,
-    content: String,
-) -> Result<(), String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+async fn save_autosave(app: tauri::AppHandle, key: String, content: String) -> Result<(), String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let autosave_dir = data_dir.join("autosave");
     fs::create_dir_all(&autosave_dir).map_err(|e| e.to_string())?;
     let safe_key = key.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
-    fs::write(
-        autosave_dir.join(format!("{}.md", safe_key)),
-        content,
-    )
-    .map_err(|e| e.to_string())
+    fs::write(autosave_dir.join(format!("{}.md", safe_key)), content).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn load_autosave(
-    app: tauri::AppHandle,
-    key: String,
-) -> Result<Option<String>, String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+async fn load_autosave(app: tauri::AppHandle, key: String) -> Result<Option<String>, String> {
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let safe_key = key.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
-    let path = data_dir
-        .join("autosave")
-        .join(format!("{}.md", safe_key));
+    let path = data_dir.join("autosave").join(format!("{}.md", safe_key));
     if path.exists() {
-        Ok(Some(
-            fs::read_to_string(&path).map_err(|e| e.to_string())?,
-        ))
+        Ok(Some(fs::read_to_string(&path).map_err(|e| e.to_string())?))
     } else {
         Ok(None)
     }
@@ -151,14 +305,9 @@ async fn load_autosave(
 
 #[tauri::command]
 async fn delete_autosave(app: tauri::AppHandle, key: String) -> Result<(), String> {
-    let data_dir = app
-        .path()
-        .app_data_dir()
-        .map_err(|e| e.to_string())?;
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let safe_key = key.replace(['/', '\\', ':', '*', '?', '"', '<', '>', '|'], "_");
-    let path = data_dir
-        .join("autosave")
-        .join(format!("{}.md", safe_key));
+    let path = data_dir.join("autosave").join(format!("{}.md", safe_key));
     if path.exists() {
         fs::remove_file(&path).map_err(|e| e.to_string())?;
     }
@@ -177,7 +326,11 @@ async fn list_user_themes(app: tauri::AppHandle) -> Result<Vec<UserTheme>, Strin
         let entry = entry.map_err(|e| e.to_string())?;
         let path = entry.path();
         if path.extension().and_then(|e| e.to_str()) == Some("yaml") {
-            let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+            let filename = path
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("")
+                .to_string();
             let content = fs::read_to_string(&path).map_err(|e| e.to_string())?;
             themes.push(UserTheme { filename, content });
         }
@@ -186,15 +339,30 @@ async fn list_user_themes(app: tauri::AppHandle) -> Result<Vec<UserTheme>, Strin
 }
 
 #[tauri::command]
-async fn save_user_theme(app: tauri::AppHandle, filename: String, content: String) -> Result<(), String> {
+async fn save_user_theme(
+    app: tauri::AppHandle,
+    filename: String,
+    content: String,
+) -> Result<(), String> {
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let themes_dir = data_dir.join("user_themes");
     fs::create_dir_all(&themes_dir).map_err(|e| e.to_string())?;
     // Sanitize filename: only allow safe characters
-    let safe_name: String = filename.chars().map(|c| {
-        if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' { c } else { '_' }
-    }).collect();
-    let safe_name = if safe_name.ends_with(".yaml") { safe_name } else { format!("{}.yaml", safe_name) };
+    let safe_name: String = filename
+        .chars()
+        .map(|c| {
+            if c.is_alphanumeric() || c == '_' || c == '-' || c == '.' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect();
+    let safe_name = if safe_name.ends_with(".yaml") {
+        safe_name
+    } else {
+        format!("{}.yaml", safe_name)
+    };
     fs::write(themes_dir.join(&safe_name), content).map_err(|e| e.to_string())
 }
 
@@ -217,11 +385,15 @@ async fn delete_user_theme(app: tauri::AppHandle, filename: String) -> Result<()
 
 #[tauri::command]
 async fn export_html(path: String, html: String) -> Result<(), String> {
-    fs::write(&path, html).map_err(|e| e.to_string())
+    let path = require_authorized_path(&path)?;
+    fs::write(path, html).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn show_html_save_dialog(app: tauri::AppHandle, filename: Option<String>) -> Result<Option<String>, String> {
+async fn show_html_save_dialog(
+    app: tauri::AppHandle,
+    filename: Option<String>,
+) -> Result<Option<String>, String> {
     use tauri_plugin_dialog::DialogExt;
     let default_name = filename.unwrap_or_else(|| "document.html".to_string());
     let path = app
@@ -230,7 +402,14 @@ async fn show_html_save_dialog(app: tauri::AppHandle, filename: Option<String>) 
         .add_filter("HTML", &["html"])
         .set_file_name(&default_name)
         .blocking_save_file();
-    Ok(path.map(|p| p.to_string()))
+    match path {
+        Some(p) => {
+            let path = p.to_string();
+            authorize_document_path(&app, Path::new(&path))?;
+            Ok(Some(path))
+        }
+        None => Ok(None),
+    }
 }
 
 #[tauri::command]
@@ -330,7 +509,14 @@ async fn show_pdf_save_dialog(
         .add_filter("PDF", &["pdf"])
         .set_file_name(&default_name)
         .blocking_save_file();
-    Ok(path.map(|p| p.to_string()))
+    match path {
+        Some(p) => {
+            let path = p.to_string();
+            authorize_document_path(&app, Path::new(&path))?;
+            Ok(Some(path))
+        }
+        None => Ok(None),
+    }
 }
 
 /// Export a fully self-contained HTML document to PDF. The frontend builds the
@@ -340,11 +526,10 @@ async fn show_pdf_save_dialog(
 /// block-flow document that paginates correctly — and print it to PDF natively.
 /// No Markdown→LaTeX round-trip, so the output is honest to the HTML.
 #[tauri::command]
-fn export_pdf_html(
-    app: tauri::AppHandle,
-    html: String,
-    output_path: String,
-) -> Result<(), String> {
+fn export_pdf_html(app: tauri::AppHandle, html: String, output_path: String) -> Result<(), String> {
+    let output_path = require_authorized_path(&output_path)?
+        .to_string_lossy()
+        .to_string();
     #[cfg(target_os = "macos")]
     {
         let (tx, rx) = std::sync::mpsc::channel();
@@ -430,8 +615,10 @@ unsafe fn render_html_to_pdf(html: &str, output_path: &str) -> Result<(), String
     let handler = block2::RcBlock::new(move |data: *mut AnyObject, error: *mut AnyObject| unsafe {
         if !error.is_null() {
             let desc: *mut AnyObject = msg_send![error, localizedDescription];
-            *result_cb.borrow_mut() =
-                Some(Err(format!("createPDF failed: {}", nsstring_to_string(desc))));
+            *result_cb.borrow_mut() = Some(Err(format!(
+                "createPDF failed: {}",
+                nsstring_to_string(desc)
+            )));
             return;
         }
         if data.is_null() {
@@ -448,7 +635,8 @@ unsafe fn render_html_to_pdf(html: &str, output_path: &str) -> Result<(), String
         *result_cb.borrow_mut() = Some(Ok(v));
     });
 
-    let _: () = msg_send![webview, createPDFWithConfiguration: pdf_config, completionHandler: &*handler];
+    let _: () =
+        msg_send![webview, createPDFWithConfiguration: pdf_config, completionHandler: &*handler];
 
     // Pump the run loop until the completion handler fires (hard ceiling).
     let pdf_start = Instant::now();
@@ -483,7 +671,9 @@ unsafe fn nsstring_to_string(s: *mut objc2::runtime::AnyObject) -> String {
     if utf8.is_null() {
         return String::new();
     }
-    std::ffi::CStr::from_ptr(utf8).to_string_lossy().into_owned()
+    std::ffi::CStr::from_ptr(utf8)
+        .to_string_lossy()
+        .into_owned()
 }
 
 /// Resolve the pandoc executable to use: a Bioscratch-managed binary in the app
@@ -525,13 +715,15 @@ fn binary_runs(bin: &std::path::Path) -> bool {
 
 /// True if any common LaTeX-based PDF engine is available on PATH.
 fn latex_engine_available() -> bool {
-    ["pdflatex", "xelatex", "lualatex", "tectonic"].iter().any(|e| {
-        std::process::Command::new(e)
-            .arg("--version")
-            .output()
-            .map(|o| o.status.success())
-            .unwrap_or(false)
-    })
+    ["pdflatex", "xelatex", "lualatex", "tectonic"]
+        .iter()
+        .any(|e| {
+            std::process::Command::new(e)
+                .arg("--version")
+                .output()
+                .map(|o| o.status.success())
+                .unwrap_or(false)
+        })
 }
 
 /// Returns true if pandoc (managed or on PATH) can be executed.
@@ -695,28 +887,49 @@ async fn install_pdf_dependencies(app: tauri::AppHandle) -> Result<String, Strin
     }
 }
 
+fn validated_external_url(value: &str) -> Result<tauri::Url, String> {
+    let parsed = tauri::Url::parse(value.trim()).map_err(|_| "Invalid URL".to_string())?;
+    if matches!(parsed.scheme(), "https" | "http" | "mailto") {
+        Ok(parsed)
+    } else {
+        Err("Unsupported URL scheme".to_string())
+    }
+}
+
 #[tauri::command]
 async fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
     use tauri_plugin_opener::OpenerExt;
-    app.opener().open_url(&url, None::<&str>).map_err(|e| e.to_string())
+    let parsed = validated_external_url(&url)?;
+    app.opener()
+        .open_url(parsed.as_str(), None::<&str>)
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn open_new_window(app: tauri::AppHandle, file_path: Option<String>) -> Result<(), String> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
-    let label = format!("bioscratch-{}", std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap_or_default()
-        .as_millis());
+    if let Some(path) = &file_path {
+        require_authorized_path(path)?;
+    }
+    let label = format!(
+        "bioscratch-{}",
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_millis()
+    );
     let url_str = match &file_path {
         Some(p) => format!("/?file={}", urlencoding_simple(p)),
         None => "/".to_string(),
     };
     let title = match &file_path {
-        Some(p) => format!("Bioscratch – {}", std::path::Path::new(p)
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("untitled")),
+        Some(p) => format!(
+            "Bioscratch – {}",
+            std::path::Path::new(p)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("untitled")
+        ),
         None => "Bioscratch".to_string(),
     };
     WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url_str.into()))
@@ -726,7 +939,7 @@ async fn open_new_window(app: tauri::AppHandle, file_path: Option<String>) -> Re
         .resizable(true)
         .initialization_script(
             "document.addEventListener('contextmenu',\
-             function(e){e.preventDefault();},{capture:true});"
+             function(e){e.preventDefault();},{capture:true});",
         )
         .build()
         .map_err(|e| e.to_string())?;
@@ -734,13 +947,15 @@ async fn open_new_window(app: tauri::AppHandle, file_path: Option<String>) -> Re
 }
 
 fn urlencoding_simple(s: &str) -> String {
-    s.chars().flat_map(|c| {
-        if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/' {
-            vec![c]
-        } else {
-            format!("%{:02X}", c as u32).chars().collect()
-        }
-    }).collect()
+    s.chars()
+        .flat_map(|c| {
+            if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' || c == '/' {
+                vec![c]
+            } else {
+                format!("%{:02X}", c as u32).chars().collect()
+            }
+        })
+        .collect()
 }
 
 // ---- Update checking ----
@@ -761,9 +976,13 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
 
     let output = std::process::Command::new("curl")
         .args([
-            "-s", "--max-time", "10",
-            "-H", "Accept: application/vnd.github.v3+json",
-            "-H", "User-Agent: Bioscratch-App",
+            "-s",
+            "--max-time",
+            "10",
+            "-H",
+            "Accept: application/vnd.github.v3+json",
+            "-H",
+            "User-Agent: Bioscratch-App",
             "https://api.github.com/repos/Broccolito/bioscratch/releases/latest",
         ])
         .output()
@@ -789,7 +1008,9 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
     let latest_version = tag.trim_start_matches('v').to_string();
     let release_url = json["html_url"].as_str().map(String::from);
     // Truncate long release notes
-    let release_notes = json["body"].as_str().map(|s| s.chars().take(600).collect::<String>());
+    let release_notes = json["body"]
+        .as_str()
+        .map(|s| s.chars().take(600).collect::<String>());
 
     // Pick the best .dmg asset for the current arch
     #[cfg(target_arch = "aarch64")]
@@ -806,9 +1027,14 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
                 let name = a["name"].as_str().unwrap_or("");
                 name.ends_with(".dmg") && (arch_hint.is_empty() || name.contains(arch_hint))
             });
-            arch_match.or_else(|| assets.iter().find(|a| a["name"].as_str().unwrap_or("").ends_with(".dmg")))
+            arch_match.or_else(|| {
+                assets
+                    .iter()
+                    .find(|a| a["name"].as_str().unwrap_or("").ends_with(".dmg"))
+            })
         })
         .and_then(|a| a["browser_download_url"].as_str())
+        .filter(|url| validated_update_url(url).is_ok())
         .map(String::from);
 
     let is_update_available = version_newer(&latest_version, CURRENT);
@@ -824,36 +1050,112 @@ async fn check_for_updates() -> Result<UpdateInfo, String> {
 }
 
 fn version_newer(latest: &str, current: &str) -> bool {
-    let parse = |v: &str| -> Vec<u32> {
-        v.split('.').filter_map(|p| p.parse().ok()).collect()
-    };
+    let parse = |v: &str| -> Vec<u32> { v.split('.').filter_map(|p| p.parse().ok()).collect() };
     let lat = parse(latest);
     let cur = parse(current);
     for i in 0..lat.len().max(cur.len()) {
         let l = lat.get(i).copied().unwrap_or(0);
         let c = cur.get(i).copied().unwrap_or(0);
-        if l > c { return true; }
-        if l < c { return false; }
+        if l > c {
+            return true;
+        }
+        if l < c {
+            return false;
+        }
     }
     false
 }
 
+fn validated_update_url(value: &str) -> Result<tauri::Url, String> {
+    let url = tauri::Url::parse(value.trim()).map_err(|_| "Invalid update URL".to_string())?;
+    let path = url.path();
+    if url.scheme() != "https"
+        || url.host_str() != Some("github.com")
+        || !path.starts_with("/Broccolito/bioscratch/releases/download/")
+        || !path.to_ascii_lowercase().ends_with(".dmg")
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err("Update URL is not an official Bioscratch release asset".to_string());
+    }
+    Ok(url)
+}
+
 #[tauri::command]
-async fn download_and_install(url: String) -> Result<(), String> {
-    let home = std::env::var("HOME").unwrap_or_else(|_| "/tmp".to_string());
-    let dest = format!("{}/Downloads/Bioscratch_update.dmg", home);
-    let dest_clone = dest.clone();
-    let url_clone = url.clone();
+async fn download_and_install(app: tauri::AppHandle, url: String) -> Result<(), String> {
+    let url = validated_update_url(&url)?;
+    let download_dir = app.path().download_dir().map_err(|e| e.to_string())?;
+    let dest = download_dir.join("Bioscratch_update.dmg");
+    let partial = download_dir.join("Bioscratch_update.download");
+    let _ = fs::remove_file(&partial);
+    let partial_clone = partial.clone();
+    let url_clone = url.to_string();
 
     tauri::async_runtime::spawn_blocking(move || {
-        std::process::Command::new("curl")
-            .args(["-L", "-o", &dest_clone, &url_clone])
-            .status()
-            .map_err(|e| format!("Download failed: {}", e))
-            .and_then(|s| if s.success() { Ok(()) } else { Err("Download failed".to_string()) })
+        let output = std::process::Command::new("curl")
+            .args([
+                "--fail",
+                "--location",
+                "--proto",
+                "=https",
+                "--proto-redir",
+                "=https",
+                "--max-time",
+                "600",
+                "--output",
+            ])
+            .arg(&partial_clone)
+            .arg(&url_clone)
+            .output()
+            .map_err(|e| format!("Download failed: {e}"))?;
+        if output.status.success() {
+            Ok(())
+        } else {
+            Err(format!(
+                "Download failed: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            ))
+        }
     })
     .await
     .map_err(|e| e.to_string())??;
+
+    // Verify both the DMG structure and Apple's notarization assessment before
+    // replacing the previous download or asking Finder to open it.
+    let verification_commands = [
+        ("hdiutil", vec!["verify"]),
+        (
+            "spctl",
+            vec![
+                "--assess",
+                "--type",
+                "open",
+                "--context",
+                "context:primary-signature",
+                "--verbose",
+            ],
+        ),
+    ];
+    for (program, args) in verification_commands {
+        let status = std::process::Command::new(program)
+            .args(args)
+            .arg(&partial)
+            .status()
+            .map_err(|e| format!("Could not verify update with {program}: {e}"))?;
+        if !status.success() {
+            let _ = fs::remove_file(&partial);
+            return Err(
+                "Downloaded update failed integrity or notarization verification".to_string(),
+            );
+        }
+    }
+
+    if dest.exists() {
+        fs::remove_file(&dest).map_err(|e| format!("Could not replace previous update: {e}"))?;
+    }
+    fs::rename(&partial, &dest).map_err(|e| format!("Could not finalize update: {e}"))?;
 
     std::process::Command::new("open")
         .arg(&dest)
@@ -1047,24 +1349,75 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
-        .run(|_app_handle, _event| {
+        .run(|app_handle, event| {
             // Handle macOS "Open With" / default-app file-open events.
             // RunEvent::Opened fires when the OS asks the app to open a file
             // (both when the app is already running and when it was just launched).
             #[cfg(any(target_os = "macos", target_os = "ios"))]
-            if let tauri::RunEvent::Opened { urls } = _event {
-                for url in &urls {
+            if let tauri::RunEvent::Opened { urls } = &event {
+                for url in urls {
                     if url.scheme() == "file" {
                         if let Ok(path) = url.to_file_path() {
                             let path_str = path.to_string_lossy().to_string();
+                            let _ = authorize_document_path(app_handle, &path);
                             // Static storage is always available, even if this
                             // fires before setup() completes.
                             *pending_file_storage().lock().unwrap() = Some(path_str.clone());
                             // Also emit for the "app already running" case.
-                            _app_handle.emit("open-file", path_str).ok();
+                            app_handle.emit("open-file", path_str).ok();
                         }
                     }
                 }
             }
+
+            // Native drag/drop is an explicit user grant. Record dropped files
+            // before the webview's asynchronous handler asks read_file for them.
+            let dropped_paths = match &event {
+                tauri::RunEvent::WindowEvent {
+                    event: tauri::WindowEvent::DragDrop(
+                        tauri::DragDropEvent::Drop { paths, .. }
+                    ),
+                    ..
+                }
+                | tauri::RunEvent::WebviewEvent {
+                    event: tauri::WebviewEvent::DragDrop(
+                        tauri::DragDropEvent::Drop { paths, .. }
+                    ),
+                    ..
+                } => Some(paths),
+                _ => None,
+            };
+            if let Some(paths) = dropped_paths {
+                for path in paths {
+                    let _ = authorize_document_path(app_handle, path);
+                }
+            }
         });
+}
+
+#[cfg(test)]
+mod security_tests {
+    use super::{validated_external_url, validated_update_url};
+
+    #[test]
+    fn external_urls_allow_only_browser_and_mail_schemes() {
+        assert!(validated_external_url("https://example.com").is_ok());
+        assert!(validated_external_url("http://example.com").is_ok());
+        assert!(validated_external_url("mailto:test@example.com").is_ok());
+        assert!(validated_external_url("javascript:alert(1)").is_err());
+        assert!(validated_external_url("data:text/html,unsafe").is_err());
+        assert!(validated_external_url("file:///etc/passwd").is_err());
+    }
+
+    #[test]
+    fn update_urls_are_pinned_to_official_https_dmg_assets() {
+        let valid = "https://github.com/Broccolito/bioscratch/releases/download/v0.3.1/Bioscratch_0.3.1_aarch64.dmg";
+        assert!(validated_update_url(valid).is_ok());
+        assert!(validated_update_url(&valid.replacen("https", "http", 1)).is_err());
+        assert!(
+            validated_update_url(&valid.replace("Broccolito/bioscratch", "attacker/fork")).is_err()
+        );
+        assert!(validated_update_url(&valid.replace(".dmg", ".zip")).is_err());
+        assert!(validated_update_url(&format!("{valid}?redirect=1")).is_err());
+    }
 }

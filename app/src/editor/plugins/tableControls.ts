@@ -1,5 +1,11 @@
-import { Plugin, EditorState, Transaction, TextSelection } from "prosemirror-state";
-import { EditorView } from "prosemirror-view";
+import {
+  Plugin,
+  PluginKey,
+  EditorState,
+  Transaction,
+  TextSelection,
+} from "prosemirror-state";
+import { Decoration, DecorationSet, EditorView } from "prosemirror-view";
 import { Node as PmNode } from "prosemirror-model";
 import {
   addRowBefore,
@@ -14,6 +20,131 @@ import {
 } from "prosemirror-tables";
 
 type PmCmd = (state: EditorState, dispatch?: (tr: Transaction) => void) => boolean;
+
+interface TableDeleteState {
+  armedPos: number | null;
+}
+
+interface TableDeleteMeta {
+  armedPos: number | null;
+}
+
+export const tableDeletePluginKey = new PluginKey<TableDeleteState>("tableDelete");
+
+function isTableNode(node: PmNode | null | undefined): node is PmNode {
+  return node?.type.spec.tableRole === "table";
+}
+
+function deleteTableAt(
+  state: EditorState,
+  dispatch: ((tr: Transaction) => void) | undefined,
+  tablePos: number
+): boolean {
+  const table = state.doc.nodeAt(tablePos);
+  if (!isTableNode(table)) return false;
+
+  if (dispatch) {
+    const tr = state.tr;
+    let blockCount = 0;
+    state.doc.forEach((child) => {
+      if (child.type.name !== "frontmatter") blockCount += 1;
+    });
+
+    // The document schema always requires at least one ordinary block after
+    // optional frontmatter, so replace the last table with a paragraph rather
+    // than leaving an invalid, empty document.
+    if (blockCount === 1) {
+      tr.replaceWith(
+        tablePos,
+        tablePos + table.nodeSize,
+        state.schema.nodes.paragraph.create()
+      );
+      tr.setSelection(TextSelection.near(tr.doc.resolve(tablePos + 1)));
+    } else {
+      tr.delete(tablePos, tablePos + table.nodeSize);
+      const nextPos = Math.min(tablePos, tr.doc.content.size);
+      tr.setSelection(TextSelection.near(tr.doc.resolve(nextPos), -1));
+    }
+
+    tr.setMeta(tableDeletePluginKey, { armedPos: null } satisfies TableDeleteMeta);
+    dispatch(tr.scrollIntoView());
+  }
+  return true;
+}
+
+function topLeftTableAtCursor(state: EditorState): { tablePos: number } | null {
+  const { $head, empty } = state.selection;
+  if (!empty) return null;
+
+  let cellDepth = -1;
+  for (let depth = $head.depth; depth > 0; depth -= 1) {
+    const role = $head.node(depth).type.spec.tableRole as string | undefined;
+    if (role === "cell" || role === "header_cell") {
+      cellDepth = depth;
+      break;
+    }
+  }
+  if (cellDepth < 2) return null;
+
+  const rowDepth = cellDepth - 1;
+  const tableDepth = cellDepth - 2;
+  if ($head.node(rowDepth).type.spec.tableRole !== "row") return null;
+  if ($head.node(tableDepth).type.spec.tableRole !== "table") return null;
+
+  // The gesture is intentionally limited to the first editable position in
+  // the top-left cell, where Backspace otherwise has no useful table action.
+  if ($head.index(tableDepth) !== 0 || $head.index(rowDepth) !== 0) return null;
+  for (let depth = cellDepth + 1; depth <= $head.depth; depth += 1) {
+    if ($head.index(depth - 1) !== 0) return null;
+  }
+  if ($head.parentOffset !== 0) return null;
+
+  return { tablePos: $head.before(tableDepth) };
+}
+
+/**
+ * At the start of a table's upper-left cell, the first Delete/Backspace arms
+ * table deletion and shows a warning; the second removes the whole table.
+ */
+export const deleteTableWithSecondPress: PmCmd = (state, dispatch) => {
+  const context = topLeftTableAtCursor(state);
+  if (!context) return false;
+
+  const armedPos = tableDeletePluginKey.getState(state)?.armedPos ?? null;
+  if (armedPos === context.tablePos) {
+    return deleteTableAt(state, dispatch, context.tablePos);
+  }
+
+  if (dispatch) {
+    dispatch(
+      state.tr.setMeta(tableDeletePluginKey, {
+        armedPos: context.tablePos,
+      } satisfies TableDeleteMeta)
+    );
+  }
+  return true;
+};
+
+function deleteWholeTable(view: EditorView, cell: HTMLElement): void {
+  const targetTable = cell.closest("table");
+  if (!targetTable) return;
+
+  let tablePos = -1;
+  view.state.doc.descendants((node, pos) => {
+    if (tablePos !== -1) return false;
+    if (node.type.spec.tableRole !== "table") return true;
+    const dom = view.nodeDOM(pos);
+    if (dom === targetTable) {
+      tablePos = pos;
+    }
+    return dom !== targetTable;
+  });
+
+  if (tablePos !== -1) {
+    deleteTableAt(view.state, (tr) => view.dispatch(tr), tablePos);
+    view.focus();
+  }
+}
 
 function execInCell(view: EditorView, cell: HTMLElement, cmd: PmCmd): void {
   try {
@@ -342,6 +473,8 @@ class TableContextMenuView {
       { separator: true },
       { label: "Delete row",    action: () => execInCell(this.view, cell, deleteRow),    danger: true },
       { label: "Delete column", action: () => execInCell(this.view, cell, deleteColumn), danger: true },
+      { separator: true },
+      { label: "Delete table", action: () => deleteWholeTable(this.view, cell), danger: true },
     ];
 
     this.menu.innerHTML = "";
@@ -397,6 +530,48 @@ class TableContextMenuView {
 
 export function buildTableControlsPlugin(): Plugin {
   return new Plugin({
+    key: tableDeletePluginKey,
+    state: {
+      init(): TableDeleteState {
+        return { armedPos: null };
+      },
+      apply(tr, value): TableDeleteState {
+        const meta = tr.getMeta(tableDeletePluginKey) as TableDeleteMeta | undefined;
+        if (meta) return { armedPos: meta.armedPos };
+        if (value.armedPos === null) return value;
+
+        // Editing the document or moving the caret cancels the confirmation;
+        // only two consecutive key presses should delete a table.
+        if (tr.docChanged || tr.selectionSet) return { armedPos: null };
+        return value;
+      },
+    },
+    props: {
+      decorations(state) {
+        const armedPos = tableDeletePluginKey.getState(state)?.armedPos ?? null;
+        if (armedPos === null) return null;
+        const table = state.doc.nodeAt(armedPos);
+        if (!isTableNode(table)) return null;
+
+        const hint = Decoration.widget(
+          armedPos,
+          () => {
+            const el = document.createElement("div");
+            el.className = "table-delete-hint";
+            el.contentEditable = "false";
+            el.textContent = "Press Delete again to remove this table";
+            return el;
+          },
+          { side: -1, key: `table-delete-hint-${armedPos}` }
+        );
+        const outline = Decoration.node(
+          armedPos,
+          armedPos + table.nodeSize,
+          { class: "table-delete-armed" }
+        );
+        return DecorationSet.create(state.doc, [hint, outline]);
+      },
+    },
     view(editorView) {
       const controls    = new TableControlsView(editorView);
       const contextMenu = new TableContextMenuView(editorView);

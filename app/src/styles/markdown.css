@@ -177,6 +177,24 @@
   overflow: hidden;
 }
 
+.ProseMirror table.table-delete-armed {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.table-delete-hint {
+  width: max-content;
+  max-width: 100%;
+  margin: 0.8em 0 -0.35em;
+  padding: 4px 8px;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  background: var(--bg-editor);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+  pointer-events: none;
+}
+
 .ProseMirror th,
 .ProseMirror td {
   border: 1px solid var(--border-color, #d4ccc0);
