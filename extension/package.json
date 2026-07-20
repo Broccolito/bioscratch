@@ -182,7 +182,7 @@
         "bioscratch.setAsDefaultEditor": {
           "type": "boolean",
           "default": true,
-          "markdownDescription": "Open Markdown files in Bioscratch by default. When on, Bioscratch registers itself as the default editor for `.md` files the first time it runs. Turn this off, or change the association under `#workbench.editorAssociations#`, to use the plain text editor or another editor instead."
+          "markdownDescription": "Open Markdown files in Bioscratch by default, including files opened from chat links and other extensions. Turn this off, or assign `.md` files to another editor under `#workbench.editorAssociations#`, to use the plain text editor or another editor instead."
         },
         "bioscratch.editDebounceMs": {
           "type": "number",

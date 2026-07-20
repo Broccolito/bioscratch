@@ -24,11 +24,10 @@ This is a VS Code port of the [Bioscratch desktop editor](https://github.com/Bro
 
 ## Default editor
 
-By default, Bioscratch opens your Markdown files automatically the first time it
-runs. If you would rather keep the plain text editor or use another editor, turn
-off `bioscratch.setAsDefaultEditor`, or change the association under
-`workbench.editorAssociations`. You can also open a single file in a different
-editor with the "Reopen Editor With..." command.
+By default, Bioscratch opens your Markdown files automatically, including files
+opened from chat links and other extensions. If you would rather keep the plain
+text editor or use another editor, turn off `bioscratch.setAsDefaultEditor`, or
+change the association under `workbench.editorAssociations`.
 
 ## How it works
 
