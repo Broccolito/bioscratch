@@ -943,7 +943,8 @@ async fn open_new_window(app: tauri::AppHandle, file_path: Option<String>) -> Re
     };
     WebviewWindowBuilder::new(&app, label, WebviewUrl::App(url_str.into()))
         .title(title)
-        .inner_size(900.0, 680.0)
+        .inner_size(1280.0, 800.0)
+        .min_inner_size(900.0, 500.0)
         .center()
         .resizable(true)
         .initialization_script(
@@ -1286,8 +1287,8 @@ pub fn run() {
             use tauri::{WebviewUrl, WebviewWindowBuilder};
             WebviewWindowBuilder::new(app, "main", WebviewUrl::App("/".into()))
                 .title("Bioscratch")
-                .inner_size(1200.0, 900.0)
-                .min_inner_size(800.0, 500.0)
+                .inner_size(1280.0, 900.0)
+                .min_inner_size(900.0, 500.0)
                 .initialization_script(
                     "document.addEventListener('contextmenu',\
                      function(e){e.preventDefault();},{capture:true});"
