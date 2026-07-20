@@ -17,6 +17,15 @@ fn pending_file_storage() -> &'static Mutex<Option<String>> {
     PENDING_FILE.get_or_init(|| Mutex::new(None))
 }
 
+fn preferred_open_file_window(windows: &[(String, bool)]) -> Option<String> {
+    windows
+        .iter()
+        .find(|(_, focused)| *focused)
+        .or_else(|| windows.iter().find(|(label, _)| label == "main"))
+        .or_else(|| windows.first())
+        .map(|(label, _)| label.clone())
+}
+
 fn authorized_files() -> &'static Mutex<HashSet<PathBuf>> {
     AUTHORIZED_FILES.get_or_init(|| Mutex::new(HashSet::new()))
 }
@@ -1360,11 +1369,26 @@ pub fn run() {
                         if let Ok(path) = url.to_file_path() {
                             let path_str = path.to_string_lossy().to_string();
                             let _ = authorize_document_path(app_handle, &path);
-                            // Static storage is always available, even if this
-                            // fires before setup() completes.
-                            *pending_file_storage().lock().unwrap() = Some(path_str.clone());
-                            // Also emit for the "app already running" case.
-                            app_handle.emit("open-file", path_str).ok();
+                            let windows = app_handle.webview_windows();
+                            if windows.is_empty() {
+                                // The app was launched by this file-open request.
+                                // Keep it until the first webview registers its listener.
+                                *pending_file_storage().lock().unwrap() = Some(path_str);
+                            } else {
+                                // `AppHandle::emit` broadcasts to every webview, which
+                                // made every open Bioscratch window add the same file.
+                                // Route the request only to the focused window (with a
+                                // deterministic main/first fallback).
+                                let candidates = windows
+                                    .iter()
+                                    .map(|(label, window)| {
+                                        (label.clone(), window.is_focused().unwrap_or(false))
+                                    })
+                                    .collect::<Vec<_>>();
+                                if let Some(label) = preferred_open_file_window(&candidates) {
+                                    app_handle.emit_to(label, "open-file", path_str).ok();
+                                }
+                            }
                         }
                     }
                 }
@@ -1397,7 +1421,39 @@ pub fn run() {
 
 #[cfg(test)]
 mod security_tests {
-    use super::{validated_external_url, validated_update_url};
+    use super::{preferred_open_file_window, validated_external_url, validated_update_url};
+
+    #[test]
+    fn file_open_targets_only_the_focused_window() {
+        let windows = vec![
+            ("main".to_string(), false),
+            ("bioscratch-2".to_string(), true),
+            ("bioscratch-3".to_string(), false),
+        ];
+        assert_eq!(
+            preferred_open_file_window(&windows).as_deref(),
+            Some("bioscratch-2")
+        );
+    }
+
+    #[test]
+    fn file_open_falls_back_to_main_then_first_window() {
+        let with_main = vec![
+            ("bioscratch-2".to_string(), false),
+            ("main".to_string(), false),
+        ];
+        assert_eq!(
+            preferred_open_file_window(&with_main).as_deref(),
+            Some("main")
+        );
+
+        let without_main = vec![("bioscratch-2".to_string(), false)];
+        assert_eq!(
+            preferred_open_file_window(&without_main).as_deref(),
+            Some("bioscratch-2")
+        );
+        assert_eq!(preferred_open_file_window(&[]), None);
+    }
 
     #[test]
     fn external_urls_allow_only_browser_and_mail_schemes() {
