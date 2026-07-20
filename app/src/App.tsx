@@ -29,6 +29,7 @@ import RecoveryDialog from "./components/RecoveryDialog";
 import LargeFileDialog from "./components/LargeFileDialog";
 import ThemeSelector from "./components/ThemeSelector";
 import UpdateDialog from "./components/UpdateDialog";
+import RecentFilesDialog from "./components/RecentFilesDialog";
 
 import "./styles/app.css";
 
@@ -105,12 +106,13 @@ const App: React.FC = () => {
   const [userThemeVars, setUserThemeVars] = useState<Record<string, Record<string, string>>>({});
   const { theme, setTheme } = useTheme(userThemeVars);
   const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const [recentPickerOpen, setRecentPickerOpen] = useState(false);
   const [updateDialogOpen, setUpdateDialogOpen] = useState(false);
   const [fontScale, setFontScale] = useState<number>(() => {
     const saved = localStorage.getItem("bioscratch-font-scale");
     return saved ? Math.max(60, Math.min(200, parseInt(saved, 10))) : 100;
   });
-  const { addRecentFile } = useRecentFiles();
+  const { recentFiles, addRecentFile, removeRecentFile } = useRecentFiles();
 
   // Load user themes on mount
   useEffect(() => {
@@ -309,7 +311,7 @@ const App: React.FC = () => {
   // Refs for menu-action event handler (avoids stale closures across re-renders)
   const handleNewRef = useRef<() => void>(() => {});
   const handleOpenRef = useRef<() => void>(() => {});
-  const openFileByPathRef = useRef<(path: string) => Promise<void>>(async () => {});
+  const openFileByPathRef = useRef<(path: string) => Promise<boolean>>(async () => false);
   const handleSaveAsRef = useRef<() => void>(() => {});
   const handleExportHtmlRef = useRef<() => void>(() => {});
   const handleExportPdfRef = useRef<() => void>(() => {});
@@ -756,11 +758,11 @@ const App: React.FC = () => {
   useEffect(() => { handleOpenRef.current = handleOpen; }, [handleOpen]);
 
   // ---- Open file by path (used by OS "Open With" and default-app handler) ----
-  const openFileByPath = useCallback(async (path: string) => {
+  const openFileByPath = useCallback(async (path: string): Promise<boolean> => {
     const existingTab = tabs.find((t) => t.filePath === path);
     if (existingTab) {
       handleSelectTab(existingTab.id);
-      return;
+      return true;
     }
     try {
       const fileContent = await invoke<string>("read_file", { path });
@@ -769,7 +771,7 @@ const App: React.FC = () => {
       const language = getCodeLanguage(path);
       if (fileContent.length > 1_000_000) {
         setPendingLargeFile({ path, content: fileContent, mode, language });
-        return;
+        return true;
       }
       const newTabId = doOpenFile(path, fileContent, mode, language);
       if (mode === "markdown") {
@@ -778,10 +780,13 @@ const App: React.FC = () => {
           setRecovery({ key: path, content: saved, filePath: path, tabId: newTabId });
         }
       }
+      return true;
     } catch (e) {
       console.error("Failed to open file:", e);
+      removeRecentFile(path);
+      return false;
     }
-  }, [tabs, handleSelectTab, addRecentFile, doOpenFile]);
+  }, [tabs, handleSelectTab, addRecentFile, removeRecentFile, doOpenFile]);
   useEffect(() => { openFileByPathRef.current = openFileByPath; }, [openFileByPath]);
 
   // ---- Save As ----
@@ -948,6 +953,7 @@ const App: React.FC = () => {
       switch (event.payload) {
         case "new":         handleNewRef.current(); break;
         case "open":        handleOpenRef.current(); break;
+        case "open-recent": setRecentPickerOpen(true); break;
         case "save":        handleSaveRef.current(); break;
         case "save-as":     handleSaveAsRef.current(); break;
         case "export-html": handleExportHtmlRef.current(); break;
@@ -1201,6 +1207,19 @@ const App: React.FC = () => {
           onClose={() => setThemePickerOpen(false)}
           onImport={handleImportTheme}
           onDeleteUserTheme={handleDeleteUserTheme}
+        />
+      )}
+
+      {recentPickerOpen && (
+        <RecentFilesDialog
+          files={recentFiles}
+          onOpen={async (path) => {
+            const opened = await openFileByPathRef.current(path);
+            if (opened) setRecentPickerOpen(false);
+          }}
+          onRemove={removeRecentFile}
+          onBrowse={() => handleOpenRef.current()}
+          onClose={() => setRecentPickerOpen(false)}
         />
       )}
 

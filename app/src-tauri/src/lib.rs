@@ -1216,6 +1216,7 @@ pub fn run() {
             // ── File menu ─────────────────────────────────────────────────
             let new_item     = MenuItem::with_id(app, "new",         "New Tab",        true, Some("CmdOrCtrl+T"))?;
             let open_item    = MenuItem::with_id(app, "open",        "Open…",          true, Some("CmdOrCtrl+O"))?;
+            let open_recent  = MenuItem::with_id(app, "open-recent", "Open Recent…",   true, None::<&str>)?;
             let sep_f1       = PredefinedMenuItem::separator(app)?;
             let save_item    = MenuItem::with_id(app, "save",        "Save",           true, Some("CmdOrCtrl+S"))?;
             let save_as_item = MenuItem::with_id(app, "save-as",     "Save As…",       true, Some("Shift+CmdOrCtrl+S"))?;
@@ -1223,7 +1224,7 @@ pub fn run() {
             let exp_html     = MenuItem::with_id(app, "export-html", "Export as HTML…",true, None::<&str>)?;
             let exp_pdf      = MenuItem::with_id(app, "export-pdf",  "Export as PDF…", true, None::<&str>)?;
             let file_menu = SubmenuBuilder::new(app, "File")
-                .items(&[&new_item, &open_item, &sep_f1, &save_item, &save_as_item, &sep_f2, &exp_html, &exp_pdf])
+                .items(&[&new_item, &open_item, &open_recent, &sep_f1, &save_item, &save_as_item, &sep_f2, &exp_html, &exp_pdf])
                 .build()?;
 
             // ── Edit menu (OS-provided) ────────────────────────────────────
@@ -1320,7 +1321,15 @@ pub fn run() {
                             .ok();
                     }
                     id => {
-                        app_handle.emit("menu-action", id).ok();
+                        let windows = app_handle.webview_windows();
+                        let target = windows
+                            .values()
+                            .find(|window| window.is_focused().unwrap_or(false))
+                            .or_else(|| windows.get("main"))
+                            .or_else(|| windows.values().next());
+                        if let Some(window) = target {
+                            window.emit("menu-action", id).ok();
+                        }
                     }
                 }
             });
