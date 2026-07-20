@@ -1032,3 +1032,152 @@ body {
   width: 60%;
   margin-bottom: 1px;
 }
+
+/* ---- Open Recent dialog ---- */
+.recent-files-backdrop {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg-app) 48%, transparent);
+  z-index: 2500;
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+
+.recent-files-dialog {
+  width: 520px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-toolbar);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px color-mix(in srgb, var(--text-primary) 20%, transparent);
+  outline: none;
+}
+
+.recent-files-header,
+.recent-files-footer {
+  display: flex;
+  align-items: center;
+  padding: 12px 14px;
+  flex-shrink: 0;
+}
+
+.recent-files-header {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.recent-files-title {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.recent-files-close,
+.recent-file-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: 4px;
+}
+
+.recent-files-close {
+  width: 24px;
+  height: 24px;
+}
+
+.recent-files-close:hover,
+.recent-file-remove:hover {
+  color: var(--text-primary);
+  background: var(--toolbar-btn-hover);
+}
+
+.recent-files-list {
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.recent-file-row {
+  display: flex;
+  align-items: stretch;
+  border-radius: 7px;
+}
+
+.recent-file-row:hover {
+  background: var(--toolbar-btn-hover);
+}
+
+.recent-file-open {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  color: var(--text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+
+.recent-file-name {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.recent-file-parent {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 10px;
+}
+
+.recent-file-remove {
+  width: 30px;
+  margin: 7px;
+  flex-shrink: 0;
+}
+
+.recent-files-empty {
+  padding: 28px 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+  text-align: center;
+}
+
+.recent-files-footer {
+  justify-content: flex-end;
+  border-top: 1px solid var(--border-subtle);
+}
+
+.recent-files-browse {
+  padding: 6px 12px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: var(--bg-editor);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.recent-files-browse:hover {
+  background: var(--toolbar-btn-hover);
+}
