@@ -135,9 +135,9 @@ function serializeBlock(node: ProseMirrorNode, indent: string = ""): string {
       let result = "";
       node.forEach((item) => {
         if (item.type.name === "task_list_item") {
-          result += serializeTaskItem(item, "- ");
+          result += serializeTaskItem(item, `${indent}- `);
         } else {
-          result += serializeListItem(item, "- ");
+          result += serializeListItem(item, `${indent}- `);
         }
       });
       return result + "\n";
@@ -147,7 +147,11 @@ function serializeBlock(node: ProseMirrorNode, indent: string = ""): string {
       let result = "";
       let order = node.attrs.order || 1;
       node.forEach((item) => {
-        result += serializeListItem(item, `${order}. `);
+        if (item.type.name === "task_list_item") {
+          result += serializeTaskItem(item, `${indent}${order}. `);
+        } else {
+          result += serializeListItem(item, `${indent}${order}. `);
+        }
         order++;
       });
       return result + "\n";
@@ -194,6 +198,12 @@ function serializeListItem(item: ProseMirrorNode, prefix: string): string {
       result += `${prefix}${blockStr.trimStart()}`;
       first = false;
     } else {
+      if (
+        (child.type.name === "bullet_list" || child.type.name === "ordered_list") &&
+        result.endsWith("\n\n")
+      ) {
+        result = result.slice(0, -1);
+      }
       const blockStr = serializeBlock(child, indent);
       result += blockStr;
     }
@@ -216,6 +226,12 @@ function serializeTaskItem(item: ProseMirrorNode, prefix: string): string {
       result += `${taskPrefix}${blockStr.trimStart()}`;
       first = false;
     } else {
+      if (
+        (child.type.name === "bullet_list" || child.type.name === "ordered_list") &&
+        result.endsWith("\n\n")
+      ) {
+        result = result.slice(0, -1);
+      }
       const blockStr = serializeBlock(child, indent);
       result += blockStr;
     }

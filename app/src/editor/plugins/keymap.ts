@@ -15,6 +15,7 @@ import {
 import {
   splitListItem,
   liftListItem,
+  sinkListItem,
 } from "prosemirror-schema-list";
 import { goToNextCell } from "prosemirror-tables";
 import { schema } from "../schema";
@@ -323,13 +324,30 @@ export function buildKeymap(
     splitListItem(schema.nodes.task_list_item)
   );
 
-  keys["Tab"] = (state, dispatch) => {
-    if (dispatch) dispatch(state.tr.insertText("\t").scrollIntoView());
-    return true;
-  };
+  // Tab follows the structural conventions users expect in lists and tables.
+  // Only fall back to a literal tab in ordinary text/code contexts.
+  keys["Tab"] = chainCommands(
+    sinkListItem(schema.nodes.list_item),
+    sinkListItem(schema.nodes.task_list_item),
+    goToNextCell(1),
+    (state, dispatch) => {
+      const { $head } = state.selection;
+      for (let depth = $head.depth; depth > 0; depth--) {
+        const type = $head.node(depth).type;
+        if (type === schema.nodes.list_item || type === schema.nodes.task_list_item) {
+          // The first item cannot be nested because it has no previous sibling.
+          // Consume Tab instead of corrupting the list with a literal tab.
+          return true;
+        }
+      }
+      if (dispatch) dispatch(state.tr.insertText("\t").scrollIntoView());
+      return true;
+    }
+  );
 
   keys["Shift-Tab"] = chainCommands(
     liftListItem(schema.nodes.list_item),
+    liftListItem(schema.nodes.task_list_item),
     goToNextCell(-1)
   );
 
