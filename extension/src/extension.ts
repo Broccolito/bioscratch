@@ -86,6 +86,13 @@ async function routeMarkdownTextEditor(editor: vscode.TextEditor | undefined): P
 
   const key = editor.document.uri.toString();
   if (routingInProgress.has(key)) return;
+
+  const activeTab = vscode.window.tabGroups.activeTabGroup.activeTab;
+  const sourceTextTab =
+    activeTab?.input instanceof vscode.TabInputText &&
+    activeTab.input.uri.toString() === key
+      ? activeTab
+      : undefined;
   routingInProgress.add(key);
 
   try {
@@ -95,6 +102,9 @@ async function routeMarkdownTextEditor(editor: vscode.TextEditor | undefined): P
       BioscratchEditorProvider.viewType,
       editor.viewColumn
     );
+    if (sourceTextTab) {
+      await vscode.window.tabGroups.close(sourceTextTab, true);
+    }
   } catch (error) {
     console.error(`Bioscratch could not route ${key} to its Markdown editor`, error);
   } finally {
