@@ -61,9 +61,13 @@ if [[ -n "$TARGET_APP" ]]; then
   # nested, already-signed appex by reference instead of re-signing it (which
   # would overwrite its entitlements and break Quick Look registration).
   echo "==> Re-signing host app"
-  ENT=()
-  [[ -n "$APP_ENTITLEMENTS" ]] && ENT=(--entitlements "$APP_ENTITLEMENTS")
-  codesign --force --options runtime --sign "$SIGN_ID" "${ENT[@]}" "${TS[@]}" "$TARGET_APP"
+  if [[ -n "$APP_ENTITLEMENTS" ]]; then
+    codesign --force --options runtime --sign "$SIGN_ID" \
+      --entitlements "$APP_ENTITLEMENTS" "${TS[@]}" "$TARGET_APP"
+  else
+    codesign --force --options runtime --sign "$SIGN_ID" \
+      "${TS[@]}" "$TARGET_APP"
+  fi
 fi
 
 echo "==> Done: $APPEX"
