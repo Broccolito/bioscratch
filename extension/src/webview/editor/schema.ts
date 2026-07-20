@@ -16,7 +16,9 @@ function sanitizeHref(href: string | null): string {
 
 const tableNodeSpecs = tableNodes({
   tableGroup: "block",
-  cellContent: "block+",
+  // Keep the document model within what GFM tables can serialize. Multi-line
+  // content uses hard breaks inside this paragraph.
+  cellContent: "paragraph",
   cellAttributes: {},
 });
 

@@ -287,6 +287,17 @@ for (const target of targets) {
       expect(textRuns(result.doc)).toEqual([{ text: "LxR", marks: ["code"] }]);
     });
 
+    it("keeps pasted Markdown punctuation literal inside inline code", () => {
+      for (const source of ["**x**", "[x](https://example.test)", "$x$", "`x`"]) {
+        const doc = paragraphDoc(target, "LR", ["code"]);
+        const result = paste(target, doc, TextSelection.create(doc, 2), source);
+        expect(result.handled).toBe(true);
+        expect(textRuns(result.doc), source).toEqual([
+          { text: `L${source}R`, marks: ["code"] },
+        ]);
+      }
+    });
+
     it("inherits code for unmarked HTML", () => {
       const doc = paragraphDoc(target, "LR", ["code"]);
       const result = paste(
@@ -312,6 +323,24 @@ for (const target of targets) {
       const doc = paragraphDoc(target, "LR", ["code"]);
       const result = paste(target, doc, TextSelection.create(doc, 1, 3), "x");
       expect(textRuns(result.doc)).toEqual([{ text: "x", marks: ["code"] }]);
+    });
+
+    it("parses Markdown echoed by an unformatted HTML clipboard wrapper", () => {
+      const doc = paragraphDoc(target, "");
+      const source = "**bold** and `code`";
+      const result = paste(
+        target,
+        doc,
+        TextSelection.create(doc, 1),
+        source,
+        { html: `<p>${source}</p>` }
+      );
+      expect(result.handled).toBe(true);
+      expect(textRuns(result.doc)).toEqual([
+        { text: "bold", marks: ["bold"] },
+        { text: " and ", marks: [] },
+        { text: "code", marks: ["code"] },
+      ]);
     });
 
     it("round-trips Unicode and Markdown punctuation literally", () => {

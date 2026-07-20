@@ -1,5 +1,5 @@
 import { inputRules, InputRule, wrappingInputRule, textblockTypeInputRule } from "prosemirror-inputrules";
-import { TextSelection } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { MarkType } from "prosemirror-model";
 import { schema } from "../schema";
 
@@ -20,7 +20,7 @@ const blockquoteRule = wrappingInputRule(
 
 // Bullet list: "- " or "* "
 const bulletListRule = wrappingInputRule(
-  /^\s*[-*]\s$/,
+  /^\s*[-*+]\s$/,
   schema.nodes.bullet_list
 );
 
@@ -96,11 +96,26 @@ const hrRule = new InputRule(/^(?:---|\*\*\*|___)\s$/, (state, _match, start) =>
 // These make typing **bold**, *italic*, `code`, ~~strike~~ render immediately,
 // matching how the same syntax renders when a file is opened.
 
+function hasUnclosedBacktickBefore(state: EditorState, start: number): boolean {
+  const $start = state.doc.resolve(start);
+  const prefix = $start.parent.textBetween(0, $start.parentOffset, "", "");
+  let count = 0;
+  for (let index = 0; index < prefix.length; index += 1) {
+    if (prefix[index] === "`" && (index === 0 || prefix[index - 1] !== "\\")) {
+      count += 1;
+    }
+  }
+  return count % 2 === 1;
+}
+
 function markInputRule(regexp: RegExp, markType: MarkType) {
   return new InputRule(regexp, (state, match, start, end) => {
     // Don't apply inline marks inside code blocks (they disallow marks).
     const $start = state.doc.resolve(start);
     if ($start.parent.type.spec.code) return null;
+    if (markType !== schema.marks.code && hasUnclosedBacktickBefore(state, start)) {
+      return null;
+    }
 
     const captured = match[match.length - 1];
     if (!captured) return null;
@@ -136,6 +151,8 @@ function markInputRule(regexp: RegExp, markType: MarkType) {
 // Order matters: ** before * so bold isn't swallowed by the italic rule.
 const boldStarRule = markInputRule(/\*\*([^*]+)\*\*$/, schema.marks.bold);
 const italicStarRule = markInputRule(/(?<!\*)\*([^*]+)\*$/, schema.marks.italic);
+const boldUnderscoreRule = markInputRule(/(?<![\w_])__([^_\n]+)__$/, schema.marks.bold);
+const italicUnderscoreRule = markInputRule(/(?<![\w_])_([^_\n]+)_$/, schema.marks.italic);
 const codeRule = markInputRule(/`([^`]+)`$/, schema.marks.code);
 const strikeRule = markInputRule(/~~([^~]+)~~$/, schema.marks.strikethrough);
 
@@ -144,10 +161,28 @@ const strikeRule = markInputRule(/~~([^~]+)~~$/, schema.marks.strikethrough);
 const linkRule = new InputRule(
   /(?<!!)\[([^\[\]]+)\]\(([^)]+)\)(.)$/,
   (state, match, start, end) => {
+    if (hasUnclosedBacktickBefore(state, start)) return null;
     const [, linkText, href, trailing] = match;
     const { tr } = state;
     const mark = schema.marks.link.create({ href: href.trim() });
     tr.replaceWith(start, end, [schema.text(linkText, [mark]), schema.text(trailing)]);
+    return tr;
+  }
+);
+
+// Inline math mirrors the link rule: typing any character (most commonly a
+// space) after the closing $ commits the expression immediately. Return is
+// handled by the keymap, including inside table cells.
+const mathInlineRule = new InputRule(
+  /(?<![$\\])\$([^$\n]+)\$(.)$/,
+  (state, match, start, end) => {
+    if (hasUnclosedBacktickBefore(state, start)) return null;
+    const [, math, trailing] = match;
+    const { tr } = state;
+    tr.replaceWith(start, end, [
+      schema.nodes.math_inline.create({ math }),
+      schema.text(trailing),
+    ]);
     return tr;
   }
 );
@@ -170,9 +205,12 @@ export function buildInputRules() {
       hrRule,
       boldStarRule,
       italicStarRule,
+      boldUnderscoreRule,
+      italicUnderscoreRule,
       codeRule,
       strikeRule,
       linkRule,
+      mathInlineRule,
     ],
   });
 }

@@ -108,6 +108,14 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   const insertTableNode = useCallback(() => {
     if (!view) return;
+    // GFM has no nested-table syntax. Refuse the operation while the caret is
+    // in a cell so saving can never silently flatten or discard an inner table.
+    for (let depth = view.state.selection.$from.depth; depth > 0; depth -= 1) {
+      if (view.state.selection.$from.node(depth).type.spec.tableRole === "table") {
+        view.focus();
+        return;
+      }
+    }
     {
       // Manually create a simple 3x3 table
       const cell = () =>

@@ -37,7 +37,10 @@ function codeLanguageFromDom(dom: Node): string {
 
 const tableNodeSpecs = tableNodes({
   tableGroup: "block",
-  cellContent: "block+",
+  // GFM table cells contain one inline flow. Allow hard breaks inside the
+  // paragraph, but reject nested tables/lists/headings/code blocks that cannot
+  // be represented by Markdown table syntax and would be lost on save.
+  cellContent: "paragraph",
   cellAttributes: {
     // GFM column alignment (left | center | right). Stored per cell and
     // rendered as text-align so imported alignment is visible and round-trips.

@@ -14,7 +14,7 @@ import {
   liftListItem,
   sinkListItem,
 } from "prosemirror-schema-list";
-import { goToNextCell } from "prosemirror-tables";
+import { addRowAfter, goToNextCell } from "prosemirror-tables";
 import { schema } from "../schema";
 import { EditorState, TextSelection, Transaction } from "prosemirror-state";
 
@@ -31,6 +31,24 @@ function convertInlinePatternsInNode(state: EditorState, nodePos: number): Trans
   if (!node || node.type !== schema.nodes.paragraph) return null;
 
   const fullText = node.textContent;
+  const isCodeProtected = (start: number, end: number): boolean => {
+    let hasCodeMark = false;
+    node.nodesBetween(start, end, (child) => {
+      if (child.isText && child.marks.some((mark) => mark.type === schema.marks.code)) {
+        hasCodeMark = true;
+      }
+      return !hasCodeMark;
+    });
+    if (hasCodeMark) return true;
+
+    let unmatchedTicks = 0;
+    for (let index = 0; index < start; index += 1) {
+      if (fullText[index] === "`" && (index === 0 || fullText[index - 1] !== "\\")) {
+        unmatchedTicks += 1;
+      }
+    }
+    return unmatchedTicks % 2 === 1;
+  };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const allMatches: Array<{ start: number; end: number; makeNode: () => any }> = [];
 
@@ -40,6 +58,7 @@ function convertInlinePatternsInNode(state: EditorState, nodePos: number): Trans
   while ((m = MATH_RE.exec(fullText)) !== null) {
     const math = m[1];
     const start = m.index, end = m.index + m[0].length;
+    if (isCodeProtected(start, end)) continue;
     allMatches.push({ start, end, makeNode: () => schema.nodes.math_inline.create({ math }) });
   }
 
@@ -48,6 +67,7 @@ function convertInlinePatternsInNode(state: EditorState, nodePos: number): Trans
   while ((m = LINK_RE.exec(fullText)) !== null) {
     const linkText = m[1], href = m[2].trim();
     const start = m.index, end = m.index + m[0].length;
+    if (isCodeProtected(start, end)) continue;
     allMatches.push({
       start, end,
       makeNode: () => schema.text(linkText, [schema.marks.link.create({ href })]),
@@ -71,7 +91,7 @@ function convertInlinePatternsInNode(state: EditorState, nodePos: number): Trans
 
 // On Enter: first convert any $...$ and [text](url) patterns in the current paragraph,
 // then check for block-level triggers (```, $$).
-const enterForMarkdownBlocks: Command = (state, dispatch) => {
+export const enterForMarkdownBlocks: Command = (state, dispatch) => {
   const { $head, empty } = state.selection;
   if (!empty) return false;
 
@@ -98,6 +118,21 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
       return true;
     }
     return false;
+  }
+
+  if (/^(?:---|\*\*\*|___)$/.test(text)) {
+    if (dispatch) {
+      const hr = schema.nodes.horizontal_rule.create();
+      const paragraph = schema.nodes.paragraph.create();
+      const tr = state.tr.replaceWith(
+        nodeStart,
+        nodeStart + node.nodeSize,
+        [hr, paragraph]
+      );
+      tr.setSelection(TextSelection.near(tr.doc.resolve(nodeStart + hr.nodeSize + 1)));
+      dispatch(tr.scrollIntoView());
+    }
+    return true;
   }
 
   // ``` or ```lang → fenced code block
@@ -143,23 +178,72 @@ const enterForMarkdownBlocks: Command = (state, dispatch) => {
 
 // Inside a table cell, Enter inserts a hard break rather than splitting the paragraph.
 // This keeps cell content self-contained and serialises cleanly as <br>.
-const enterInTableCell: Command = (state, dispatch) => {
+export const enterInTableCell: Command = (state, dispatch) => {
   const { $head, empty } = state.selection;
   if (!empty) return false;
+  let inTableCell = false;
   for (let d = $head.depth; d > 0; d--) {
     const name = $head.node(d).type.name;
     if (name === "table_cell" || name === "table_header") {
-      if (dispatch) {
-        dispatch(
-          state.tr.replaceSelectionWith(schema.nodes.hard_break.create()).scrollIntoView()
-        );
-      }
-      return true;
+      inTableCell = true;
+      break;
     }
     if (name === "doc") break;
   }
-  return false;
+  if (!inTableCell) return false;
+
+  if (dispatch) {
+    const nodeStart = $head.parent.type === schema.nodes.paragraph
+      ? $head.before()
+      : -1;
+    const tr = nodeStart >= 0
+      ? convertInlinePatternsInNode(state, nodeStart) ?? state.tr
+      : state.tr;
+    dispatch(
+      tr.replaceSelectionWith(schema.nodes.hard_break.create()).scrollIntoView()
+    );
+  }
+  return true;
 };
+
+export function moveTableCell(direction: 1 | -1): Command {
+  return (state, dispatch) => {
+    if (goToNextCell(direction)(state, dispatch)) return true;
+
+    const { $head } = state.selection;
+    let tableDepth = -1;
+    for (let depth = $head.depth; depth > 0; depth -= 1) {
+      if ($head.node(depth).type.spec.tableRole === "table") {
+        tableDepth = depth;
+        break;
+      }
+    }
+    if (tableDepth < 0) return false;
+    if (direction === -1) return true;
+
+    if (dispatch) {
+      const tablePos = $head.before(tableDepth);
+      let rowTr: Transaction | null = null;
+      addRowAfter(state, (tr) => { rowTr = tr; });
+      if (rowTr) {
+        const tr = rowTr as Transaction;
+        const table = tr.doc.nodeAt(tablePos);
+        if (table?.type.spec.tableRole === "table" && table.childCount > 0) {
+          let firstCellPos = tablePos + 1;
+          for (let row = 0; row < table.childCount - 1; row += 1) {
+            firstCellPos += table.child(row).nodeSize;
+          }
+          firstCellPos += 1;
+          tr.setSelection(
+            TextSelection.near(tr.doc.resolve(firstCellPos + 1), 1)
+          );
+        }
+        dispatch(tr.scrollIntoView());
+      }
+    }
+    return true;
+  };
+}
 
 // Toggle checked state on a task_list_item when cursor is inside it.
 export const toggleTaskItem: Command = (state, dispatch) => {
@@ -253,7 +337,7 @@ export function buildKeymap(
   keys["Tab"] = chainCommands(
     sinkListItem(schema.nodes.list_item),
     sinkListItem(schema.nodes.task_list_item),
-    goToNextCell(1),
+    moveTableCell(1),
     (state, dispatch) => {
       const { $head } = state.selection;
       for (let depth = $head.depth; depth > 0; depth--) {
@@ -270,7 +354,7 @@ export function buildKeymap(
   keys["Shift-Tab"] = chainCommands(
     liftListItem(schema.nodes.list_item),
     liftListItem(schema.nodes.task_list_item),
-    goToNextCell(-1)
+    moveTableCell(-1)
   );
 
   // ArrowUp at first line of code_block or math_block: insert paragraph before and move there
