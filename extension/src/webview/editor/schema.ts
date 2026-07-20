@@ -65,7 +65,7 @@ export const schema = new Schema({
 
     bullet_list: {
       group: "block",
-      content: "list_item+",
+      content: "(list_item | task_list_item)+",
       parseDOM: [{ tag: "ul" }],
       toDOM() {
         return ["ul", 0];
@@ -74,7 +74,7 @@ export const schema = new Schema({
 
     ordered_list: {
       group: "block",
-      content: "list_item+",
+      content: "(list_item | task_list_item)+",
       attrs: { order: { default: 1 } },
       parseDOM: [
         {
