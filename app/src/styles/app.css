@@ -689,6 +689,23 @@ body {
   color: var(--text-primary);
 }
 
+.modal-btn:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.close-document-dialog {
+  max-width: 460px;
+}
+
+.close-document-actions {
+  align-items: center;
+}
+
+.close-document-delete {
+  margin-right: auto;
+}
+
 @keyframes spin {
   to { transform: rotate(360deg); }
 }

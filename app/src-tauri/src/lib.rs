@@ -12,6 +12,8 @@ mod dev_bridge;
 // RunEvent::Opened fires before setup() has registered Tauri managed state.
 static PENDING_FILE: OnceLock<Mutex<Option<String>>> = OnceLock::new();
 static AUTHORIZED_FILES: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+static RECENT_FILES_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+const MAX_RECENT_FILES: usize = 10;
 
 fn pending_file_storage() -> &'static Mutex<Option<String>> {
     PENDING_FILE.get_or_init(|| Mutex::new(None))
@@ -28,6 +30,22 @@ fn preferred_open_file_window(windows: &[(String, bool)]) -> Option<String> {
 
 fn authorized_files() -> &'static Mutex<HashSet<PathBuf>> {
     AUTHORIZED_FILES.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn recent_files_lock() -> &'static Mutex<()> {
+    RECENT_FILES_LOCK.get_or_init(|| Mutex::new(()))
+}
+
+fn add_recent_path(mut files: Vec<String>, path: String) -> Vec<String> {
+    files.retain(|existing| existing != &path);
+    files.insert(0, path);
+    files.truncate(MAX_RECENT_FILES);
+    files
+}
+
+fn remove_recent_path(mut files: Vec<String>, path: &str) -> Vec<String> {
+    files.retain(|existing| existing != path);
+    files
 }
 
 fn normalized_access_path(path: &Path) -> Result<PathBuf, String> {
@@ -265,30 +283,71 @@ async fn get_app_data_dir(app: tauri::AppHandle) -> Result<String, String> {
 
 #[tauri::command]
 async fn read_recent_files(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let guard = recent_files_lock()
+        .lock()
+        .map_err(|_| "Recent files lock failed")?;
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     let recent_path = data_dir.join("recent_files.json");
-    if recent_path.exists() {
+    let files = if recent_path.exists() {
         let content = fs::read_to_string(&recent_path).map_err(|e| e.to_string())?;
-        let files: Vec<String> = serde_json::from_str(&content).map_err(|e| e.to_string())?;
-        for file in &files {
-            let _ = authorize_document_path(&app, Path::new(file));
-        }
-        Ok(files)
+        serde_json::from_str(&content).map_err(|e| e.to_string())?
     } else {
-        Ok(vec![])
+        vec![]
+    };
+    // Never hold the recent-file lock while granting document access: add
+    // operations validate access before taking this lock.
+    drop(guard);
+    for file in &files {
+        let _ = authorize_document_path(&app, Path::new(file));
     }
+    Ok(files)
 }
 
 #[tauri::command]
-async fn save_recent_files(app: tauri::AppHandle, files: Vec<String>) -> Result<(), String> {
-    for file in &files {
-        require_authorized_path(file)?;
-    }
+async fn add_recent_file(app: tauri::AppHandle, path: String) -> Result<Vec<String>, String> {
+    require_authorized_path(&path)?;
+    let _guard = recent_files_lock()
+        .lock()
+        .map_err(|_| "Recent files lock failed")?;
     let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
     fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
     let recent_path = data_dir.join("recent_files.json");
+    let files = if recent_path.exists() {
+        let content = fs::read_to_string(&recent_path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).map_err(|e| e.to_string())?
+    } else {
+        vec![]
+    };
+    let files = add_recent_path(files, path);
     let content = serde_json::to_string(&files).map_err(|e| e.to_string())?;
-    fs::write(&recent_path, content).map_err(|e| e.to_string())
+    fs::write(&recent_path, content).map_err(|e| e.to_string())?;
+    drop(_guard);
+    app.emit("recent-files-updated", files.clone())
+        .map_err(|e| e.to_string())?;
+    Ok(files)
+}
+
+#[tauri::command]
+async fn remove_recent_file(app: tauri::AppHandle, path: String) -> Result<Vec<String>, String> {
+    let _guard = recent_files_lock()
+        .lock()
+        .map_err(|_| "Recent files lock failed")?;
+    let data_dir = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    fs::create_dir_all(&data_dir).map_err(|e| e.to_string())?;
+    let recent_path = data_dir.join("recent_files.json");
+    let files = if recent_path.exists() {
+        let content = fs::read_to_string(&recent_path).map_err(|e| e.to_string())?;
+        serde_json::from_str(&content).map_err(|e| e.to_string())?
+    } else {
+        vec![]
+    };
+    let files = remove_recent_path(files, &path);
+    let content = serde_json::to_string(&files).map_err(|e| e.to_string())?;
+    fs::write(&recent_path, content).map_err(|e| e.to_string())?;
+    drop(_guard);
+    app.emit("recent-files-updated", files.clone())
+        .map_err(|e| e.to_string())?;
+    Ok(files)
 }
 
 #[tauri::command]
@@ -1344,7 +1403,8 @@ pub fn run() {
             show_save_dialog,
             get_app_data_dir,
             read_recent_files,
-            save_recent_files,
+            add_recent_file,
+            remove_recent_file,
             save_autosave,
             load_autosave,
             delete_autosave,
@@ -1431,7 +1491,10 @@ pub fn run() {
 
 #[cfg(test)]
 mod security_tests {
-    use super::{preferred_open_file_window, validated_external_url, validated_update_url};
+    use super::{
+        add_recent_path, preferred_open_file_window, remove_recent_path,
+        validated_external_url, validated_update_url,
+    };
 
     #[test]
     fn file_open_targets_only_the_focused_window() {
@@ -1463,6 +1526,28 @@ mod security_tests {
             Some("bioscratch-2")
         );
         assert_eq!(preferred_open_file_window(&[]), None);
+    }
+
+    #[test]
+    fn recent_files_are_deduplicated_ordered_and_bounded() {
+        let files = (0..10).map(|index| format!("/{index}.md")).collect();
+        let files = add_recent_path(files, "/5.md".to_string());
+        assert_eq!(files.first().map(String::as_str), Some("/5.md"));
+        assert_eq!(files.iter().filter(|path| path.as_str() == "/5.md").count(), 1);
+        assert_eq!(files.len(), 10);
+
+        let files = add_recent_path(files, "/new.md".to_string());
+        assert_eq!(files.first().map(String::as_str), Some("/new.md"));
+        assert_eq!(files.len(), 10);
+    }
+
+    #[test]
+    fn removing_a_recent_file_preserves_the_other_entries() {
+        let files = vec!["/a.md".to_string(), "/b.md".to_string(), "/c.md".to_string()];
+        assert_eq!(
+            remove_recent_path(files, "/b.md"),
+            vec!["/a.md".to_string(), "/c.md".to_string()]
+        );
     }
 
     #[test]
