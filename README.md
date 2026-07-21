@@ -4,7 +4,7 @@
 
 <p align="center">A What You See Is What You Get (WYSIWYG) Markdown editor built for researchers, data scientists, and AI engineers — for humans and agents alike.</p>
 
-<p align="center"><strong><a href="https://broccolito.github.io/bioscratch/">Website</a></strong> · <strong><a href="https://github.com/Broccolito/bioscratch/releases">Download</a></strong> · <strong><a href="https://github.com/Broccolito/bioscratch/issues">Report a Bug</a></strong></p>
+<p align="center"><strong><a href="https://broccolito.github.io/bioscratch/">Website</a></strong> · <strong><a href="https://github.com/Broccolito/bioscratch/releases">Download</a></strong> · <strong><a href="https://marketplace.visualstudio.com/items?itemName=WanjunGu.bioscratch">VS Code Marketplace</a></strong> · <strong><a href="https://github.com/Broccolito/bioscratch/issues">Report a Bug</a></strong></p>
 
 ## Why Bioscratch?
 
@@ -38,6 +38,9 @@ macOS only for now. Both chips supported:
 | `Bioscratch_*_x86_64.dmg` | Intel |
 
 → [Releases page](https://github.com/Broccolito/bioscratch/releases)
+
+Prefer to stay in VS Code? Install
+[Bioscratch from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=WanjunGu.bioscratch).
 
 > **PDF export requires Pandoc.** Install it once:
 > ```bash

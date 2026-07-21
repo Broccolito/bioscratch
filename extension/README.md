@@ -4,6 +4,8 @@ A WYSIWYG Markdown editor for VS Code. Bioscratch renders your `.md` files as a
 live document you edit in place. Math, diagrams, code, tables, and images all
 render as you type, while the file on disk stays plain Markdown.
 
+[Install Bioscratch from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=WanjunGu.bioscratch).
+
 This is a VS Code port of the [Bioscratch desktop editor](https://github.com/Broccolito/bioscratch).
 
 ## Features
