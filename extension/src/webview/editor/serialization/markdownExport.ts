@@ -247,7 +247,9 @@ function serializeCellContent(cell: ProseMirrorNode): string {
   cell.forEach((block) => {
     parts.push(serializeInlineSeq(block, "<br>").trim());
   });
-  return parts.filter(Boolean).join("<br>");
+  // A literal pipe belongs to the cell; without escaping it changes the table
+  // shape on the next Markdown parse.
+  return parts.filter(Boolean).join("<br>").replace(/\|/g, "\\|");
 }
 
 function serializeTable(node: ProseMirrorNode): string {

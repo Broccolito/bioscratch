@@ -1,4 +1,5 @@
 import { Plugin } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
 import {
   Fragment,
   Slice,
@@ -38,6 +39,57 @@ function addContextMarks(slice: Slice, contextMarks: readonly Mark[]): Slice {
   );
 }
 
+function selectionIsInTableCell(view: EditorView): boolean {
+  const { $from } = view.state.selection;
+  for (let depth = $from.depth; depth > 0; depth -= 1) {
+    const role = $from.node(depth).type.spec.tableRole;
+    if (role === "cell" || role === "header_cell") return true;
+  }
+  return false;
+}
+
+function isInlineCellSlice(slice: Slice): boolean {
+  const first = slice.content.firstChild;
+  if (!first) return true;
+  if (slice.content.childCount !== 1) return false;
+  if (first.isInline) return true;
+  return first.type.name === "paragraph";
+}
+
+function literalCellSlice(text: string, contextMarks: readonly Mark[]): Slice {
+  const nodes: ProseMirrorNode[] = [];
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  lines.forEach((line, index) => {
+    if (line) nodes.push(schema.text(line, contextMarks));
+    if (index < lines.length - 1) nodes.push(schema.nodes.hard_break.create());
+  });
+  return new Slice(Fragment.fromArray(nodes), 0, 0);
+}
+
+function nodeHasMarkdownSemantics(root: ProseMirrorNode): boolean {
+  let semantic = false;
+  root.descendants((node) => {
+    if (node.marks.length > 0) semantic = true;
+    if (!["paragraph", "text", "hard_break"].includes(node.type.name)) {
+      semantic = true;
+    }
+    return !semantic;
+  });
+  return semantic;
+}
+
+function sliceHasMarkdownSemantics(slice: Slice): boolean {
+  let semantic = false;
+  slice.content.nodesBetween(0, slice.content.size, (node) => {
+    if (node.marks.length > 0) semantic = true;
+    if (!["paragraph", "text", "hard_break"].includes(node.type.name)) {
+      semantic = true;
+    }
+    return !semantic;
+  });
+  return semantic;
+}
+
 /**
  * Handles paste events in Markdown mode. Plain text is parsed as Markdown,
  * while inline content inherits formatting at the insertion point. Rich
@@ -67,8 +119,35 @@ export function buildMarkdownPastePlugin(
           (selection.empty
             ? selection.$from.marks()
             : selection.$from.marksAcross(selection.$to) ?? []);
+        const inTableCell = selectionIsInTableCell(view);
 
-        if (hasHtml && !hasMermaidFence) {
+        if (text && contextMarks.some((mark) => mark.type === schema.marks.code)) {
+          const literal = text.replace(/\r?\n/g, " ");
+          view.dispatch(
+            view.state.tr.replaceSelection(
+              new Slice(Fragment.from(schema.text(literal, contextMarks)), 0, 0)
+            ).scrollIntoView()
+          );
+          return true;
+        }
+
+        const parsedDoc = text.trim() ? markdownToDoc(text, schema) : null;
+        const shouldParseMarkdown = Boolean(
+          parsedDoc &&
+          (hasMermaidFence ||
+            (nodeHasMarkdownSemantics(parsedDoc) &&
+              !sliceHasMarkdownSemantics(defaultSlice)))
+        );
+
+        if (hasHtml && !shouldParseMarkdown) {
+          if (inTableCell && !isInlineCellSlice(defaultSlice)) {
+            view.dispatch(
+              view.state.tr
+                .replaceSelection(literalCellSlice(text, contextMarks))
+                .scrollIntoView()
+            );
+            return true;
+          }
           const markedSlice = addContextMarks(defaultSlice, contextMarks);
           if (markedSlice === defaultSlice) return false;
           view.dispatch(
@@ -77,12 +156,19 @@ export function buildMarkdownPastePlugin(
           return true;
         }
 
-        if (!text.trim()) return false;
-
-        const parsedDoc = markdownToDoc(text, schema);
+        if (!parsedDoc) return false;
         const isSingleParagraph =
           parsedDoc.childCount === 1 &&
           parsedDoc.child(0).type.name === "paragraph";
+
+        if (inTableCell && !isSingleParagraph) {
+          view.dispatch(
+            view.state.tr
+              .replaceSelection(literalCellSlice(text, contextMarks))
+              .scrollIntoView()
+          );
+          return true;
+        }
         const paragraph = isSingleParagraph ? parsedDoc.child(0) : null;
         const firstInline = paragraph?.firstChild;
         const isUnformattedSingleLineText =

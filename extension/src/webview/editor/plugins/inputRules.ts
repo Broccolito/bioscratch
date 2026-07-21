@@ -1,5 +1,5 @@
 import { inputRules, InputRule, wrappingInputRule, textblockTypeInputRule } from "prosemirror-inputrules";
-import { TextSelection } from "prosemirror-state";
+import { EditorState, TextSelection } from "prosemirror-state";
 import { MarkType } from "prosemirror-model";
 import { schema } from "../schema";
 
@@ -20,7 +20,7 @@ const blockquoteRule = wrappingInputRule(
 
 // Bullet list: "- " or "* "
 const bulletListRule = wrappingInputRule(
-  /^\s*[-*]\s$/,
+  /^\s*[-*+]\s$/,
   schema.nodes.bullet_list
 );
 
@@ -91,10 +91,25 @@ const hrRule = new InputRule(/^(?:---|\*\*\*|___)\s$/, (state, _match, start) =>
 
 // ---- Inline mark input rules (live conversion) ---------------------------
 
+function hasUnclosedBacktickBefore(state: EditorState, start: number): boolean {
+  const $start = state.doc.resolve(start);
+  const prefix = $start.parent.textBetween(0, $start.parentOffset, "", "");
+  let count = 0;
+  for (let index = 0; index < prefix.length; index += 1) {
+    if (prefix[index] === "`" && (index === 0 || prefix[index - 1] !== "\\")) {
+      count += 1;
+    }
+  }
+  return count % 2 === 1;
+}
+
 function markInputRule(regexp: RegExp, markType: MarkType) {
   return new InputRule(regexp, (state, match, start, end) => {
     const $start = state.doc.resolve(start);
     if ($start.parent.type.spec.code) return null;
+    if (markType !== schema.marks.code && hasUnclosedBacktickBefore(state, start)) {
+      return null;
+    }
 
     const captured = match[match.length - 1];
     if (!captured) return null;
@@ -126,6 +141,8 @@ function markInputRule(regexp: RegExp, markType: MarkType) {
 
 const boldStarRule = markInputRule(/\*\*([^*]+)\*\*$/, schema.marks.bold);
 const italicStarRule = markInputRule(/(?<!\*)\*([^*]+)\*$/, schema.marks.italic);
+const boldUnderscoreRule = markInputRule(/(?<![\w_])__([^_\n]+)__$/, schema.marks.bold);
+const italicUnderscoreRule = markInputRule(/(?<![\w_])_([^_\n]+)_$/, schema.marks.italic);
 const codeRule = markInputRule(/`([^`]+)`$/, schema.marks.code);
 const strikeRule = markInputRule(/~~([^~]+)~~$/, schema.marks.strikethrough);
 
@@ -134,10 +151,25 @@ const strikeRule = markInputRule(/~~([^~]+)~~$/, schema.marks.strikethrough);
 const linkRule = new InputRule(
   /(?<!!)\[([^\[\]]+)\]\(([^)]+)\)(.)$/,
   (state, match, start, end) => {
+    if (hasUnclosedBacktickBefore(state, start)) return null;
     const [, linkText, href, trailing] = match;
     const { tr } = state;
     const mark = schema.marks.link.create({ href: href.trim() });
     tr.replaceWith(start, end, [schema.text(linkText, [mark]), schema.text(trailing)]);
+    return tr;
+  }
+);
+
+const mathInlineRule = new InputRule(
+  /(?<![$\\])\$([^$\n]+)\$(.)$/,
+  (state, match, start, end) => {
+    if (hasUnclosedBacktickBefore(state, start)) return null;
+    const [, math, trailing] = match;
+    const { tr } = state;
+    tr.replaceWith(start, end, [
+      schema.nodes.math_inline.create({ math }),
+      schema.text(trailing),
+    ]);
     return tr;
   }
 );
@@ -160,9 +192,12 @@ export function buildInputRules() {
       hrRule,
       boldStarRule,
       italicStarRule,
+      boldUnderscoreRule,
+      italicUnderscoreRule,
       codeRule,
       strikeRule,
       linkRule,
+      mathInlineRule,
     ],
   });
 }

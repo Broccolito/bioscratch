@@ -134,10 +134,14 @@ function deleteWholeTable(view: EditorView, cell: HTMLElement): void {
     if (tablePos !== -1) return false;
     if (node.type.spec.tableRole !== "table") return true;
     const dom = view.nodeDOM(pos);
-    if (dom === targetTable) {
+    const element = dom instanceof HTMLElement ? dom : null;
+    const renderedTable = element?.matches("table")
+      ? element
+      : element?.querySelector(":scope > table");
+    if (renderedTable === targetTable) {
       tablePos = pos;
     }
-    return dom !== targetTable;
+    return renderedTable !== targetTable;
   });
 
   if (tablePos !== -1) {

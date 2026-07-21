@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.5.0
+
+- Open Markdown files in Bioscratch consistently from Explorer, chat links,
+  other extensions, and restored editor tabs when the default-editor setting
+  is enabled.
+- Improved Markdown typing and paste behavior for inline code, emphasis,
+  links, inline math, horizontal rules, Mermaid fences, lists, and rich HTML.
+- Expanded table editing with predictable Tab and Shift+Tab navigation,
+  automatic row creation, hard breaks, inline formatting, safe pipe escaping,
+  and stable whole-table deletion.
+- Fixed nested-list indentation and serialization in both the desktop and
+  VS Code editors.
+- Preserved surrounding inline formatting when plain or rich text is pasted,
+  including inside inline code.
+
 ## 0.4.0
 
 - Fixed inline-code insertion, deletion, replacement, editing, and Markdown

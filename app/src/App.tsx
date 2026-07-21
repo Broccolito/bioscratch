@@ -7,6 +7,7 @@ import { docToMarkdown } from "./editor/serialization/markdownExport";
 import { getDocStats } from "./lib/stats";
 import { exportToHtml, exportToPdf } from "./lib/export";
 import { getFileMode, getCodeLanguage, FileMode } from "./lib/fileMode";
+import { autosaveKeyForDiscard, saveBeforeClose } from "./lib/closeFlow";
 import { useTheme } from "./hooks/useTheme";
 import {
   fetchUserThemes,
@@ -30,6 +31,7 @@ import LargeFileDialog from "./components/LargeFileDialog";
 import ThemeSelector from "./components/ThemeSelector";
 import UpdateDialog from "./components/UpdateDialog";
 import RecentFilesDialog from "./components/RecentFilesDialog";
+import CloseDocumentDialog from "./components/CloseDocumentDialog";
 
 import "./styles/app.css";
 
@@ -112,7 +114,12 @@ const App: React.FC = () => {
     const saved = localStorage.getItem("bioscratch-font-scale");
     return saved ? Math.max(60, Math.min(200, parseInt(saved, 10))) : 100;
   });
-  const { recentFiles, addRecentFile, removeRecentFile } = useRecentFiles();
+  const {
+    recentFiles,
+    addRecentFile,
+    removeRecentFile,
+    refreshRecentFiles,
+  } = useRecentFiles();
 
   // Load user themes on mount
   useEffect(() => {
@@ -194,6 +201,13 @@ const App: React.FC = () => {
 
   const [searchVisible, setSearchVisible] = useState(false);
   const [recovery, setRecovery] = useState<RecoveryData | null>(null);
+  const [pendingClose, setPendingClose] = useState<{
+    tabId: string;
+    label: string;
+    filePath: string | null;
+  } | null>(null);
+  const [pendingSaveCloseId, setPendingSaveCloseId] = useState<string | null>(null);
+  const [closeSaving, setCloseSaving] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const draggingTabIdRef = useRef<string | null>(null);
@@ -306,8 +320,9 @@ const App: React.FC = () => {
   const suppressWatchUntilRef = useRef(0);
   // Last content we read from disk — used to detect external changes
   const lastDiskContentRef = useRef<string>("");
-  // Forward ref so handleCloseTab can call handleSave before it's declared
-  const handleSaveRef = useRef<() => Promise<void>>(() => Promise.resolve());
+  // Forward ref so the close flow can call handleSave before it's declared.
+  // A false result means the save dialog was cancelled or the write failed.
+  const handleSaveRef = useRef<() => Promise<boolean>>(async () => false);
   // Refs for menu-action event handler (avoids stale closures across re-renders)
   const handleNewRef = useRef<() => void>(() => {});
   const handleOpenRef = useRef<() => void>(() => {});
@@ -585,31 +600,8 @@ const App: React.FC = () => {
   useEffect(() => { handleNewRef.current = handleNew; }, [handleNew]);
 
   // ---- Close tab ----
-  const handleCloseTab = useCallback(
-    (id: string, skipDirtyCheck = false) => {
-      const tabMeta = tabs.find((t) => t.id === id);
-      const stored = storedTabsRef.current.get(id);
-      const isDirty = id === activeTabId ? dirty : stored?.dirty ?? false;
-
-      if (isDirty && !skipDirtyCheck) {
-        const label = tabMeta?.filePath
-          ? tabMeta.filePath.split("/").pop()
-          : "Blank";
-        if (id === activeTabId) {
-          // Active tab: offer to save first
-          const saveFirst = window.confirm(
-            `"${label}" has unsaved changes.\n\nOK to save and close — Cancel to discard and close.`
-          );
-          if (saveFirst) {
-            handleSaveRef.current().then(() => handleCloseTab(id, true));
-            return;
-          }
-        } else {
-          // Background tab: just confirm discard
-          if (!window.confirm(`"${label}" has unsaved changes. Discard and close?`)) return;
-        }
-      }
-
+  const closeTabImmediately = useCallback(
+    (id: string) => {
       storedTabsRef.current.delete(id);
 
       setTabs((prev) => {
@@ -650,7 +642,34 @@ const App: React.FC = () => {
         return remaining;
       });
     },
-    [tabs, activeTabId, dirty, restoreTab]
+    [activeTabId, restoreTab]
+  );
+  const closeTabImmediatelyRef = useRef(closeTabImmediately);
+  useEffect(() => {
+    closeTabImmediatelyRef.current = closeTabImmediately;
+  }, [closeTabImmediately]);
+
+  const handleCloseTab = useCallback(
+    (id: string, skipDirtyCheck = false) => {
+      const tabMeta = tabs.find((tab) => tab.id === id);
+      if (!tabMeta) return;
+      const stored = storedTabsRef.current.get(id);
+      const isDirty = id === activeTabId ? dirty : stored?.dirty ?? tabMeta.dirty;
+
+      if (isDirty && !skipDirtyCheck) {
+        const targetPath = id === activeTabId
+          ? filePath
+          : stored?.filePath ?? tabMeta.filePath;
+        const label = targetPath
+          ? targetPath.replace(/\\/g, "/").split("/").pop() || targetPath
+          : "Blank";
+        setPendingClose({ tabId: id, label, filePath: targetPath });
+        return;
+      }
+
+      closeTabImmediately(id);
+    },
+    [tabs, activeTabId, dirty, filePath, closeTabImmediately]
   );
 
   // ---- Helper: load file content into a new tab (stashes the current tab) ----
@@ -720,23 +739,23 @@ const App: React.FC = () => {
   }, [tabs, activeTabId, addRecentFile, stashActiveTab, handleSelectTab, doOpenFile]);
 
   // ---- Save ----
-  const handleSave = useCallback(async () => {
+  const handleSave = useCallback(async (): Promise<boolean> => {
     const view = viewRef.current;
-    if (!view) return;
-
-    // For markdown, serialize from ProseMirror doc; for code/plaintext use raw content
-    const saveContent = fileModeRef.current === "markdown"
-      ? docToMarkdown(view.state.doc)
-      : (view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "");
-    let savePath = filePath;
-
-    if (!savePath) {
-      const path = await invoke<string | null>("show_save_dialog");
-      if (!path) return;
-      savePath = path;
-    }
+    if (!view) return false;
 
     try {
+      // For markdown, serialize from ProseMirror doc; for code/plaintext use raw content
+      const saveContent = fileModeRef.current === "markdown"
+        ? docToMarkdown(view.state.doc)
+        : (view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "");
+      let savePath = filePath;
+
+      if (!savePath) {
+        const path = await invoke<string | null>("show_save_dialog");
+        if (!path) return false;
+        savePath = path;
+      }
+
       suppressWatchUntilRef.current = Date.now() + 2000;
       await invoke("write_file", { path: savePath, content: saveContent });
       lastDiskContentRef.current = saveContent;
@@ -749,13 +768,55 @@ const App: React.FC = () => {
       addRecentFile(savePath);
       await deleteAutosave(savePath).catch(() => {});
       await deleteAutosave("__untitled__").catch(() => {});
+      return true;
     } catch (e) {
       console.error("Failed to save:", e);
+      return false;
     }
   }, [filePath, activeTabId, addRecentFile, syncTabMeta]);
   // Keep ref current so handleCloseTab (declared before handleSave) can call it
   useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
   useEffect(() => { handleOpenRef.current = handleOpen; }, [handleOpen]);
+
+  const handleCancelClose = useCallback(() => {
+    if (closeSaving) return;
+    setPendingClose(null);
+    setPendingSaveCloseId(null);
+  }, [closeSaving]);
+
+  const handleDeleteClose = useCallback(() => {
+    if (!pendingClose || closeSaving) return;
+    const { tabId, filePath: targetPath } = pendingClose;
+    setPendingClose(null);
+    setPendingSaveCloseId(null);
+    // Delete means discard the unsaved document/changes. Remove its recovery
+    // copy as well so reopening cannot resurrect content the user discarded.
+    void deleteAutosave(autosaveKeyForDiscard(targetPath)).catch(() => {});
+    closeTabImmediately(tabId);
+  }, [pendingClose, closeSaving, closeTabImmediately]);
+
+  const handleSaveClose = useCallback(() => {
+    if (!pendingClose || closeSaving) return;
+    setCloseSaving(true);
+    if (pendingClose.tabId !== activeTabId) {
+      // The shared EditorView can only serialize the active tab. Selecting a
+      // background target restores its exact stored state before the effect
+      // below performs the save.
+      handleSelectTab(pendingClose.tabId);
+    }
+    setPendingSaveCloseId(pendingClose.tabId);
+  }, [pendingClose, closeSaving, activeTabId, handleSelectTab]);
+
+  useEffect(() => {
+    if (!pendingSaveCloseId || activeTabId !== pendingSaveCloseId) return;
+    void saveBeforeClose(handleSaveRef.current, () => {
+      setPendingClose(null);
+      closeTabImmediatelyRef.current(pendingSaveCloseId);
+    }).then(() => {
+      setCloseSaving(false);
+      setPendingSaveCloseId(null);
+    });
+  }, [pendingSaveCloseId, activeTabId]);
 
   // ---- Open file by path (used by OS "Open With" and default-app handler) ----
   const openFileByPath = useCallback(async (path: string): Promise<boolean> => {
@@ -953,7 +1014,9 @@ const App: React.FC = () => {
       switch (event.payload) {
         case "new":         handleNewRef.current(); break;
         case "open":        handleOpenRef.current(); break;
-        case "open-recent": setRecentPickerOpen(true); break;
+        case "open-recent":
+          void refreshRecentFiles().finally(() => setRecentPickerOpen(true));
+          break;
         case "save":        handleSaveRef.current(); break;
         case "save-as":     handleSaveAsRef.current(); break;
         case "export-html": handleExportHtmlRef.current(); break;
@@ -967,7 +1030,7 @@ const App: React.FC = () => {
       }
     });
     return () => { promise.then((fn) => fn()); };
-  }, []);
+  }, [refreshRecentFiles]);
 
   // ---- OS "Open With" / default-app file handler ----
   useEffect(() => {
@@ -1031,6 +1094,7 @@ const App: React.FC = () => {
   // ---- Keyboard shortcuts ----
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (pendingClose) return;
       const mod = e.metaKey || e.ctrlKey;
       if (mod && e.key === "s") {
         e.preventDefault();
@@ -1076,7 +1140,7 @@ const App: React.FC = () => {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleSave, handleOpen, handleNew, handleNewWindow, handleCloseTab, handleSelectTab, activeTabId, searchVisible, setFontScale]);
+  }, [handleSave, handleOpen, handleNew, handleNewWindow, handleCloseTab, handleSelectTab, activeTabId, searchVisible, setFontScale, pendingClose]);
 
   return (
     <div className="app-container">
@@ -1196,6 +1260,17 @@ const App: React.FC = () => {
             doOpenFile(path, fileContent, mode, language);
           }}
           onCancel={() => setPendingLargeFile(null)}
+        />
+      )}
+
+      {pendingClose && (
+        <CloseDocumentDialog
+          label={pendingClose.label}
+          hasSavedFile={pendingClose.filePath !== null}
+          saving={closeSaving}
+          onDelete={handleDeleteClose}
+          onCancel={handleCancelClose}
+          onSave={handleSaveClose}
         />
       )}
 
