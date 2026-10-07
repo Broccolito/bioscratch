@@ -106,6 +106,7 @@ npm run tauri build    # production .dmg
 
 - **Wanjun Gu** — creator and maintainer
 - **Tianlu Zhu** — contributor
+- **Ilan Ladabaum** — contributor
 
 ## Developer
 
