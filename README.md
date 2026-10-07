@@ -18,7 +18,7 @@ As `skill.md` files become a common way for researchers and engineers to represe
 
 **Opens almost anything** — `.md`, `.txt`, `.py`, `.r`, `.json`, `.yaml`, `.toml`, `.tex`, `.sql`, `.html`, `.ts`, `.go`, `.rs`, and more. Markdown-first, but works well for anything text-based.
 
-**Export to HTML and PDF** — One-click export from the toolbar. **HTML export** produces a self-contained file with KaTeX math, syntax highlighting, and Mermaid diagrams bundled in. **PDF export** uses Pandoc for properly typeset output — local images, inline or block, are resolved automatically regardless of where the file lives.
+**Export to HTML and PDF** — One-click export from the toolbar. **HTML export** produces a self-contained file with KaTeX math, syntax highlighting, and Mermaid diagrams bundled in. **PDF export** is rendered natively from the page you see — math, highlighted code, Mermaid diagrams, tables and local images included — with nothing extra to install.
 
 **Mermaid diagram support** — Write flowcharts, sequence diagrams, and ERDs in fenced code blocks. They render live in the editor and carry through into HTML exports.
 
@@ -41,11 +41,6 @@ macOS only for now. Both chips supported:
 
 Prefer to stay in VS Code? Install
 [Bioscratch from the VS Code Marketplace](https://marketplace.visualstudio.com/items?itemName=WanjunGu.bioscratch).
-
-> **PDF export requires Pandoc.** Install it once:
-> ```bash
-> brew install pandoc
-> ```
 
 ## Keyboard Shortcuts
 
@@ -101,7 +96,7 @@ npm run tauri build    # production .dmg
 | Math | KaTeX |
 | Syntax highlighting | highlight.js |
 | Diagrams | Mermaid |
-| PDF export | Pandoc |
+| PDF export | Native WebKit PDF rendering |
 
 ## Contributors
 
