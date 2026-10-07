@@ -517,6 +517,15 @@ span.image-inline-widget:hover img {
   cursor: default;
 }
 
+/* Front matter holding only tags: shown in the TagBar, so nothing appears in
+   the note unless the caret moves into the YAML source. */
+.frontmatter-view.frontmatter-tags-only:not(.frontmatter-active) {
+  margin: 0;
+}
+.frontmatter-view.frontmatter-tags-only:not(.frontmatter-active) .frontmatter-preview {
+  display: none;
+}
+
 /* Source (raw YAML): collapsed when the caret is elsewhere */
 .frontmatter-view:not(.frontmatter-active) .frontmatter-source-section {
   height: 0;

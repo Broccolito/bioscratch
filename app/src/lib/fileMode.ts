@@ -84,3 +84,32 @@ export function getCodeLanguage(path: string | null): string {
   const ext = path.split(".").pop()?.toLowerCase() ?? "";
   return CODE_LANG_MAP[ext] ?? "";
 }
+
+// Extensions Bioscratch opens as text (drag-drop, sidebar, quick switcher).
+const TEXT_EXTENSIONS = new Set([
+  // Markdown / text / data
+  "md","markdown","txt","text","csv","tsv","xml","json","json5","yaml","yml","toml","ini","env","cfg","conf","config",
+  // Web
+  "html","htm","css","scss","sass","less","js","jsx","ts","tsx","mjs","cjs","vue","svelte","astro",
+  // Systems / compiled
+  "c","h","cpp","cc","cxx","hpp","hxx","cs","java","kt","kts","scala","swift","m","mm","zig","v",
+  // Scripting
+  "py","pyw","rb","rbw","lua","pl","pm","php","sh","bash","zsh","fish","ps1","psm1","bat","cmd",
+  // Scientific / data science
+  "r","rmd","jl","ipynb","m","mat","f","f90","f95","for",
+  // Systems / DevOps
+  "rs","go","ex","exs","erl","hrl","hs","lhs","ml","mli","fs","fsx","fsi","clj","cljs","cljc","lisp","el","vim","lua",
+  // Config / infra
+  "dockerfile","makefile","cmake","gradle","properties","plist","tf","tfvars","hcl","nix","cabal",
+  // Docs / markup
+  "tex","rst","adoc","org","wiki",
+  // Misc
+  "sql","graphql","gql","proto","thrift","avsc","log","diff","patch",
+]);
+
+/** True for files Bioscratch can open in a tab. Extensionless names such as
+ *  `Makefile` match on the whole name. */
+export function isOpenableTextFile(path: string): boolean {
+  const name = path.split("/").pop() ?? "";
+  return TEXT_EXTENSIONS.has(name.split(".").pop()?.toLowerCase() ?? "");
+}

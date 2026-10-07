@@ -24,7 +24,7 @@ import { dropCursor } from "prosemirror-dropcursor";
 import { gapCursor } from "prosemirror-gapcursor";
 import { tableEditing, columnResizing } from "prosemirror-tables";
 import { renderMathInline, renderMathBlock } from "../lib/math";
-import { renderFrontmatterBanner } from "../lib/frontmatter";
+import { isTagsOnly, renderFrontmatterBanner } from "../lib/frontmatter";
 import "../styles/editor.css";
 import "../styles/markdown.css";
 
@@ -520,6 +520,9 @@ export class FrontmatterView implements NodeView {
   }
 
   renderBanner(source: string) {
+    // Front matter holding only tags is managed by the TagBar; keep it out of
+    // the note entirely (CSS hides it unless the caret is inside).
+    this.dom.classList.toggle("frontmatter-tags-only", isTagsOnly(source));
     try {
       const banner = renderFrontmatterBanner(source);
       this.preview.replaceChildren(banner);

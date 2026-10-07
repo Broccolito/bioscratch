@@ -166,12 +166,24 @@ function renderItem(key: string, value: unknown): HTMLElement {
   return li;
 }
 
+/** Front-matter keys holding note tags (lib/tags.ts). The TagBar shows and
+ *  edits them, so the banner leaves them out. */
+export const TAG_KEYS = ["tags", "tag"];
+
+const isTagKey = (key: string) => TAG_KEYS.includes(key.trim().toLowerCase());
+
+/** True when the front matter holds tags and nothing else. */
+export function isTagsOnly(yamlText: string): boolean {
+  const { entries } = parseFrontmatter(yamlText);
+  return entries.length > 0 && entries.every(([key]) => isTagKey(key));
+}
+
 /**
  * Build the banner element from raw YAML text. Empty frontmatter yields an
- * empty banner card with no placeholder text.
+ * empty banner card with no placeholder text. Tag keys are omitted.
  */
 export function renderFrontmatterBanner(yamlText: string): HTMLElement {
-  const { entries } = parseFrontmatter(yamlText);
+  const entries = parseFrontmatter(yamlText).entries.filter(([key]) => !isTagKey(key));
 
   const banner = document.createElement("div");
   banner.className = "fm-banner";

@@ -21,6 +21,8 @@ interface ToolbarProps {
   onExportPdf: () => void;
   onToggleSearch: () => void;
   onOpenThemeSelector: () => void;
+  sidebarVisible: boolean;
+  onToggleSidebar: () => void;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -35,6 +37,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onExportPdf,
   onToggleSearch,
   onOpenThemeSelector,
+  sidebarVisible,
+  onToggleSidebar,
 }) => {
   // File ops (Save, Save As, Export) need an open document.
   // Formatting ops (Paragraph → HR) need an open markdown document.
@@ -194,6 +198,18 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
   return (
     <div className="toolbar">
+      <button
+        className={`toolbar-btn icon-only${sidebarVisible ? " active" : ""}`}
+        onClick={onToggleSidebar}
+        title={sidebarVisible ? "Hide Sidebar (⌘\\)" : "Show Sidebar (⌘\\)"}
+        aria-label="Toggle sidebar"
+        aria-pressed={sidebarVisible}
+      >
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/>
+        </svg>
+      </button>
+      <div className="toolbar-separator" />
       {/* File operations */}
       <button className="toolbar-btn" onClick={onNew} title="New Tab (⌘T)">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
