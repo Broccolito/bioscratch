@@ -778,10 +778,19 @@ const App: React.FC = () => {
   useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
   useEffect(() => { handleOpenRef.current = handleOpen; }, [handleOpen]);
 
+  // Closing the window or quitting walks through each unsaved tab with the
+  // same Save / Delete / Cancel dialog (see src-tauri/src/unsaved.rs).
+  const [closeFlow, setCloseFlow] = useState<"window" | "quit" | null>(null);
+  const closeFlowRef = useRef(closeFlow);
+  useEffect(() => { closeFlowRef.current = closeFlow; }, [closeFlow]);
+
   const handleCancelClose = useCallback(() => {
     if (closeSaving) return;
     setPendingClose(null);
     setPendingSaveCloseId(null);
+    // Cancel on any document stops the whole window close / quit.
+    if (closeFlowRef.current === "quit") void invoke("cancel_quit");
+    setCloseFlow(null);
   }, [closeSaving]);
 
   const handleDeleteClose = useCallback(() => {
@@ -817,6 +826,39 @@ const App: React.FC = () => {
       setPendingSaveCloseId(null);
     });
   }, [pendingSaveCloseId, activeTabId]);
+
+  const handleCloseTabRef = useRef(handleCloseTab);
+  useEffect(() => { handleCloseTabRef.current = handleCloseTab; }, [handleCloseTab]);
+
+  useEffect(() => {
+    const start = (kind: "window" | "quit") => {
+      // A quit arriving during a window close takes over (it asks about the same tabs).
+      setCloseFlow((current) => (current === "quit" ? current : kind));
+    };
+    const unlistenClose = listen("close-requested", () => start("window"));
+    const unlistenQuit = listen("quit-requested", () => start("quit"));
+    return () => {
+      unlistenClose.then((f) => f());
+      unlistenQuit.then((f) => f());
+    };
+  }, []);
+
+  // Ask about the next unsaved tab once the previous answer has been handled;
+  // when none are left, let the window close or the app quit.
+  useEffect(() => {
+    if (!closeFlow || pendingClose || closeSaving || pendingSaveCloseId) return;
+    const nextDirty = tabs.find((t) =>
+      t.id === activeTabId ? dirty : storedTabsRef.current.get(t.id)?.dirty ?? t.dirty
+    );
+    if (nextDirty) {
+      // Show the document being asked about, like Word does.
+      if (nextDirty.id !== activeTabId) handleSelectTabRef.current(nextDirty.id);
+      handleCloseTabRef.current(nextDirty.id);
+      return;
+    }
+    setCloseFlow(null);
+    void invoke(closeFlow === "window" ? "close_window_confirmed" : "window_ready_to_quit");
+  }, [closeFlow, pendingClose, closeSaving, pendingSaveCloseId, tabs, activeTabId, dirty]);
 
   // ---- Open file by path (used by OS "Open With" and default-app handler) ----
   const openFileByPath = useCallback(async (path: string): Promise<boolean> => {

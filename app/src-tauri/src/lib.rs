@@ -7,6 +7,7 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_fs::FsExt;
 
 mod dev_bridge;
+mod unsaved;
 
 // Static storage so the pending file path is always accessible — even if
 // RunEvent::Opened fires before setup() has registered Tauri managed state.
@@ -1268,7 +1269,9 @@ pub fn run() {
             let about = PredefinedMenuItem::about(app, Some("About Bioscratch"), None)?;
             let check_updates = MenuItem::with_id(app, "check-updates", "Check for Updates…", true, None::<&str>)?;
             let sep_a1 = PredefinedMenuItem::separator(app)?;
-            let quit = PredefinedMenuItem::quit(app, Some("Quit Bioscratch"))?;
+            // Not PredefinedMenuItem::quit: quitting must first ask about
+            // unsaved changes (see unsaved.rs).
+            let quit = MenuItem::with_id(app, "quit", "Quit Bioscratch", true, Some("CmdOrCtrl+Q"))?;
             let app_menu = SubmenuBuilder::new(app, "Bioscratch")
                 .items(&[&about, &check_updates, &sep_a1, &quit])
                 .build()?;
@@ -1356,6 +1359,7 @@ pub fn run() {
 
         app.on_menu_event(|app_handle, event| {
                 match event.id().as_ref() {
+                    "quit" => unsaved::request_quit(app_handle),
                     "learn-more" => {
                         use tauri_plugin_opener::OpenerExt;
                         app_handle.opener()
@@ -1424,11 +1428,39 @@ pub fn run() {
             download_and_install,
             quit_app,
             get_initial_file,
+            unsaved::window_ready_to_quit,
+            unsaved::cancel_quit,
+            unsaved::close_window_confirmed,
             dev_bridge::__dev_bridge_result,
         ])
         .build(tauri::generate_context!())
         .expect("error while running tauri application")
         .run(|app_handle, event| {
+            // Closing a Bioscratch window: let the frontend ask about unsaved
+            // documents first; it calls close_window_confirmed when done.
+            if let tauri::RunEvent::WindowEvent {
+                label,
+                event: tauri::WindowEvent::CloseRequested { api, .. },
+                ..
+            } = &event
+            {
+                if let Some(window) = app_handle.get_webview_window(label) {
+                    api.prevent_close();
+                    window.emit("close-requested", ()).ok();
+                }
+            }
+
+            // Quit requested by the OS (Dock, logout): review unsaved documents
+            // unless a quit is already under way. app.exit(0) carries a code,
+            // and the last window closing leaves none to ask; both go through.
+            if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
+                let has_windows = !app_handle.webview_windows().is_empty();
+                if code.is_none() && has_windows && !unsaved::is_quitting() {
+                    api.prevent_exit();
+                    unsaved::request_quit(app_handle);
+                }
+            }
+
             // Handle macOS "Open With" / default-app file-open events.
             // RunEvent::Opened fires when the OS asks the app to open a file
             // (both when the app is already running and when it was just launched).

@@ -24,7 +24,7 @@ As `skill.md` files become a common way for researchers and engineers to represe
 
 **30+ themes, fully customizable** — Ships with themes inspired by GitHub, IBM Carbon, Material Design, Apple, Spotify, NASA, Atlassian, Twitter/X, Medium, BBC, Audi, Mailchimp, Ubuntu, Ant Design, and more — **light and dark variants for each**. Don't like any of them? Drop a YAML file in the user themes folder and it appears in the selector immediately.
 
-**Multi-tab, multi-window** — Open multiple files in tabs. **Drag a tab outside the tab bar** to detach it into its own window. Autosave runs every 30 seconds in the background, and crash recovery kicks in on next open if the autosave diverges from disk.
+**Multi-tab, multi-window** — Open multiple files in tabs. **Drag a tab outside the tab bar** to detach it into its own window. Autosave runs every 30 seconds in the background, and crash recovery kicks in on next open if the autosave diverges from disk. Closing a window or quitting asks before discarding unsaved changes.
 
 **Free and open source** — No account, no telemetry, no subscription. MIT licensed.
 
