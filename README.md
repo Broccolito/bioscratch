@@ -56,6 +56,7 @@ Prefer to stay in VS Code? Install
 | Save As | `⌘⇧S` |
 | New tab | `⌘T` |
 | Close tab | `⌘W` |
+| Go to tab 1–8 / last tab | `⌘1`–`⌘8` / `⌘9` |
 | Find | `⌘F` |
 | Bold | `⌘B` |
 | Italic | `⌘I` |

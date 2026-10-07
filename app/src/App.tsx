@@ -1138,7 +1138,14 @@ const App: React.FC = () => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (pendingClose) return;
       const mod = e.metaKey || e.ctrlKey;
-      if (mod && e.key === "s") {
+      if (mod && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
+        // Like browsers: ⌘1–⌘8 jump to that tab, ⌘9 to the last one.
+        e.preventDefault();
+        const currentTabs = tabsRef.current;
+        const n = Number(e.key);
+        const target = n === 9 ? currentTabs[currentTabs.length - 1] : currentTabs[n - 1];
+        if (target) handleSelectTabRef.current(target.id);
+      } else if (mod && e.key === "s") {
         e.preventDefault();
         handleSave();
       } else if (mod && e.key === "o") {
