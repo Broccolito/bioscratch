@@ -138,10 +138,9 @@ body {
   position: relative;
 }
 
+/* Rendered outside the (clipping) toolbar; Toolbar.tsx sets top/left. */
 .export-menu {
   position: absolute;
-  top: calc(100% + 3px);
-  left: 0;
   background: var(--bg-toolbar);
   border: 1px solid var(--border-color);
   border-radius: 6px;
