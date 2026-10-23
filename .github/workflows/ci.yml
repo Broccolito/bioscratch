@@ -27,8 +27,13 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: app/package-lock.json
+          cache-dependency-path: |
+            app/package-lock.json
+            extension/package-lock.json
       - run: npm ci
+      - name: Install shared editor test dependencies
+        run: npm ci
+        working-directory: extension
       - run: npm audit --audit-level=low
       - run: npm run check:versions
       - run: npm test
