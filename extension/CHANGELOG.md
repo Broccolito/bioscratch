@@ -6,6 +6,8 @@
   note search and tags. These desktop navigation features are not part of the
   VS Code custom editor.
 - Refreshed editor and packaging dependencies for security fixes.
+- HTML exports embed math styles and fonts for offline viewing and preserve
+  rendered diagram labels while removing editor controls.
 
 ## 0.5.0
 
