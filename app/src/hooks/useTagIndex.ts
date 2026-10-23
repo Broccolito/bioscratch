@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { readWorkspaceMetadata, isUnder, type NoteMetadata } from "../lib/workspace";
 import { buildTagIndex, metadataFromContent, withLiveTags, type TagIndex } from "../lib/tagIndex";
+import { frontmatterTags } from "../lib/tags";
+import { getFileMode } from "../lib/fileMode";
 
 /**
  * Tag index for the active workspace folder. Built by walking the folder
  * once and kept current by `updateNote` whenever the app saves a note. Open
- * notes report their current (maybe unsaved) tags with `setLiveTags`, which
- * take precedence until `dropLiveTags`. Edits made outside Bioscratch show up
- * after `refresh`.
+ * dirty notes report their current text with `setDirtyNotes`. Only those
+ * notes override disk metadata; clean/closed notes follow `refresh`.
  */
 export function useTagIndex(root: string | null) {
   const [notes, setNotes] = useState<NoteMetadata[]>([]);
@@ -56,12 +57,20 @@ export function useTagIndex(root: string | null) {
     setNotes((prev) => [...prev.filter((n) => n.path !== path), meta]);
   }, []);
 
-  /** Report an open note's current tags. */
-  const setLiveTags = useCallback((path: string, tags: string[]) => {
+  /** Replace the overlay with every currently open dirty Markdown note. */
+  const setDirtyNotes = useCallback((openDocs: Map<string, string>) => {
+    const next = new Map<string, string[]>();
+    for (const [path, content] of openDocs) {
+      if (getFileMode(path) !== "markdown") continue;
+      // Keep empty tags too: removing all tags must mask the saved metadata.
+      next.set(path, frontmatterTags(metadataFromContent(path, content).frontmatter));
+    }
     setLive((prev) => {
-      const current = prev.get(path);
-      if (current && current.length === tags.length && current.every((t, i) => t === tags[i])) return prev;
-      return new Map(prev).set(path, tags);
+      const unchanged = prev.size === next.size && [...next].every(([path, tags]) => {
+        const current = prev.get(path);
+        return current && current.length === tags.length && current.every((tag, i) => tag === tags[i]);
+      });
+      return unchanged ? prev : next;
     });
   }, []);
 
@@ -76,5 +85,5 @@ export function useTagIndex(root: string | null) {
   const diskIndex = useMemo(() => buildTagIndex(notes), [notes]);
   const index: TagIndex = useMemo(() => withLiveTags(diskIndex, live, root), [diskIndex, live, root]);
 
-  return { index, truncated, loading, error, refresh, updateNote, setLiveTags, dropLiveTags };
+  return { index, truncated, loading, error, refresh, updateNote, setDirtyNotes, dropLiveTags };
 }

@@ -180,7 +180,7 @@ const App: React.FC = () => {
   // Wait until persisted folders are re-granted, or the first scan is refused.
   const tagIndex = useTagIndex(workspaceLoaded ? activeRoot : null);
   const updateTagIndex = tagIndex.updateNote;
-  const { setLiveTags, dropLiveTags } = tagIndex;
+  const { setDirtyNotes, dropLiveTags } = tagIndex;
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [filterTree, setFilterTree] = useState(false);
   // Folder at the top of the Files tree (double-click a folder to open it);
@@ -1283,14 +1283,11 @@ const App: React.FC = () => {
     return docs;
   }, [tabs, activeTabId, dirty, content]);
 
-  // Report the active note's current tags (saved or not) to the tag index, so
-  // a tag just added is offered in the next note straight away. `content`
-  // changes on every edit, load and tab switch.
+  // Unsaved notes override the disk index, including background dirty tabs.
+  // Replace the whole overlay so clean/abandoned paths can refresh from disk.
   useEffect(() => {
-    const view = viewRef.current;
-    if (!filePath || fileMode !== "markdown" || !view) return;
-    setLiveTags(filePath, docTags(view.state.doc));
-  }, [content, filePath, fileMode, setLiveTags]);
+    setDirtyNotes(openDocs);
+  }, [openDocs, setDirtyNotes]);
 
   // Follow the active file in the tree.
   useEffect(() => {
