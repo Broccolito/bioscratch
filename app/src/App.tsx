@@ -10,6 +10,7 @@ import { getFileMode, getCodeLanguage, FileMode, isOpenableTextFile } from "./li
 import { autosaveKeyForDiscard, canCompleteSaveClose, saveBeforeClose, type CloseFlow } from "./lib/closeFlow";
 import { detachDocument, type DetachDocument } from "./lib/detachFlow";
 import { useTheme } from "./hooks/useTheme";
+import { planRecovery } from "./lib/recoveryFlow";
 import {
   fetchUserThemes,
   saveUserTheme,
@@ -776,7 +777,7 @@ const App: React.FC = () => {
 
   // ---- Helper: load file content into a new tab (stashes the current tab) ----
   const doOpenFile = useCallback(
-    (path: string, fileContent: string, mode: FileMode, language: string): string => {
+    (path: string | null, fileContent: string, mode: FileMode, language: string): string => {
       stashActiveTab();
       const id = makeTabId();
       const view = viewRef.current;
@@ -1602,9 +1603,43 @@ const App: React.FC = () => {
   // ---- Recovery ----
   const handleRestore = useCallback(() => {
     if (!recovery) return;
-    loadDocContent(recovery.content, recovery.filePath);
+    const plan = planRecovery(recovery, tabsRef.current.map((tab) => ({
+      ...tab,
+      dirty: tab.id === activeTabIdRef.current
+        ? dirtyRef.current
+        : storedTabsRef.current.get(tab.id)?.dirty ?? tab.dirty,
+    })));
+    if (plan.tabId === activeTabIdRef.current) {
+      loadDocContent(plan.content, plan.filePath, "markdown", "");
+    } else if (plan.tabId) {
+      const stored = storedTabsRef.current.get(plan.tabId);
+      storedTabsRef.current.set(plan.tabId, {
+        id: plan.tabId,
+        filePath: plan.filePath,
+        content: plan.content,
+        dirty: true,
+        fileMode: "markdown",
+        codeLanguage: "",
+        scrollTop: stored?.scrollTop ?? 0,
+        editorState: makeEditorStateForContent(plan.content, "markdown", "", viewRef.current?.state.plugins ?? []),
+      });
+      // Stash the active document before displaying the recovered owner.
+      handleSelectTabRef.current(plan.tabId);
+    } else {
+      // The owner was edited, closed, or navigated elsewhere while autosave
+      // was loading. Keep both versions: restore this one as an unsaved draft.
+      plan.tabId = doOpenFileRef.current(null, plan.content, "markdown", "");
+    }
+    activeTabIdRef.current = plan.tabId;
+    filePathRef.current = plan.filePath;
+    contentRef.current = plan.content;
+    dirtyRef.current = true;
+    fileModeRef.current = "markdown";
+    codeLanguageRef.current = "";
+    setDirty(true);
+    syncTabMeta(plan.tabId, { filePath: plan.filePath, dirty: true });
     setRecovery(null);
-  }, [recovery, loadDocContent]);
+  }, [recovery, loadDocContent, syncTabMeta]);
 
   const handleDiscard = useCallback(async () => {
     if (!recovery) return;

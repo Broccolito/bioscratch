@@ -168,6 +168,7 @@ fn walk_files(root: &Path, mut visit: impl FnMut(&Path) -> bool) -> bool {
     let walker = ignore::WalkBuilder::new(root)
         .hidden(true)
         .git_ignore(true)
+        .require_git(false)
         .git_global(false)
         .follow_links(false)
         .filter_entry(move |entry| {
@@ -743,6 +744,23 @@ mod tests {
         assert_ne!(first.load(Ordering::SeqCst), first_generation);
         assert_eq!(first.load(Ordering::SeqCst), newer_generation);
         assert_eq!(other.load(Ordering::SeqCst), other_generation);
+    }
+
+    #[test]
+    fn ordinary_folders_honor_gitignore_without_a_git_repository() {
+        let tmp = std::env::temp_dir().join(format!("bioscratch-ignore-test-{}", std::process::id()));
+        std::fs::create_dir_all(tmp.join("ignored-folder")).unwrap();
+        std::fs::write(tmp.join(".gitignore"), "ignored.md\nignored-folder/\n").unwrap();
+        std::fs::write(tmp.join("ignored.md"), "not searched").unwrap();
+        std::fs::write(tmp.join("ignored-folder/note.md"), "not indexed").unwrap();
+        std::fs::write(tmp.join("kept.md"), "searched and indexed").unwrap();
+        let mut files = Vec::new();
+        assert!(!super::walk_files(&tmp, |path| {
+            files.push(path.strip_prefix(&tmp).unwrap().to_path_buf());
+            true
+        }));
+        assert_eq!(files, vec![std::path::PathBuf::from("kept.md")]);
+        std::fs::remove_dir_all(tmp).unwrap();
     }
 
     #[test]
