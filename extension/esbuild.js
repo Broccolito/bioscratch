@@ -2,6 +2,8 @@
 //   1. Extension host  — Node/CommonJS, `vscode` external           → dist/extension.js
 //   2. Webview app     — browser/IIFE, bundles React + ProseMirror  → dist/webview.js (+ webview.css)
 const esbuild = require("esbuild");
+const { dirname } = require("node:path");
+const { readEmbeddedStylesheet } = require("../scripts/embed-styles.cjs");
 
 const production = process.argv.includes("--production");
 const watch = process.argv.includes("--watch");
@@ -26,6 +28,19 @@ const hostBuild = {
 
 const webviewBuild = {
   ...common,
+  plugins: [{
+    name: "bioscratch-export-css",
+    setup(build) {
+      build.onResolve({ filter: /\.css\?embedded$/ }, (args) => ({
+        path: require.resolve(args.path.slice(0, -9), { paths: [dirname(args.importer)] }),
+        namespace: "export-css",
+      }));
+      build.onLoad({ filter: /.*/, namespace: "export-css" }, (args) => ({
+        contents: `export default ${JSON.stringify(readEmbeddedStylesheet(args.path))};`,
+        loader: "js",
+      }));
+    },
+  }],
   entryPoints: ["src/webview/index.tsx"],
   outfile: "dist/webview.js",
   platform: "browser",

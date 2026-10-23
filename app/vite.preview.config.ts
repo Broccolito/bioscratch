@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react";
+import { exportStylesPlugin } from "./exportStylesPlugin";
 import { resolve } from "path";
 
 // Standalone build of the read-only Quick Look preview page.
@@ -8,7 +9,7 @@ import { resolve } from "path";
 // `file://` URL inside the macOS Quick Look sandbox (where there is no dev
 // server / custom protocol). Output is fully self-contained in `dist-preview/`.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [exportStylesPlugin(), react()],
   base: "./",
   build: {
     outDir: "dist-preview",

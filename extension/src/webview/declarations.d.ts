@@ -7,3 +7,9 @@ declare module "*.yaml" {
 // Side-effect CSS imports are handled by esbuild's `css` loader; declare them
 // so TypeScript accepts `import "./foo.css"`.
 declare module "*.css";
+
+// Stylesheets with embedded font data for standalone HTML/PDF exports.
+declare module "*.css?embedded" {
+  const content: string;
+  export default content;
+}

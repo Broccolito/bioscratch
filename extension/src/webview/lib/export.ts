@@ -1,4 +1,8 @@
 import DOMPurify from "dompurify";
+import { renderMath } from "./math";
+import { cloneStaticEditor } from "../../../../shared/staticExport";
+import katexCss from "katex/dist/katex.min.css?embedded";
+import highlightCss from "highlight.js/styles/github.css?embedded";
 import { saveHtml } from "../bridge";
 
 function escapeHtml(value: string): string {
@@ -10,41 +14,29 @@ function escapeHtml(value: string): string {
     .replace(/'/g, "&#039;");
 }
 
-function buildHtmlBody(): string {
+export function buildHtmlBody(): string {
   const editorEl = document.querySelector(".ProseMirror");
   if (!editorEl) return "";
-
-  // Clone DOM so we can transform it without affecting the live editor
-  const clone = editorEl.cloneNode(true) as HTMLElement;
-
-  // Export the already-rendered, sanitized SVG instead of executing Mermaid in
-  // the generated file. This keeps exported documents script-free.
-  clone.querySelectorAll(".mermaid-block-view").forEach((block) => {
-    const preview = block.querySelector(".mermaid-preview");
-    if (preview) {
-      const div = document.createElement("div");
-      div.className = "mermaid";
-      div.append(...Array.from(preview.childNodes).map((node) => node.cloneNode(true)));
-      block.replaceWith(div);
-    }
-  });
+  const clone = cloneStaticEditor(editorEl, renderMath);
 
   return DOMPurify.sanitize(clone.innerHTML, {
-    ADD_TAGS: ["math", "mrow", "mi", "mo", "mn", "msup", "msub", "mfrac", "mspace", "mtext", "annotation", "semantics"],
+    // Mermaid labels use HTML inside SVG foreignObject; its children still
+    // pass through the normal HTML sanitizer.
+    HTML_INTEGRATION_POINTS: { foreignobject: true },
+    ADD_TAGS: ["math", "mrow", "mi", "mo", "mn", "msup", "msub", "mfrac", "mspace", "mtext", "annotation", "semantics", "foreignObject"],
     ADD_ATTR: ["xmlns", "class", "id", "style", "aria-hidden", "focusable"],
   });
 }
 
-function buildHtmlDocument(title: string, bodyHtml: string): string {
+export function buildHtmlDocument(title: string, bodyHtml: string): string {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline' https://cdn.jsdelivr.net https://cdnjs.cloudflare.com; font-src data: https://cdn.jsdelivr.net https://cdnjs.cloudflare.com" />
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https:; style-src 'unsafe-inline'; font-src data:; base-uri 'none'; form-action 'none'" />
 <title>${escapeHtml(title)}</title>
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css" />
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
+<style>${katexCss}\n${highlightCss}</style>
 <style>
   body {
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
@@ -69,7 +61,8 @@ function buildHtmlDocument(title: string, bodyHtml: string): string {
   img { max-width: 100%; height: auto; }
   hr { border: none; border-top: 1px solid #e1e4e8; margin: 2em 0; }
   .katex-display { margin: 1em 0; }
-  .mermaid { text-align: center; margin: 1.2em 0; }
+  .mermaid-print { text-align: center; margin: 1.2em 0; }
+  .mermaid-print svg { max-width: 100%; height: auto; }
 </style>
 </head>
 <body>
