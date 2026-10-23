@@ -8,6 +8,7 @@ import { getDocStats } from "./lib/stats";
 import { exportToHtml, exportToPdf } from "./lib/export";
 import { getFileMode, getCodeLanguage, FileMode, isOpenableTextFile } from "./lib/fileMode";
 import { autosaveKeyForDiscard, canCompleteSaveClose, saveBeforeClose, type CloseFlow } from "./lib/closeFlow";
+import { detachDocument, type DetachDocument } from "./lib/detachFlow";
 import { useTheme } from "./hooks/useTheme";
 import {
   fetchUserThemes,
@@ -1412,55 +1413,49 @@ const App: React.FC = () => {
   }, []);
 
   // ---- Detach tab into new window ----
+  const detachingTabsRef = useRef(new Set<string>());
   const handleDetachTab = useCallback(async (tabId: string) => {
-    if (tabsRef.current.length <= 1) return; // never detach the only tab
-    const tab = tabsRef.current.find((t) => t.id === tabId);
-    if (!tab) return;
-
-    const stored = storedTabsRef.current.get(tabId);
-    const tabFilePath = tabId === activeTabId ? filePath : (stored?.filePath ?? null);
-    const tabMode = tabId === activeTabId ? fileModeRef.current : (stored?.fileMode ?? "markdown");
-    const tabContent = tabId === activeTabId
-      ? (viewRef.current
-          ? (tabMode === "markdown"
-              ? docToMarkdown(viewRef.current.state.doc)
-              : (viewRef.current.state.doc.childCount > 0
-                  ? viewRef.current.state.doc.child(0).textContent : ""))
-          : content)
-      : (stored?.content ?? "");
-    const tabDirty = tabId === activeTabId ? dirty : (stored?.dirty ?? false);
-
-    // A detached window can only be spawned around a file path. An untitled tab
-    // has no file on disk to hand off, so detaching it would silently discard
-    // its content (the tab is closed with skipDirtyCheck afterwards). Refuse to
-    // detach untitled tabs and leave them in place.
-    if (!tabFilePath) {
-      setDraggingTabId(null);
-      return;
-    }
-
-    // Save dirty content to disk so the new window can read it
-    if (tabDirty && tabFilePath) {
-      try {
-        suppressWatchUntilRef.current = Date.now() + 2000;
-        await invoke("write_file", { path: tabFilePath, content: tabContent });
-        lastDiskContentRef.current = tabContent;
-        if (tabMode === "markdown") updateTagIndex(tabFilePath, tabContent);
-      } catch (e) {
-        console.error("Failed to save before detach:", e);
-      }
-    }
-
+    if (tabsRef.current.length <= 1 || detachingTabsRef.current.has(tabId) || closeBlockedRef.current) return;
+    const current = (): DetachDocument | null => {
+      const tab = tabsRef.current.find((t) => t.id === tabId);
+      if (!tab) return null;
+      const stored = storedTabsRef.current.get(tabId);
+      const active = tabId === activeTabIdRef.current;
+      const path = active ? filePathRef.current : stored?.filePath ?? tab.filePath;
+      if (!path) return null; // Untitled documents cannot be handed off by path.
+      const mode = active ? fileModeRef.current : stored?.fileMode ?? getFileMode(path);
+      const language = active ? codeLanguageRef.current : stored?.codeLanguage ?? getCodeLanguage(path);
+      const view = active ? viewRef.current : null;
+      const text = view
+        ? (mode === "markdown" ? docToMarkdown(view.state.doc) : view.state.doc.firstChild?.textContent ?? "")
+        : active ? contentRef.current : stored?.content ?? "";
+      return { filePath: path, content: text, mode, language };
+    };
+    const snapshot = current();
+    if (!snapshot) { setDraggingTabId(null); return; }
+    const tabDirty = tabId === activeTabIdRef.current
+      ? dirtyRef.current
+      : storedTabsRef.current.get(tabId)?.dirty ?? tabsRef.current.find((t) => t.id === tabId)?.dirty;
+    detachingTabsRef.current.add(tabId);
     try {
-      await invoke("open_new_window", { filePath: tabFilePath });
-    } catch (e) {
-      console.error("Failed to spawn window:", e);
-      return;
+      await detachDocument(snapshot, {
+        current: () => closeBlockedRef.current ? null : current(),
+        save: tabDirty ? async () => {
+          suppressWatchUntilRef.current = Date.now() + 2000;
+          await invoke("write_file", { path: snapshot.filePath, content: snapshot.content });
+          if (filePathRef.current === snapshot.filePath) lastDiskContentRef.current = snapshot.content;
+          if (snapshot.mode === "markdown") updateTagIndex(snapshot.filePath, snapshot.content);
+        } : undefined,
+        open: () => invoke("open_new_window", { filePath: snapshot.filePath }),
+        close: () => closeTabImmediatelyRef.current(tabId),
+      });
+    } catch (error) {
+      console.error("Failed to detach tab; the source document remains open:", error);
+    } finally {
+      detachingTabsRef.current.delete(tabId);
+      setDraggingTabId(null);
     }
-
-    setDraggingTabId(null);
-    handleCloseTab(tabId, true);
-  }, [activeTabId, filePath, content, dirty, handleCloseTab, updateTagIndex]);
+  }, [updateTagIndex]);
 
   // ---- New window (Cmd+N) ----
   const handleNewWindow = useCallback(async () => {

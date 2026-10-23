@@ -79,13 +79,28 @@ const Toolbar: React.FC<ToolbarProps> = ({
       }
     };
     const close = () => setExportMenuOpen(false);
+    const toolbar = exportMenuRef.current?.closest(".toolbar");
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      close();
+      exportMenuRef.current?.querySelector("button")?.focus();
+    };
     document.addEventListener("mousedown", handler);
+    document.addEventListener("keydown", handleKeyDown);
     window.addEventListener("resize", close);
+    toolbar?.addEventListener("scroll", close);
     return () => {
       document.removeEventListener("mousedown", handler);
+      document.removeEventListener("keydown", handleKeyDown);
       window.removeEventListener("resize", close);
+      toolbar?.removeEventListener("scroll", close);
     };
   }, [exportMenuOpen]);
+
+  useEffect(() => {
+    if (!fileOpsEnabled) setExportMenuOpen(false);
+  }, [fileOpsEnabled]);
 
   const exec = useCallback(
     (command: (state: any, dispatch?: any) => boolean) => {
