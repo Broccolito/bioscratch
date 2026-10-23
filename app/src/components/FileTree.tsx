@@ -399,7 +399,7 @@ const FileTree: React.FC<FileTreeProps> = ({
     const entries = children.get(dir);
     const error = errors.get(dir);
     if (error && !entries) {
-      return <div className="file-tree-note" style={{ paddingLeft: 12 + depth * 14 }}>Can't read folder</div>;
+      return <div className="file-tree-error" role="alert" title={error} style={{ marginLeft: 6 + depth * 14 }}>Can't read folder</div>;
     }
     if (!entries) {
       return <div className="file-tree-note" style={{ paddingLeft: 12 + depth * 14 }}>Loading…</div>;
@@ -409,10 +409,15 @@ const FileTree: React.FC<FileTreeProps> = ({
           e.path === editing?.path || (e.is_dir ? visible.dirs.has(e.path) : visible.files.has(e.path))
         )
       : entries;
+    const warning = error ? (
+      <div className="file-tree-error" role="alert" title={error} style={{ marginLeft: 6 + depth * 14 }}>
+        Can't refresh folder. Showing its last loaded contents.
+      </div>
+    ) : null;
     if (shown.length === 0) {
-      return <div className="file-tree-note" style={{ paddingLeft: 12 + depth * 14 }}>{visible ? "No matching notes" : "Empty"}</div>;
+      return <>{warning}<div className="file-tree-note" style={{ paddingLeft: 12 + depth * 14 }}>{visible ? "No matching notes" : "Empty"}</div></>;
     }
-    return shown.map((entry) => {
+    return <>{warning}{shown.map((entry) => {
       const isOpen = entry.is_dir && effectiveExpanded.has(entry.path);
       const openable = entry.is_dir || isOpenableTextFile(entry.path);
       const classes = [
@@ -460,7 +465,7 @@ const FileTree: React.FC<FileTreeProps> = ({
           {isOpen && renderEntries(entry.path, depth + 1)}
         </React.Fragment>
       );
-    });
+    })}</>;
   };
 
   const menuItems: Array<{ label: string; run: () => void; danger?: boolean }> = menu

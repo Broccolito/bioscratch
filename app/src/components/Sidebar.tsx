@@ -6,6 +6,7 @@ import { basename, breadcrumbs, dirname } from "../lib/workspace";
 
 interface SidebarProps {
   folders: string[];
+  workspaceReady: boolean;
   activeRoot: string | null;
   activePath: string | null;
   reveal: RevealRequest | null;
@@ -45,6 +46,7 @@ const SHOW_HIDDEN_KEY = "bioscratch-show-hidden";
 
 const Sidebar: React.FC<SidebarProps> = ({
   folders,
+  workspaceReady,
   activeRoot,
   activePath,
   reveal,
@@ -225,6 +227,7 @@ const Sidebar: React.FC<SidebarProps> = ({
               </div>
             )}
             <div className="sidebar-scroll sidebar-tree-area">
+              {workspaceReady ? (
               <FileTree
                 root={dir}
                 activePath={activePath}
@@ -238,6 +241,9 @@ const Sidebar: React.FC<SidebarProps> = ({
                 onRenamed={onRenamed}
                 onDeleted={onDeleted}
               />
+              ) : (
+                <div className="file-tree-note">Opening folder…</div>
+              )}
             </div>
             <div className="sidebar-search-area">
             <SearchPanel

@@ -1802,6 +1802,7 @@ const App: React.FC = () => {
       {sidebarVisible && (
         <Sidebar
           folders={folders}
+          workspaceReady={workspaceLoaded}
           activeRoot={activeRoot}
           activePath={filePath}
           reveal={reveal}
