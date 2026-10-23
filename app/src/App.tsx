@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect, useCallback, useMemo } from "react"
 import { EditorView } from "prosemirror-view";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { schema } from "./editor/schema";
-import { markdownToDoc } from "./editor/serialization/markdownImport";
+import { markdownSearchTarget, markdownToDoc } from "./editor/serialization/markdownImport";
 import { docToMarkdown } from "./editor/serialization/markdownExport";
 import { getDocStats } from "./lib/stats";
 import { exportToHtml, exportToPdf } from "./lib/export";
@@ -1192,17 +1192,20 @@ const App: React.FC = () => {
     // match. setTimeout rather than rAF: rAF never fires in a hidden window.
     setTimeout(() => {
       const view = viewRef.current;
-      if (!view) return;
+      if (!view || filePathRef.current !== path) return;
       const found = setSearch(query, view.state, view.dispatch);
-      if (found.matches.length > 0) {
-        const index = Math.min(occurrenceIndexAtLine(fileContent, query, line), found.matches.length - 1);
-        const match = found.matches[index];
-        view.dispatch(
-          view.state.tr
-            .setMeta(searchPluginKey, { ...found, currentIndex: index })
-            .setSelection(TextSelection.create(view.state.doc, match.from))
-            .scrollIntoView()
-        );
+      const target = getFileMode(path) === "markdown"
+        ? markdownSearchTarget(fileContent, query, line, schema)
+        : { matchIndex: occurrenceIndexAtLine(fileContent, query, line), anchor: 1 };
+      const index = target.matchIndex !== null && target.matchIndex < found.matches.length ? target.matchIndex : -1;
+      const position = index >= 0 ? found.matches[index].from : target.anchor;
+      view.dispatch(
+        view.state.tr
+          .setMeta(searchPluginKey, { ...found, currentIndex: index })
+          .setSelection(TextSelection.near(view.state.doc.resolve(Math.min(position, view.state.doc.content.size))))
+          .scrollIntoView()
+      );
+      if (index >= 0) {
         setTimeout(() => {
           view.dom.querySelector(".search-highlight-current")?.scrollIntoView({ block: "center" });
         }, 0);

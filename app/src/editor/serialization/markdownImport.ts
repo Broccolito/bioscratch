@@ -288,9 +288,7 @@ function convertBlocks(nodes: MdastNode[], schema: Schema): ProseMirrorNode[] {
   return result;
 }
 
-export function markdownToDoc(markdown: string, schema: Schema): ProseMirrorNode {
-  const tree = processor.parse(markdown) as Root;
-
+function treeToDoc(tree: Root, schema: Schema): ProseMirrorNode {
   // Collect link/image reference definitions before converting, so
   // reference-style links/images can be resolved wherever they appear.
   currentDefinitions = {};
@@ -310,4 +308,89 @@ export function markdownToDoc(markdown: string, schema: Schema): ProseMirrorNode
   }
 
   return schema.nodes.doc.create(null, blocks);
+}
+
+export function markdownToDoc(markdown: string, schema: Schema): ProseMirrorNode {
+  return treeToDoc(processor.parse(markdown) as Root, schema);
+}
+
+interface SearchSourceNode {
+  type: string;
+  value?: string;
+  children?: SearchSourceNode[];
+  position?: { start: { line: number }; end: { line: number } };
+}
+
+/** Locate a source-line hit among rendered text matches, excluding link URLs. */
+export function markdownSearchTarget(
+  markdown: string,
+  query: string,
+  line: number,
+  schema: Schema
+): { matchIndex: number | null; anchor: number } {
+  const tree = processor.parse(markdown) as Root;
+  const original = treeToDoc(tree, schema);
+  const q = query.toLowerCase();
+  const sourceLines = markdown.split(/\r?\n/);
+  let anchor = 1;
+  let offset = 0;
+  for (const node of tree.children) {
+    const blocks = convertBlocks([node as MdastNode], schema);
+    if (node.position && node.position.start.line <= line && line <= node.position.end.line) {
+      anchor = offset + 1;
+      break;
+    }
+    offset += blocks.reduce((size, block) => size + block.nodeSize, 0);
+  }
+  anchor = Math.min(anchor, original.content.size);
+  if (!q) return { matchIndex: null, anchor };
+
+  // Mark the first visible occurrence on the requested source line in the AST.
+  // Rendering that marker through the real converter accounts for text-node
+  // merging, marks, lists and tables without counting Markdown-only syntax.
+  let marker = "\uE000";
+  while (markdown.includes(marker)) marker += "\uE000";
+  const markHit = (node: SearchSourceNode): boolean => {
+    if (node.type === "definition" || node.type === "footnoteDefinition") return false;
+    if (node.value !== undefined && node.position && ["text", "inlineCode", "html", "code", "yaml"].includes(node.type)) {
+      let firstLine = node.position.start.line;
+      if (node.type === "yaml" || (node.type === "code" && /^\s{0,3}(?:`{3,}|~{3,})/.test(sourceLines[firstLine - 1] ?? ""))) firstLine++;
+      const lower = node.value.toLowerCase();
+      let at = lower.indexOf(q);
+      while (at !== -1) {
+        const matchLine = firstLine + (node.value.slice(0, at).match(/\n/g)?.length ?? 0);
+        if (matchLine === line) {
+          node.value = node.value.slice(0, at) + marker + node.value.slice(at);
+          return true;
+        }
+        at = lower.indexOf(q, at + q.length);
+      }
+    }
+    return node.children?.some(markHit) ?? false;
+  };
+  if (!markHit(tree as SearchSourceNode)) return { matchIndex: null, anchor };
+
+  const marked = treeToDoc(tree, schema);
+  let markerPosition = -1;
+  marked.descendants((node, pos) => {
+    if (!node.isText) return true;
+    const at = node.text!.indexOf(marker);
+    if (at !== -1) markerPosition = pos + at;
+    return false;
+  });
+  if (markerPosition < 0) return { matchIndex: null, anchor };
+  let matchIndex = 0;
+  let targetIndex: number | null = null;
+  original.descendants((node, pos) => {
+    if (!node.isText) return true;
+    const text = node.text!.toLowerCase();
+    let at = text.indexOf(q);
+    while (at !== -1) {
+      if (pos + at === markerPosition) targetIndex = matchIndex;
+      matchIndex++;
+      at = text.indexOf(q, at + q.length);
+    }
+    return false;
+  });
+  return { matchIndex: targetIndex, anchor };
 }

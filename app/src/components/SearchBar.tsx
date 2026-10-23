@@ -65,7 +65,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ view, initialQuery = "", onClose 
   const matchText =
     matchCount === 0
       ? query ? "No matches" : ""
-      : `${currentIndex + 1} / ${matchCount}`;
+      : currentIndex < 0 ? `${matchCount} matches` : `${currentIndex + 1} / ${matchCount}`;
 
   return (
     <div className="search-bar">

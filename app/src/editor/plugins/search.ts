@@ -104,8 +104,9 @@ export function navigateSearch(
   const prev = searchPluginKey.getState(state);
   if (!prev || prev.matches.length === 0) return;
 
-  const newIndex =
-    (prev.currentIndex + direction + prev.matches.length) % prev.matches.length;
+  const newIndex = prev.currentIndex < 0
+    ? direction > 0 ? 0 : prev.matches.length - 1
+    : (prev.currentIndex + direction + prev.matches.length) % prev.matches.length;
 
   const newSearchState: SearchState = { ...prev, currentIndex: newIndex };
   const match = prev.matches[newIndex];
