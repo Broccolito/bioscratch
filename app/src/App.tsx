@@ -1197,12 +1197,46 @@ const App: React.FC = () => {
       .filter((p): p is string => !!p && remap(p) !== p);
     setTabs((prev) => prev.map((t) => (t.filePath ? { ...t, filePath: remap(t.filePath) } : t)));
     for (const [id, stored] of storedTabsRef.current) {
-      if (stored.filePath) storedTabsRef.current.set(id, { ...stored, filePath: remap(stored.filePath) });
+      if (!stored.filePath || remap(stored.filePath) === stored.filePath) continue;
+      const nextPath = remap(stored.filePath);
+      const nextMode = getFileMode(nextPath);
+      const nextLanguage = getCodeLanguage(nextPath);
+      const changesMode = nextMode !== stored.fileMode || nextLanguage !== stored.codeLanguage;
+      storedTabsRef.current.set(id, {
+        ...stored,
+        filePath: nextPath,
+        fileMode: nextMode,
+        codeLanguage: nextLanguage,
+        editorState: changesMode && stored.editorState
+          ? makeEditorStateForContent(stored.content, nextMode, nextLanguage, stored.editorState.plugins)
+          : stored.editorState,
+      });
     }
     const current = filePathRef.current;
     if (current && remap(current) !== current) {
-      filePathRef.current = remap(current);
-      setFilePath(remap(current));
+      const nextPath = remap(current);
+      const nextMode = getFileMode(nextPath);
+      const nextLanguage = getCodeLanguage(nextPath);
+      const view = viewRef.current;
+      if (view && (nextMode !== fileModeRef.current || nextLanguage !== codeLanguageRef.current)) {
+        // Keep the exact current text and dirty flag when a new extension
+        // changes its editor mode; loading from disk would lose unsaved edits.
+        const currentContent = fileModeRef.current === "markdown"
+          ? docToMarkdown(view.state.doc)
+          : view.state.doc.firstChild?.textContent ?? "";
+        view.updateState(makeEditorStateForContent(currentContent, nextMode, nextLanguage, view.state.plugins));
+        contentRef.current = currentContent;
+        setContent(currentContent);
+        const stats = getDocStats(view.state.doc);
+        setWordCount(stats.words);
+        setCharCount(stats.chars);
+      }
+      filePathRef.current = nextPath;
+      fileModeRef.current = nextMode;
+      codeLanguageRef.current = nextLanguage;
+      setFilePath(nextPath);
+      setFileMode(nextMode);
+      setCodeLanguage(nextLanguage);
     }
     for (const [id, h] of historyRef.current) {
       historyRef.current.set(id, { back: h.back.map(remap), forward: h.forward.map(remap) });

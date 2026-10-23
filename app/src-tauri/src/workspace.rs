@@ -8,17 +8,31 @@
 // re-granted on startup, the same trust model as `recent_files.json`.
 
 use serde::Serialize;
+use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use tauri::{Emitter, Manager};
 use tauri_plugin_fs::FsExt;
 
 static AUTHORIZED_ROOTS: OnceLock<Mutex<Vec<PathBuf>>> = OnceLock::new();
 static FOLDERS_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-// Bumped by every search; a running search stops when it no longer matches.
-static SEARCH_GENERATION: AtomicU64 = AtomicU64::new(0);
+// Each window cancels only its own previous search.
+static SEARCH_GENERATIONS: OnceLock<Mutex<HashMap<String, Arc<AtomicU64>>>> = OnceLock::new();
+
+fn next_search_generation(window_label: &str) -> Result<(Arc<AtomicU64>, u64), String> {
+    let mut generations = SEARCH_GENERATIONS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .map_err(|_| "Search lock failed")?;
+    let counter = generations
+        .entry(window_label.to_string())
+        .or_insert_with(|| Arc::new(AtomicU64::new(0)))
+        .clone();
+    let generation = counter.fetch_add(1, Ordering::SeqCst) + 1;
+    Ok((counter, generation))
+}
 
 const FOLDERS_FILE: &str = "workspace_folders.json";
 /// Upper bound on files visited by one walk, so pointing the sidebar at a
@@ -323,11 +337,17 @@ pub async fn open_with_default_app(app: tauri::AppHandle, path: String) -> Resul
 
 // ---- Creating and renaming --------------------------------------------------
 
-fn is_authorized_root(path: &Path) -> bool {
+fn contains_authorized_root(path: &Path) -> bool {
+    // A final symlink is renamed/trashed as a link, leaving its target alone.
+    // Resolve real entries for case-insensitive filesystems before comparing.
+    if fs::symlink_metadata(path).map(|m| m.file_type().is_symlink()).unwrap_or(false) {
+        return false;
+    }
+    let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     authorized_roots()
         .lock()
-        .map(|roots| roots.iter().any(|root| root == path))
-        .unwrap_or(false)
+        .map(|roots| roots.iter().any(|root| root.starts_with(&canonical)))
+        .unwrap_or(true)
 }
 
 /// Resolve `path` without following a final symlink (so renaming a link
@@ -391,8 +411,8 @@ pub async fn create_untitled(dir: String, kind: String) -> Result<String, String
 #[tauri::command]
 pub async fn rename_path(path: String, new_name: String) -> Result<String, String> {
     let from = require_entry_under_root(&path)?;
-    if is_authorized_root(&from) {
-        return Err("Rename an opened folder in Finder, then open it again".to_string());
+    if contains_authorized_root(&from) {
+        return Err("This folder contains an opened folder. Rename it in Finder, then open it again".to_string());
     }
     let name = validate_name(&new_name)?;
     let to = from.parent().ok_or("Invalid path")?.join(&name);
@@ -412,11 +432,7 @@ pub async fn rename_path(path: String, new_name: String) -> Result<String, Strin
 #[tauri::command]
 pub async fn move_to_trash(path: String) -> Result<(), String> {
     let entry = require_entry_under_root(&path)?;
-    let holds_root = authorized_roots()
-        .lock()
-        .map(|roots| roots.iter().any(|root| root.starts_with(&entry)))
-        .unwrap_or(true);
-    if holds_root {
+    if contains_authorized_root(&entry) {
         return Err("Remove an opened folder from the sidebar instead".to_string());
     }
     tauri::async_runtime::spawn_blocking(move || trash::delete(&entry).map_err(|e| e.to_string()))
@@ -490,12 +506,13 @@ fn search_text(text: &str, query_lower: &str) -> Vec<SearchHit> {
 /// notes matching a tag filter); each must lie inside `root`.
 #[tauri::command]
 pub async fn search_workspace(
+    window: tauri::WebviewWindow,
     root: String,
     query: String,
     paths: Option<Vec<String>>,
 ) -> Result<SearchResults, String> {
     let root = require_under_root(&root)?;
-    let generation = SEARCH_GENERATION.fetch_add(1, Ordering::SeqCst) + 1;
+    let (search_generation, generation) = next_search_generation(window.label())?;
     let query_lower = query.trim().to_lowercase();
     if query_lower.is_empty() {
         return Ok(SearchResults { files: vec![], truncated: false, cancelled: false });
@@ -514,7 +531,7 @@ pub async fn search_workspace(
         let mut cancelled = false;
         let mut hit_limit = false;
         let mut visit = |path: &Path| {
-            if SEARCH_GENERATION.load(Ordering::SeqCst) != generation {
+            if search_generation.load(Ordering::SeqCst) != generation {
                 cancelled = true;
                 return false;
             }
@@ -688,6 +705,44 @@ mod tests {
         assert!(run(rename_path(dir.clone(), "Other".into())).is_err());
         assert!(run(super::move_to_trash(dir.clone())).is_err());
         std::fs::remove_dir_all(&root).unwrap();
+    }
+
+    #[test]
+    fn renaming_an_ancestor_cannot_invalidate_a_pinned_root() {
+        use super::{authorized_roots, contains_authorized_root, rename_path};
+        use std::os::unix::fs::symlink;
+        let tmp = std::env::temp_dir().join(format!("bioscratch-root-rename-test-{}", std::process::id()));
+        std::fs::create_dir_all(tmp.join("parent/pinned")).unwrap();
+        let root = std::fs::canonicalize(&tmp).unwrap();
+        let parent = root.join("parent");
+        let pinned = parent.join("pinned");
+        authorized_roots().lock().unwrap().extend([root.clone(), pinned.clone()]);
+        use tauri::async_runtime::block_on as run;
+
+        assert!(run(rename_path(parent.to_string_lossy().into(), "renamed".into())).is_err());
+        assert!(pinned.is_dir());
+        // A link to the pinned root can still be renamed: its target stays put.
+        let link = root.join("link");
+        symlink(&pinned, &link).unwrap();
+        assert!(!contains_authorized_root(&link));
+        let renamed_link = run(rename_path(link.to_string_lossy().into(), "renamed-link".into())).unwrap();
+        assert!(std::fs::symlink_metadata(renamed_link).unwrap().file_type().is_symlink());
+        assert!(pinned.is_dir());
+        authorized_roots().lock().unwrap().retain(|p| p != &root && p != &pinned);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn searches_cancel_only_earlier_searches_in_the_same_window() {
+        use super::next_search_generation;
+        use std::sync::atomic::Ordering;
+        let (first, first_generation) = next_search_generation("search-test-window-a").unwrap();
+        let (other, other_generation) = next_search_generation("search-test-window-b").unwrap();
+        assert_eq!(first.load(Ordering::SeqCst), first_generation);
+        let (_, newer_generation) = next_search_generation("search-test-window-a").unwrap();
+        assert_ne!(first.load(Ordering::SeqCst), first_generation);
+        assert_eq!(first.load(Ordering::SeqCst), newer_generation);
+        assert_eq!(other.load(Ordering::SeqCst), other_generation);
     }
 
     #[test]

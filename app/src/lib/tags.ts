@@ -135,7 +135,7 @@ export function writeFrontmatterTags(yaml: string, tags: string[]): string | nul
   } else {
     const node = doc.createNode(spelled);
     if (isSeq(existing)) node.flow = existing.flow ?? false;
-    if (primary) primary.value = node;
+    if (primary) doc.set(primary.key, node);
     else doc.set("tags", node);
   }
   if (spelled.length > 0 && isMap(doc.contents)) {

@@ -129,7 +129,11 @@ const SearchPanel: React.FC<SearchPanelProps> = ({
       searchWorkspace(scope, q, hasTags ? tagMatches : undefined)
         .then((res) => {
           // A newer keystroke, scope or tag change owns the panel now.
-          if (request !== requestRef.current || res.cancelled) return;
+          if (request !== requestRef.current) return;
+          if (res.cancelled) {
+            setSearching(false);
+            return;
+          }
           setDiskResults(res);
           setResultsQuery(q);
           setCollapsed(new Set());

@@ -54,8 +54,13 @@ fn normalized_access_path(path: &Path) -> Result<PathBuf, String> {
     if !path.is_absolute() {
         return Err("File access requires an absolute path".to_string());
     }
-    if path.exists() {
-        return fs::canonicalize(path).map_err(|e| e.to_string());
+    match fs::symlink_metadata(path) {
+        // `exists` follows links and treats a dangling link like a new file.
+        // Canonicalize every existing entry so writes cannot follow such a
+        // link from an authorized folder to a new file outside it.
+        Ok(_) => return fs::canonicalize(path).map_err(|e| e.to_string()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {},
+        Err(error) => return Err(error.to_string()),
     }
     let parent = path.parent().ok_or("Invalid file path")?;
     let filename = path.file_name().ok_or("Invalid file path")?;
@@ -1432,9 +1437,29 @@ pub fn run() {
 #[cfg(test)]
 mod security_tests {
     use super::{
-        add_recent_path, preferred_open_file_window, remove_recent_path,
+        add_recent_path, normalized_access_path, preferred_open_file_window, remove_recent_path,
         validated_external_url, validated_update_url,
     };
+
+    #[test]
+    fn file_access_rejects_dangling_symlinks_but_allows_new_files() {
+        use std::os::unix::fs::symlink;
+        let temp = std::env::temp_dir().join(format!("bioscratch-access-test-{}", std::process::id()));
+        std::fs::create_dir_all(temp.join("granted")).unwrap();
+        let temp = std::fs::canonicalize(temp).unwrap();
+        let outside = temp.join("outside.md");
+        let link = temp.join("granted/link.md");
+        symlink(&outside, &link).unwrap();
+        assert!(!link.exists());
+        assert!(normalized_access_path(&link).is_err());
+        assert!(!outside.exists());
+
+        let new_file = temp.join("granted/new.md");
+        assert_eq!(normalized_access_path(&new_file).unwrap(), new_file);
+        std::fs::write(&outside, "outside").unwrap();
+        assert_eq!(normalized_access_path(&link).unwrap(), outside);
+        std::fs::remove_dir_all(temp).unwrap();
+    }
 
     #[test]
     fn file_open_targets_only_the_focused_window() {
