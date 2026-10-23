@@ -32,6 +32,7 @@ jobs:
       - run: npm audit --audit-level=low
       - run: npm run check:versions
       - run: npm test
+      - run: npm run test:release
       - run: npm run build
       - run: npm run build:preview
       - name: Check frontmatter fixtures

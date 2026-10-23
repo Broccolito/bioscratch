@@ -11,7 +11,8 @@
     "build:preview": "vite build --config vite.preview.config.ts",
     "preview": "vite preview",
     "tauri": "tauri",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "prepare": "git config core.hooksPath .githooks || true",
+    "test:release": "node --test scripts/check-release-macos.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2",
