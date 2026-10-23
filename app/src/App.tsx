@@ -9,6 +9,7 @@ import { exportToHtml, exportToPdf } from "./lib/export";
 import { getFileMode, getCodeLanguage, FileMode, isOpenableTextFile } from "./lib/fileMode";
 import { autosaveKeyForDiscard, canCompleteSaveClose, saveBeforeClose, type CloseFlow } from "./lib/closeFlow";
 import { detachDocument, type DetachDocument } from "./lib/detachFlow";
+import { planSavedDocument, type SaveDocumentSnapshot } from "./lib/saveFlow";
 import { useTheme } from "./hooks/useTheme";
 import { planRecovery } from "./lib/recoveryFlow";
 import {
@@ -392,6 +393,7 @@ const App: React.FC = () => {
 
   // ---- Change handler ----
   const handleChange = useCallback(() => {
+    dirtyRef.current = true;
     setDirty(true);
     syncTabMeta(activeTabId, { dirty: true });
     const view = viewRef.current;
@@ -400,10 +402,12 @@ const App: React.FC = () => {
       setWordCount(stats.words);
       setCharCount(stats.chars);
       if (fileModeRef.current === "markdown") {
-        setContent(docToMarkdown(view.state.doc));
+        contentRef.current = docToMarkdown(view.state.doc);
+        setContent(contentRef.current);
       } else {
         // For code/plaintext: extract raw text from the single code_block node
-        setContent(view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "");
+        contentRef.current = view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "";
+        setContent(contentRef.current);
       }
     }
   }, [activeTabId, syncTabMeta]);
@@ -418,6 +422,11 @@ const App: React.FC = () => {
       const actualLang = language ?? codeLanguageRef.current;
       const newState = makeEditorStateForContent(rawContent, actualMode, actualLang, view.state.plugins);
       view.updateState(newState);
+      filePathRef.current = path;
+      fileModeRef.current = actualMode;
+      codeLanguageRef.current = actualLang;
+      contentRef.current = rawContent;
+      dirtyRef.current = false;
       setFilePath(path);
       setFileMode(actualMode);
       setCodeLanguage(actualLang);
@@ -626,6 +635,7 @@ const App: React.FC = () => {
     (tabId: string) => {
       const view = viewRef.current;
       if (!view) return;
+      activeTabIdRef.current = tabId;
       const scrollEl = document.querySelector(".editor-scroll-area") as HTMLElement | null;
 
       const stored = storedTabsRef.current.get(tabId);
@@ -636,6 +646,11 @@ const App: React.FC = () => {
           stored.editorState ??
           makeEditorStateForContent(stored.content, mode, lang, view.state.plugins);
         view.updateState(state);
+        filePathRef.current = stored.filePath;
+        contentRef.current = stored.content;
+        dirtyRef.current = stored.dirty;
+        fileModeRef.current = mode;
+        codeLanguageRef.current = lang;
         if (scrollEl) scrollEl.scrollTop = stored.scrollTop ?? 0;
         setFilePath(stored.filePath);
         setContent(stored.content);
@@ -649,6 +664,11 @@ const App: React.FC = () => {
         // Brand new tab — empty markdown document
         const emptyState = makeEmptyEditorState(view.state.plugins);
         view.updateState(emptyState);
+        filePathRef.current = null;
+        contentRef.current = "";
+        dirtyRef.current = false;
+        fileModeRef.current = "markdown";
+        codeLanguageRef.current = "";
         if (scrollEl) scrollEl.scrollTop = 0;
         setFilePath(null);
         setContent("");
@@ -679,6 +699,12 @@ const App: React.FC = () => {
     stashActiveTab();
     const id = makeTabId();
     const newTab: TabData = { id, filePath: null, dirty: false };
+    activeTabIdRef.current = id;
+    filePathRef.current = null;
+    contentRef.current = "";
+    dirtyRef.current = false;
+    fileModeRef.current = "markdown";
+    codeLanguageRef.current = "";
     setTabs((prev) => [...prev, newTab]);
     setActiveTabId(id);
     // restoreTab will find nothing for this id and create an empty doc
@@ -783,6 +809,12 @@ const App: React.FC = () => {
       const view = viewRef.current;
       const plugins = view?.state.plugins ?? [];
       const newState = makeEditorStateForContent(fileContent, mode, language, plugins);
+      activeTabIdRef.current = id;
+      filePathRef.current = path;
+      contentRef.current = fileContent;
+      dirtyRef.current = false;
+      fileModeRef.current = mode;
+      codeLanguageRef.current = language;
       setTabs((prev) => [...prev, { id, filePath: path, dirty: false }]);
       setActiveTabId(id);
       if (view) view.updateState(newState);
@@ -842,42 +874,77 @@ const App: React.FC = () => {
   }, [tabs, activeTabId, addRecentFile, stashActiveTab, handleSelectTab, doOpenFile]);
 
   // ---- Save ----
-  const handleSave = useCallback(async (): Promise<boolean> => {
+  const saveDocument = useCallback(async (saveAs: boolean): Promise<boolean> => {
     const view = viewRef.current;
-    if (!view) return false;
+    const tabId = activeTabIdRef.current;
+    if (!view || !tabId) return false;
+    const snapshotMode = fileModeRef.current;
+    const snapshot: SaveDocumentSnapshot = {
+      tabId,
+      filePath: filePathRef.current,
+      content: snapshotMode === "markdown"
+        ? docToMarkdown(view.state.doc)
+        : view.state.doc.firstChild?.textContent ?? "",
+    };
 
     try {
-      // For markdown, serialize from ProseMirror doc; for code/plaintext use raw content
-      const saveContent = fileModeRef.current === "markdown"
-        ? docToMarkdown(view.state.doc)
-        : (view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "");
-      let savePath = filePath;
-
+      let savePath = saveAs ? null : snapshot.filePath;
       if (!savePath) {
-        const path = await invoke<string | null>("show_save_dialog");
-        if (!path) return false;
-        savePath = path;
+        savePath = await invoke<string | null>("show_save_dialog");
+        if (!savePath) return false;
       }
 
       suppressWatchUntilRef.current = Date.now() + 2000;
-      await invoke("write_file", { path: savePath, content: saveContent });
-      lastDiskContentRef.current = saveContent;
-      if (fileModeRef.current === "markdown") updateTagIndex(savePath, saveContent);
-      setFilePath(savePath);
-      setDirty(false);
-      setContent(saveContent);
-      setDeletedPaths((prev) => { const n = new Set(prev); n.delete(savePath); return n; });
-      setExternalChange(null);
-      syncTabMeta(activeTabId, { filePath: savePath, dirty: false });
+      await invoke("write_file", { path: savePath, content: snapshot.content });
+      if (snapshotMode === "markdown") updateTagIndex(savePath, snapshot.content);
       addRecentFile(savePath);
-      await deleteAutosave(savePath).catch(() => {});
-      await deleteAutosave("__untitled__").catch(() => {});
-      return true;
-    } catch (e) {
-      console.error("Failed to save:", e);
+      setDeletedPaths((prev) => { const next = new Set(prev); next.delete(savePath); return next; });
+
+      // The shared editor may now belong to another tab. Read the source by
+      // its captured id, and never overwrite edits made while the write ran.
+      const active = activeTabIdRef.current === tabId;
+      const stored = storedTabsRef.current.get(tabId);
+      const currentView = active ? viewRef.current : null;
+      const current: SaveDocumentSnapshot | null = active && currentView
+        ? {
+            tabId,
+            filePath: filePathRef.current,
+            content: fileModeRef.current === "markdown"
+              ? docToMarkdown(currentView.state.doc)
+              : currentView.state.doc.firstChild?.textContent ?? "",
+          }
+        : stored && tabsRef.current.some((tab) => tab.id === tabId)
+          ? { tabId, filePath: stored.filePath, content: stored.content }
+          : null;
+      const plan = planSavedDocument(snapshot, savePath, current);
+      if (!plan) return false;
+
+      const metadata = { filePath: plan.filePath, dirty: plan.dirty };
+      tabsRef.current = tabsRef.current.map((tab) => tab.id === tabId ? { ...tab, ...metadata } : tab);
+      syncTabMeta(tabId, metadata);
+      if (active) {
+        lastDiskContentRef.current = snapshot.content;
+        filePathRef.current = plan.filePath;
+        contentRef.current = plan.content;
+        dirtyRef.current = plan.dirty;
+        setFilePath(plan.filePath);
+        setContent(plan.content);
+        setDirty(plan.dirty);
+        setExternalChange(null);
+      } else if (stored) {
+        storedTabsRef.current.set(tabId, { ...stored, ...metadata });
+      }
+      if (!plan.dirty) {
+        await deleteAutosave(savePath).catch(() => {});
+        if (!snapshot.filePath) await deleteAutosave("__untitled__").catch(() => {});
+      }
+      return !plan.dirty;
+    } catch (error) {
+      console.error("Failed to save:", error);
       return false;
     }
-  }, [filePath, activeTabId, addRecentFile, syncTabMeta, updateTagIndex]);
+  }, [addRecentFile, syncTabMeta, updateTagIndex]);
+  const handleSave = useCallback(() => saveDocument(false), [saveDocument]);
   // Keep ref current so handleCloseTab (declared before handleSave) can call it
   useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
   useEffect(() => { handleOpenRef.current = handleOpen; }, [handleOpen]);
@@ -1371,32 +1438,7 @@ const App: React.FC = () => {
   });
 
   // ---- Save As ----
-  const handleSaveAs = useCallback(async () => {
-    const view = viewRef.current;
-    if (!view) return;
-
-    const saveContent = fileModeRef.current === "markdown"
-      ? docToMarkdown(view.state.doc)
-      : (view.state.doc.childCount > 0 ? view.state.doc.child(0).textContent : "");
-    const path = await invoke<string | null>("show_save_dialog");
-    if (!path) return;
-
-    try {
-      suppressWatchUntilRef.current = Date.now() + 2000;
-      await invoke("write_file", { path, content: saveContent });
-      lastDiskContentRef.current = saveContent;
-      if (fileModeRef.current === "markdown") updateTagIndex(path, saveContent);
-      setFilePath(path);
-      setDirty(false);
-      setContent(saveContent);
-      setDeletedPaths((prev) => { const n = new Set(prev); n.delete(path); return n; });
-      setExternalChange(null);
-      syncTabMeta(activeTabId, { filePath: path, dirty: false });
-      addRecentFile(path);
-    } catch (e) {
-      console.error("Failed to save:", e);
-    }
-  }, [activeTabId, addRecentFile, syncTabMeta, updateTagIndex]);
+  const handleSaveAs = useCallback(async () => { await saveDocument(true); }, [saveDocument]);
   useEffect(() => { handleSaveAsRef.current = handleSaveAs; }, [handleSaveAs]);
 
   // ---- Tab reorder ----
@@ -1609,8 +1651,10 @@ const App: React.FC = () => {
         ? dirtyRef.current
         : storedTabsRef.current.get(tab.id)?.dirty ?? tab.dirty,
     })));
+    const recoveryMode = plan.filePath ? getFileMode(plan.filePath) : "markdown";
+    const recoveryLanguage = plan.filePath ? getCodeLanguage(plan.filePath) : "";
     if (plan.tabId === activeTabIdRef.current) {
-      loadDocContent(plan.content, plan.filePath, "markdown", "");
+      loadDocContent(plan.content, plan.filePath, recoveryMode, recoveryLanguage);
     } else if (plan.tabId) {
       const stored = storedTabsRef.current.get(plan.tabId);
       storedTabsRef.current.set(plan.tabId, {
@@ -1618,24 +1662,24 @@ const App: React.FC = () => {
         filePath: plan.filePath,
         content: plan.content,
         dirty: true,
-        fileMode: "markdown",
-        codeLanguage: "",
+        fileMode: recoveryMode,
+        codeLanguage: recoveryLanguage,
         scrollTop: stored?.scrollTop ?? 0,
-        editorState: makeEditorStateForContent(plan.content, "markdown", "", viewRef.current?.state.plugins ?? []),
+        editorState: makeEditorStateForContent(plan.content, recoveryMode, recoveryLanguage, viewRef.current?.state.plugins ?? []),
       });
       // Stash the active document before displaying the recovered owner.
       handleSelectTabRef.current(plan.tabId);
     } else {
       // The owner was edited, closed, or navigated elsewhere while autosave
       // was loading. Keep both versions: restore this one as an unsaved draft.
-      plan.tabId = doOpenFileRef.current(null, plan.content, "markdown", "");
+      plan.tabId = doOpenFileRef.current(null, plan.content, recoveryMode, recoveryLanguage);
     }
     activeTabIdRef.current = plan.tabId;
     filePathRef.current = plan.filePath;
     contentRef.current = plan.content;
     dirtyRef.current = true;
-    fileModeRef.current = "markdown";
-    codeLanguageRef.current = "";
+    fileModeRef.current = recoveryMode;
+    codeLanguageRef.current = recoveryLanguage;
     setDirty(true);
     syncTabMeta(plan.tabId, { filePath: plan.filePath, dirty: true });
     setRecovery(null);
