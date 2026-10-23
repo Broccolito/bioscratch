@@ -15,6 +15,7 @@ vi.mock("../../extension/src/webview/bridge", () => ({ saveHtml: vi.fn() }));
 afterEach(() => {
   document.body.replaceChildren();
   document.documentElement.removeAttribute("style");
+  document.documentElement.removeAttribute("data-color-scheme");
 });
 
 const targets = [
@@ -69,6 +70,22 @@ describe.each(targets)("$name export", (target) => {
     const parsed = new DOMParser().parseFromString(target.document(title, ""), "text/html");
     expect(parsed.title).toBe(title);
     expect(parsed.querySelector("script")).toBeNull();
+  });
+
+  it.each([
+    { scheme: "light", background: "#fafafa", foreground: "#2b2620" },
+    { scheme: "dark", background: "#201d19", foreground: "#e6dfd4" },
+  ])("preserves matching $scheme page and text colors", ({ scheme, background, foreground }) => {
+    document.documentElement.setAttribute("data-color-scheme", scheme);
+    document.documentElement.style.setProperty("--bg-editor", background);
+    document.documentElement.style.setProperty("--text-primary", foreground);
+    const parsed = new DOMParser().parseFromString(target.document("Theme", "<p>Readable</p>"), "text/html");
+    expect(parsed.documentElement.getAttribute("data-color-scheme")).toBe(scheme);
+    const style = [...parsed.querySelectorAll("style")].map((node) => node.textContent).join("\n");
+    expect(style).toContain(`--bg-editor: ${background}`);
+    expect(style).toContain(`--text-primary: ${foreground}`);
+    expect(style).toMatch(/(?:html, body|body)\s*\{[^}]*background:\s*var\(--bg-editor,\s*#fafafa\)/);
+    expect(style).toMatch(/color:\s*var\(--text-primary,/);
   });
 });
 

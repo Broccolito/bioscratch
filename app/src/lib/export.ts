@@ -100,7 +100,7 @@ ${editorCss}
 html, body {
   margin: 0;
   padding: 0;
-  background: #fff;
+  background: var(--bg-editor, #fafafa);
   font-family: Arial, sans-serif;
 }
 * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
