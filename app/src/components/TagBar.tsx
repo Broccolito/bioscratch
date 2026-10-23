@@ -33,9 +33,9 @@ const TagBar: React.FC<TagBarProps> = ({ tags, editable, folderTags, folderName,
       {!editable ? (
         <span
           className="tag-bar-note"
-          title="This note's YAML front matter has a syntax error, so tags can't be edited without risking it. Fix the YAML at the top of the note."
+          title="These tags need to be edited in the YAML source to preserve this note's front matter safely."
         >
-          Tags read-only (front matter has an error)
+          Tags read-only (edit in YAML source)
         </span>
       ) : adding ? (
         <TagPicker
