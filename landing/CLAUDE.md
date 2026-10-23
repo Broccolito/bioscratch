@@ -45,4 +45,4 @@ Sections in order: nav → hero (title + three-pillar value props + download CTA
 
 ## Version Updates
 
-Download links in the hero and download sections hardcode the version (e.g. `v0.1.2`) and DMG filenames pointing to GitHub releases. Update these when the main app cuts a new release. The main app version is in `app/package.json` and `app/src-tauri/Cargo.toml` in the bioscratch repo.
+Download links in the hero and download sections hardcode the version (e.g. `v0.1.2`) and DMG filenames pointing to GitHub releases. Update these when the main app cuts a new release. See the main repo’s `AGENTS.md` Version Management section for every app, Quick Look, extension, and lockfile version to synchronize.

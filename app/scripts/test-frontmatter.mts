@@ -2,7 +2,7 @@
 //   1. import → doc → export round-trips each fixture's YAML block
 //   2. parseFrontmatter classifies/parses the YAML (or falls back) without throwing
 //
-// Run: npx esbuild app/scripts/test-frontmatter.mts --bundle --platform=node \
+// Run from app/: npx esbuild scripts/test-frontmatter.mts --bundle --platform=node \
 //        --format=esm --outfile=/tmp/fmtest.mjs && node /tmp/fmtest.mjs
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";

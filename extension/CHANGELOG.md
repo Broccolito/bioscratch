@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.0
+
+- Version aligned with the Bioscratch desktop release, which adds folder browsing,
+  note search and tags. These desktop navigation features are not part of the
+  VS Code custom editor.
+- Refreshed editor and packaging dependencies for security fixes.
+
 ## 0.5.0
 
 - Open Markdown files in Bioscratch consistently from Explorer, chat links,

@@ -25,7 +25,7 @@ Unit tests live in `app/tests/` (serialization round-trips, paste, tables, neste
 
 ## VS Code extension (`extension/`)
 
-A separate VS Code custom-editor port, published to the Marketplace as `WanjunGu.bioscratch`. `extension/src/extension.ts` + `editorProvider.ts` register the custom editor for `.md`; the editing surface runs in a webview (`extension/src/webview/`). VS Code owns the document, save and undo/redo; the webview writes back with minimal-diff edits.
+A separate VS Code custom-editor port, published to the Marketplace as `WanjunGu.bioscratch`. `extension/src/extension.ts` + `editorProvider.ts` register the custom editor for `.md` and `.markdown`; the editing surface runs in a webview (`extension/src/webview/`). VS Code owns the document, save and undo/redo; the webview writes back with minimal-diff edits.
 
 The webview has its **own copy** of the editor code (`extension/src/webview/editor/`, `components/`, `lib/`, `themes/`). It does not import from `app/src`, and the copies have diverged (e.g. the extension has no `frontmatterPlugin`/`history`). A fix to the editor in `app/` does not reach the extension unless you port it by hand.
 
@@ -69,6 +69,8 @@ ProseMirror — WYSIWYG editing, schema, plugins, serialization
 ### Rust backend (`app/src-tauri/src/lib.rs`)
 
 Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`read_recent_files`, `add_recent_file`, `remove_recent_file`; mutations broadcast to every window), `export_html`, `show_pdf_save_dialog`, `export_pdf_html`, `pdf_export_ready`, `export_pdf_pandoc`, `install_pdf_dependencies`, `open_url`, `open_new_window`, `get_app_data_dir`, `get_initial_file`, `list_user_themes`, `save_user_theme`, `delete_user_theme`, `check_for_updates`, `download_and_install`, `quit_app`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
+
+Workspace commands are `show_folder_dialog`, `read_workspace_folders`, `remove_workspace_folder`, `list_dir`, `list_workspace_files`, `reveal_in_finder`, `open_with_default_app`, `search_workspace`, `read_workspace_metadata`, `create_untitled`, `rename_path`, and `move_to_trash`. Window/quit coordination uses `window_ready_to_quit`, `cancel_quit`, `get_quit_generation`, and `close_window_confirmed`.
 
 **Tauri security** — A strict CSP is set in `tauri.conf.json` (`script-src 'self'`, `style-src 'self' 'unsafe-inline'`, images limited to `self`/`asset:`/`blob:`/`data:`/`https:`). Inline scripts and new remote origins will be blocked, so update the CSP deliberately when a feature needs them.
 
@@ -120,7 +122,9 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 
 ## Version Management
 
-Version is declared in three places that must stay in sync: `app/package.json` (`"version"`), `app/src-tauri/Cargo.toml` (`version = "..."`), and `extension/package.json`. Release notes go in `release-notes/v<version>.md`; `app/scripts/release-macos.sh` drives the macOS release build (signing/notarization credentials live in `notarization/`, gitignored). The landing page at [broccolito.github.io/bioscratch](https://broccolito.github.io/bioscratch/) and its source in the `landing/` folder of this repo also hardcode the version in download links — update those on release too. The landing page is deployed to GitHub Pages from `landing/` by `.github/workflows/deploy-landing.yml`.
+Keep the release version in sync across `app/package.json`, `app/package-lock.json` (root and root-package versions), `app/src-tauri/Cargo.toml`, the `bioscratch` entry in `app/src-tauri/Cargo.lock`, `app/src-tauri/tauri.conf.json`, both version keys in `app/src-tauri/quicklook/Info.plist`, `extension/package.json`, and `extension/package-lock.json` (root and root-package versions). Update `extension/CHANGELOG.md`, add release notes in `release-notes/v<version>.md`, and update the download links and version labels in `landing/index.html` and `landing/README.md`. Historical release notes and dependency versions stay unchanged.
+
+`app/scripts/release-macos.sh` builds Developer ID signed, notarized DMGs for Apple Silicon and Intel, including the Quick Look extension. Signing credentials are in the ignored `notarization/notarization_credentials.env`; never print or commit them. Package the VS Code extension with `npm run package` from `extension/` and attach the resulting `.vsix` with both DMGs to the GitHub release. The landing page at [broccolito.github.io/bioscratch](https://broccolito.github.io/bioscratch/) deploys from `landing/` on main through `.github/workflows/deploy-landing.yml`. `.github/workflows/ci.yml` validates frontend tests/builds, the preview bundle, Rust tests on macOS, and the VS Code extension.
 
 ## TypeScript Configuration
 

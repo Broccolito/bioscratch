@@ -2,7 +2,7 @@
   "name": "bioscratch",
   "displayName": "Bioscratch",
   "description": "A WYSIWYG Markdown editor for VS Code with live KaTeX math, Mermaid diagrams, syntax highlighting, tables, images, and 32 themes.",
-  "version": "0.5.0",
+  "version": "0.6.0",
   "publisher": "WanjunGu",
   "license": "MIT",
   "contributors": [
@@ -209,11 +209,11 @@
     "@types/react-dom": "^19.1.6",
     "@types/vscode": "^1.90.0",
     "@vscode/vsce": "^3.9.2",
-    "dompurify": "^3.4.12",
+    "dompurify": "^3.4.17",
     "esbuild": "^0.28.1",
     "highlight.js": "^11.11.1",
-    "katex": "^0.16.45",
-    "mermaid": "^11.16.0",
+    "katex": "^0.19.1",
+    "mermaid": "^11.17.2",
     "prosemirror-commands": "^1.7.1",
     "prosemirror-dropcursor": "^1.8.2",
     "prosemirror-gapcursor": "^1.4.1",
@@ -224,7 +224,7 @@
     "prosemirror-schema-list": "^1.5.1",
     "prosemirror-state": "^1.4.4",
     "prosemirror-tables": "^1.8.5",
-    "prosemirror-view": "^1.41.8",
+    "prosemirror-view": "^1.42.7",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "remark-gfm": "^4.0.1",
@@ -233,5 +233,8 @@
     "remark-stringify": "^11.0.0",
     "typescript": "~5.8.3",
     "unified": "^11.0.5"
+  },
+  "overrides": {
+    "katex": "$katex"
   }
 }
