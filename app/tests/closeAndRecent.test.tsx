@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createRoot, type Root } from "react-dom/client";
 
 import CloseDocumentDialog from "../src/components/CloseDocumentDialog";
-import { autosaveKeyForDiscard, saveBeforeClose } from "../src/lib/closeFlow";
+import { autosaveKeyForDiscard, canCompleteSaveClose, saveBeforeClose, type CloseFlow } from "../src/lib/closeFlow";
 
 let root: Root | null = null;
 
@@ -111,5 +111,27 @@ describe("dirty-document close flow", () => {
   it("deletes the matching recovery copy when changes are discarded", () => {
     expect(autosaveKeyForDiscard(null)).toBe("__untitled__");
     expect(autosaveKeyForDiscard("/tmp/blank.md")).toBe("/tmp/blank.md");
+  });
+
+  it("keeps a document open if another window cancels while its save is pending", async () => {
+    const started: CloseFlow = { kind: "quit", generation: 1 };
+    let current: CloseFlow | null = started;
+    let finishWrite!: (saved: boolean) => void;
+    const write = new Promise<boolean>((resolve) => { finishWrite = resolve; });
+    const close = vi.fn();
+    const saving = saveBeforeClose(() => write, () => {
+      if (canCompleteSaveClose(started, current)) close();
+    });
+    current = null;
+    finishWrite(true);
+    await saving;
+    expect(close).not.toHaveBeenCalled();
+  });
+
+  it("rejects a stale quit save but permits a window close promoted into quit", () => {
+    expect(canCompleteSaveClose({ kind: "quit", generation: 1 }, { kind: "quit", generation: 2 }))
+      .toBe(false);
+    expect(canCompleteSaveClose({ kind: "window", generation: null }, { kind: "quit", generation: 2 }))
+      .toBe(true);
   });
 });

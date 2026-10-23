@@ -7,7 +7,7 @@ import { docToMarkdown } from "./editor/serialization/markdownExport";
 import { getDocStats } from "./lib/stats";
 import { exportToHtml, exportToPdf } from "./lib/export";
 import { getFileMode, getCodeLanguage, FileMode, isOpenableTextFile } from "./lib/fileMode";
-import { autosaveKeyForDiscard, saveBeforeClose } from "./lib/closeFlow";
+import { autosaveKeyForDiscard, canCompleteSaveClose, saveBeforeClose, type CloseFlow } from "./lib/closeFlow";
 import { useTheme } from "./hooks/useTheme";
 import {
   fetchUserThemes,
@@ -317,6 +317,16 @@ const App: React.FC = () => {
   } | null>(null);
   const [pendingSaveCloseId, setPendingSaveCloseId] = useState<string | null>(null);
   const [closeSaving, setCloseSaving] = useState(false);
+  const [closeFlow, setCloseFlow] = useState<CloseFlow | null>(null);
+  const closeFlowRef = useRef<CloseFlow | null>(null);
+  const cancelledQuitRef = useRef(0);
+  const [quitReady, setQuitReady] = useState(false);
+  // Keep acknowledged windows read-only until every other window has finished
+  // reviewing or cancelled. Otherwise edits made after acknowledgement are lost.
+  const closeBlocked = !!closeFlow || !!pendingClose || closeSaving;
+  const closeBlockedRef = useRef(closeBlocked);
+  closeBlockedRef.current = closeBlocked;
+  const deferredFileOpensRef = useRef<string[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
   const draggingTabIdRef = useRef<string | null>(null);
@@ -576,6 +586,7 @@ const App: React.FC = () => {
     const unlistenLeave = listen("tauri://drag-leave", () => setIsDragging(false));
     const unlistenDrop  = listen<{ paths: string[] }>("tauri://drag-drop", async (event) => {
       setIsDragging(false);
+      if (closeBlockedRef.current) return;
 
       // Deduplicate paths within this batch, then read all in parallel
       const uniquePaths = [...new Set(
@@ -598,7 +609,7 @@ const App: React.FC = () => {
 
       files.forEach(({ path }) => addRecentFile(path));
       // Apply all tabs atomically in one synchronous pass
-      openDroppedFilesRef.current(files);
+      if (!closeBlockedRef.current) openDroppedFilesRef.current(files);
     });
     return () => {
       unlistenEnter.then((f) => f());
@@ -713,7 +724,7 @@ const App: React.FC = () => {
             setCharCount(0);
             try {
               const { Window } = await import("@tauri-apps/api/window");
-              await Window.getCurrent().hide();
+              if (!closeFlowRef.current) await Window.getCurrent().hide();
             } catch {}
           }, 0);
           return [];
@@ -871,17 +882,19 @@ const App: React.FC = () => {
 
   // Closing the window or quitting walks through each unsaved tab with the
   // same Save / Delete / Cancel dialog (see src-tauri/src/unsaved.rs).
-  const [closeFlow, setCloseFlow] = useState<"window" | "quit" | null>(null);
-  const closeFlowRef = useRef(closeFlow);
-  useEffect(() => { closeFlowRef.current = closeFlow; }, [closeFlow]);
-
   const handleCancelClose = useCallback(() => {
     if (closeSaving) return;
     setPendingClose(null);
     setPendingSaveCloseId(null);
     // Cancel on any document stops the whole window close / quit.
-    if (closeFlowRef.current === "quit") void invoke("cancel_quit");
+    const current = closeFlowRef.current;
+    if (current?.kind === "quit") {
+      cancelledQuitRef.current = Math.max(cancelledQuitRef.current, current.generation);
+      void invoke("cancel_quit", { generation: current.generation });
+    }
+    closeFlowRef.current = null;
     setCloseFlow(null);
+    setQuitReady(false);
   }, [closeSaving]);
 
   const handleDeleteClose = useCallback(() => {
@@ -909,7 +922,11 @@ const App: React.FC = () => {
 
   useEffect(() => {
     if (!pendingSaveCloseId || activeTabId !== pendingSaveCloseId) return;
+    const savingFlow = closeFlowRef.current;
     void saveBeforeClose(handleSaveRef.current, () => {
+      // Another window can cancel the quit while this one's native Save
+      // dialog/write is pending. Finish saving, but keep its document open.
+      if (!canCompleteSaveClose(savingFlow, closeFlowRef.current)) return;
       setPendingClose(null);
       closeTabImmediatelyRef.current(pendingSaveCloseId);
     }).then(() => {
@@ -922,22 +939,51 @@ const App: React.FC = () => {
   useEffect(() => { handleCloseTabRef.current = handleCloseTab; }, [handleCloseTab]);
 
   useEffect(() => {
-    const start = (kind: "window" | "quit") => {
-      // A quit arriving during a window close takes over (it asks about the same tabs).
-      setCloseFlow((current) => (current === "quit" ? current : kind));
+    const start = (request: CloseFlow) => {
+      const current = closeFlowRef.current;
+      if (request.kind === "quit" && (request.generation <= cancelledQuitRef.current
+        || (current?.kind === "quit" && request.generation < current.generation))) return;
+      if (current?.kind === "quit" && (request.kind === "window" || current.generation === request.generation)) return;
+      closeFlowRef.current = request;
+      closeBlockedRef.current = true;
+      setCloseFlow(request);
+      setQuitReady(false);
+      setQuickOpen(false);
+      setThemePickerOpen(false);
+      setRecentPickerOpen(false);
+      setUpdateDialogOpen(false);
     };
-    const unlistenClose = listen("close-requested", () => start("window"));
-    const unlistenQuit = listen("quit-requested", () => start("quit"));
+    const unlistenClose = listen("close-requested", () => start({ kind: "window", generation: null }));
+    const unlistenQuit = listen<number>("quit-requested", ({ payload }) => start({ kind: "quit", generation: payload }));
+    const unlistenCancel = listen<number>("quit-cancelled", ({ payload }) => {
+      cancelledQuitRef.current = Math.max(cancelledQuitRef.current, payload);
+      const current = closeFlowRef.current;
+      if (current?.kind !== "quit" || current.generation !== payload) return;
+      closeFlowRef.current = null;
+      setCloseFlow(null);
+      setQuitReady(false);
+      setPendingClose(null);
+      setPendingSaveCloseId(null);
+    });
+    let disposed = false;
+    // Register first, then recover a quit requested before this webview was
+    // ready. Generations make late responses/cancellations harmless.
+    void Promise.all([unlistenClose, unlistenQuit, unlistenCancel]).then(async () => {
+      const generation = await invoke<number | null>("get_quit_generation");
+      if (!disposed && generation !== null) start({ kind: "quit", generation });
+    }).catch(console.error);
     return () => {
+      disposed = true;
       unlistenClose.then((f) => f());
       unlistenQuit.then((f) => f());
+      unlistenCancel.then((f) => f());
     };
   }, []);
 
   // Ask about the next unsaved tab once the previous answer has been handled;
   // when none are left, let the window close or the app quit.
   useEffect(() => {
-    if (!closeFlow || pendingClose || closeSaving || pendingSaveCloseId) return;
+    if (!closeFlow || quitReady || pendingClose || closeSaving || pendingSaveCloseId) return;
     const nextDirty = tabs.find((t) =>
       t.id === activeTabId ? dirty : storedTabsRef.current.get(t.id)?.dirty ?? t.dirty
     );
@@ -947,9 +993,27 @@ const App: React.FC = () => {
       handleCloseTabRef.current(nextDirty.id);
       return;
     }
-    setCloseFlow(null);
-    void invoke(closeFlow === "window" ? "close_window_confirmed" : "window_ready_to_quit");
-  }, [closeFlow, pendingClose, closeSaving, pendingSaveCloseId, tabs, activeTabId, dirty]);
+    if (closeFlow.kind === "quit") {
+      setQuitReady(true);
+      void invoke("window_ready_to_quit", { generation: closeFlow.generation });
+    } else {
+      void invoke("close_window_confirmed").catch((error) => {
+        console.error("Failed to close window:", error);
+        closeFlowRef.current = null;
+        setCloseFlow(null);
+      });
+    }
+  }, [closeFlow, quitReady, pendingClose, closeSaving, pendingSaveCloseId, tabs, activeTabId, dirty]);
+
+  useEffect(() => {
+    if (!closeFlow || !pendingClose) return;
+    void import("@tauri-apps/api/window").then(async ({ getCurrentWindow }) => {
+      const window = getCurrentWindow();
+      await window.unminimize();
+      await window.show();
+      await window.setFocus();
+    }).catch(console.error);
+  }, [closeFlow, pendingClose]);
 
   // ---- Open file by path (used by OS "Open With" and default-app handler) ----
   const openFileByPath = useCallback(async (path: string): Promise<boolean> => {
@@ -1467,6 +1531,7 @@ const App: React.FC = () => {
   // ---- Native menu event listener ----
   useEffect(() => {
     const promise = listen<string>("menu-action", (event) => {
+      if (closeBlockedRef.current) return;
       switch (event.payload) {
         case "new":         handleNewRef.current(); break;
         case "open":        handleOpenRef.current(); break;
@@ -1498,10 +1563,19 @@ const App: React.FC = () => {
     });
     // Also listen for files opened while the app is already running.
     const unlisten = listen<string>("open-file", (event) => {
-      openFileByPathRef.current(event.payload);
+      if (closeBlockedRef.current) deferredFileOpensRef.current.push(event.payload);
+      else void openFileByPathRef.current(event.payload);
     });
     return () => { unlisten.then((fn) => fn()); };
   }, []);
+
+  useEffect(() => {
+    if (closeBlocked) return;
+    const paths = deferredFileOpensRef.current.splice(0);
+    void (async () => {
+      for (const path of paths) await openFileByPathRef.current(path);
+    })();
+  }, [closeBlocked]);
 
   // ---- Export ----
   const handleExportHtml = useCallback(async () => {
@@ -1551,7 +1625,7 @@ const App: React.FC = () => {
   // ---- Keyboard shortcuts ----
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (pendingClose || quickOpenRef.current) return;
+      if (closeBlockedRef.current || quickOpenRef.current) return;
       const mod = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
       const run = (action: string) => {
@@ -1636,6 +1710,7 @@ const App: React.FC = () => {
           </div>
         </div>
       )}
+      <div inert={closeBlocked} style={{ display: "contents" }}>
       <Toolbar
         view={viewRef.current}
         hasDocument={tabs.length > 0}
@@ -1834,6 +1909,20 @@ const App: React.FC = () => {
           }}
           onCancel={() => setPendingLargeFile(null)}
         />
+      )}
+
+      </div>
+
+      {quitReady && (
+        <div className="modal-overlay">
+          <div className="modal-dialog" role="status" aria-live="polite">
+            <h2>Waiting for other windows</h2>
+            <p>Review the unsaved documents in the other Bioscratch windows to finish quitting.</p>
+            <div className="modal-actions">
+              <button className="modal-btn secondary" onClick={handleCancelClose}>Cancel Quit</button>
+            </div>
+          </div>
+        </div>
       )}
 
       {pendingClose && (

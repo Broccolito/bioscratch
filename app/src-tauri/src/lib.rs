@@ -865,6 +865,9 @@ async fn open_url(app: tauri::AppHandle, url: String) -> Result<(), String> {
 #[tauri::command]
 async fn open_new_window(app: tauri::AppHandle, file_path: Option<String>) -> Result<(), String> {
     use tauri::{WebviewUrl, WebviewWindowBuilder};
+    if unsaved::is_quitting() {
+        return Err("Finish or cancel the current quit before opening a new window".into());
+    }
     if let Some(path) = &file_path {
         require_authorized_path(path)?;
     }
@@ -1125,7 +1128,7 @@ async fn download_and_install(app: tauri::AppHandle, url: String) -> Result<(), 
 
 #[tauri::command]
 async fn quit_app(app: tauri::AppHandle) {
-    app.exit(0);
+    unsaved::request_quit(&app);
 }
 
 /// Called by the frontend on mount to retrieve a file path that was passed
@@ -1343,6 +1346,7 @@ pub fn run() {
             workspace::move_to_trash,
             unsaved::window_ready_to_quit,
             unsaved::cancel_quit,
+            unsaved::get_quit_generation,
             unsaved::close_window_confirmed,
             dev_bridge::__dev_bridge_result,
         ])
@@ -1364,11 +1368,11 @@ pub fn run() {
             }
 
             // Quit requested by the OS (Dock, logout): review unsaved documents
-            // unless a quit is already under way. app.exit(0) carries a code,
-            // and the last window closing leaves none to ask; both go through.
+            // including a repeated Dock quit while the prompts are open.
+            // Only a confirmed app.exit(0), or no windows, can pass through.
             if let tauri::RunEvent::ExitRequested { api, code, .. } = &event {
                 let has_windows = !app_handle.webview_windows().is_empty();
-                if code.is_none() && has_windows && !unsaved::is_quitting() {
+                if code.is_none() && has_windows {
                     api.prevent_exit();
                     unsaved::request_quit(app_handle);
                 }
