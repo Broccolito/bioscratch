@@ -37,8 +37,8 @@ jobs:
       - run: npm run build:preview
       - name: Check frontmatter fixtures
         run: |
-          npx --no-install esbuild scripts/test-frontmatter.mts --bundle --platform=node --format=esm --outfile="$RUNNER_TEMP/bioscratch-frontmatter.mjs"
-          node "$RUNNER_TEMP/bioscratch-frontmatter.mjs"
+          npx --no-install esbuild scripts/test-frontmatter.mts --bundle --platform=node --format=cjs --outfile="$RUNNER_TEMP/bioscratch-frontmatter.cjs"
+          node "$RUNNER_TEMP/bioscratch-frontmatter.cjs"
 
   rust:
     name: macOS backend tests

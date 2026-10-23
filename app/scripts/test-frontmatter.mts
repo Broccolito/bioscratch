@@ -3,7 +3,7 @@
 //   2. parseFrontmatter classifies/parses the YAML (or falls back) without throwing
 //
 // Run from app/: npx esbuild scripts/test-frontmatter.mts --bundle --platform=node \
-//        --format=esm --outfile=/tmp/fmtest.mjs && node /tmp/fmtest.mjs
+//        --format=cjs --outfile=/tmp/fmtest.cjs && node /tmp/fmtest.cjs
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { schema } from "../src/editor/schema";
