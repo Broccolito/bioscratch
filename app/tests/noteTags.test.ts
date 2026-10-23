@@ -68,6 +68,20 @@ describe("writing tags into front matter", () => {
     expect(writeFrontmatterTags("tags: [a]", [])).toBe("");
   });
 
+  it("edits case-insensitive aliases without leaving the old tags behind", () => {
+    expect(writeFrontmatterTags("Tags: [Lab]\ntitle: X", ["lab", "new"])).toBe("Tags: [Lab, new]\ntitle: X");
+    expect(writeFrontmatterTags("TAG: Solo", [])).toBe("");
+    expect(writeFrontmatterTags("' tags ': [Lab]", [])).toBe("");
+  });
+
+  it("consolidates all tag aliases and preserves spelling from each", () => {
+    const yaml = "title: X # keep me\nTag: [Lab]\ntags: [Coding]\nTAGS: [Other]\nyear: 1977";
+    const next = writeFrontmatterTags(yaml, ["coding", "new"]);
+    expect(next).toBe("title: X # keep me\nTag: [Coding, new]\nyear: 1977");
+    expect(frontmatterTags(next)).toEqual(["coding", "new"]);
+    expect(writeFrontmatterTags(yaml, [])).toBe("title: X # keep me\nyear: 1977");
+  });
+
   it("handles notes with no front matter and no tags", () => {
     // Regression: rendering the tag bar for a new/blank note crashed the app.
     expect(writeFrontmatterTags("", [])).toBe("");
@@ -79,6 +93,9 @@ describe("writing tags into front matter", () => {
   it("refuses to rewrite YAML it cannot parse safely", () => {
     expect(writeFrontmatterTags("tags: [unclosed, list\ntitle: x", ["a"])).toBeNull();
     expect(writeFrontmatterTags("- just\n- a list", ["a"])).toBeNull();
+    expect(writeFrontmatterTags("tags: &shared [lab]\nother: *shared", ["new"])).toBeNull();
+    expect(writeFrontmatterTags("tags: &shared [lab]\nother: *shared", [])).toBeNull();
+    expect(canEditDocTags(stateFor("---\ntags: &shared [lab]\nother: *shared\n---\nBody\n").doc)).toBe(false);
   });
 });
 

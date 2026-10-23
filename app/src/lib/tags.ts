@@ -11,7 +11,7 @@
 // list (`tags: [a, b]`) keeps its style when edited, and `tag:` is accepted as
 // an alias. Matching is case-insensitive via `normalizeTag`.
 
-import { isMap, isScalar, isSeq, parseDocument } from "yaml";
+import { isMap, isScalar, isSeq, parseDocument, visit } from "yaml";
 import { parseFrontmatter, TAG_KEYS } from "./frontmatter";
 
 const MAX_TAG_LENGTH = 64;
@@ -72,7 +72,17 @@ export function frontmatterTags(yaml: string | null): string[] {
  *  is empty or a key/value map. */
 export function canWriteFrontmatterTags(yaml: string): boolean {
   const doc = parseDocument(yaml);
-  return doc.errors.length === 0 && (doc.contents === null || isMap(doc.contents));
+  if (doc.errors.length > 0 || (doc.contents !== null && !isMap(doc.contents))) return false;
+  // Replacing/removing a tag node can invalidate aliases elsewhere in the
+  // metadata. Keep shared YAML graphs read-only instead of risking data loss.
+  let hasAliases = false;
+  visit(doc, {
+    Alias() {
+      hasAliases = true;
+      return visit.BREAK;
+    },
+  });
+  return !hasAliases;
 }
 
 /**
@@ -86,25 +96,38 @@ export function writeFrontmatterTags(yaml: string, tags: string[]): string | nul
   if (!canWriteFrontmatterTags(yaml)) return null;
   const doc = parseDocument(yaml);
 
-  const key = TAG_KEYS.find((k) => doc.has(k)) ?? "tags";
-  const existing = doc.get(key, true);
+  // Reading accepts case-insensitive `tag` / `tags` aliases, so editing must
+  // replace every spelling too. Keep the first key and its formatting rather
+  // than adding a second, lowercase key whose values would merge on reading.
+  const tagPairs = isMap(doc.contents)
+    ? doc.contents.items.filter((pair) =>
+        isScalar(pair.key) && typeof pair.key.value === "string"
+          && TAG_KEYS.includes(pair.key.value.trim().toLowerCase())
+      )
+    : [];
+  const primary = tagPairs[0];
+  const existing = primary?.value;
 
   // Reuse the original spelling of tags the note already had.
   const original = new Map<string, string>();
-  const rawItems: unknown[] = isSeq(existing)
-    ? existing.items.map((item) => (isScalar(item) ? item.value : item))
-    : isScalar(existing) ? String(existing.value ?? "").split(/[,\s]+/) : [];
-  for (const raw of rawItems) {
-    if (typeof raw !== "string" && typeof raw !== "number") continue;
-    const tag = normalizeTag(String(raw));
-    if (tag && !original.has(tag)) original.set(tag, String(raw).trim());
+  for (const pair of tagPairs) {
+    const value = pair.value;
+    const rawItems: unknown[] = isSeq(value)
+      ? value.items.map((item) => (isScalar(item) ? item.value : item))
+      : isScalar(value) ? String(value.value ?? "").split(/[,\s]+/) : [];
+    for (const raw of rawItems) {
+      if (typeof raw !== "string" && typeof raw !== "number") continue;
+      const tag = normalizeTag(String(raw));
+      if (tag && !original.has(tag)) original.set(tag, String(raw).trim());
+    }
   }
   const spelled = tags.map((t) => original.get(t) ?? t);
 
   if (spelled.length === 0) {
-    // Nothing to remove from empty front matter (doc.delete throws on it).
-    if (!doc.has(key)) return yaml;
-    doc.delete(key);
+    if (tagPairs.length === 0) return yaml;
+    if (isMap(doc.contents)) {
+      doc.contents.items = doc.contents.items.filter((pair) => !tagPairs.includes(pair));
+    }
   } else if (isScalar(existing) && typeof existing.value === "string" && /[,\s]/.test(existing.value.trim())) {
     // A multi-tag string (Jekyll's `tags: a b`, or `a, b`) keeps its style;
     // a single value becomes a standard list.
@@ -112,7 +135,11 @@ export function writeFrontmatterTags(yaml: string, tags: string[]): string | nul
   } else {
     const node = doc.createNode(spelled);
     if (isSeq(existing)) node.flow = existing.flow ?? false;
-    doc.set(key, node);
+    if (primary) primary.value = node;
+    else doc.set("tags", node);
+  }
+  if (spelled.length > 0 && isMap(doc.contents)) {
+    doc.contents.items = doc.contents.items.filter((pair) => pair === primary || !tagPairs.includes(pair));
   }
 
   if (isMap(doc.contents) && doc.contents.items.length === 0 && !doc.commentBefore && !doc.comment) {
