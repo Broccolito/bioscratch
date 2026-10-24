@@ -7,7 +7,7 @@ snapshot; the remaining checks below must be updated before publication.
 
 | Check | Result |
 | --- | --- |
-| App and extension editor regression suite | 194 passed across 22 files, including Quick Look and image-path regressions |
+| App and extension editor regression suite | 196 passed across 22 files, including Quick Look and image-path regressions |
 | Rust backend tests | 21 passed; 1 ignored |
 | Release-script checks with stubbed Apple tools | 31 passed |
 | Front-matter fixture assertions | 27 passed |
@@ -34,8 +34,8 @@ ID signed and notarized Apple Silicon app.
 | Folder browser (PR #11) | Native folder picker, persistence, tree navigation, file/folder creation, rename, and native Trash |
 | Search and navigation (PR #11) | Scoped/full-text search, fuzzy Command+P, Command+Enter, rendered match highlighting, and preserving a dirty background tab during an extension-changing rename |
 | Tags (PR #11) | Nested tags, AND filters, removal and aliases, read-only anchored YAML, live changes, and external-edit rescan |
-| Document local images | Alpha's relative image displayed on first open and after reopening the final installed ARM app |
-| Native Quick Look | Alpha's banner, math, table, Mermaid diagram, and code displayed without raw YAML or editor controls; neighboring local-image access was denied by macOS |
+| Document local images | Alpha's relative image displayed on first open and when Alpha was reopened in the final installed ARM app |
+| Native Quick Look | Alpha's banner, math, table, Mermaid diagram, and code displayed without raw YAML or editor controls; task checkbox state looked correct; neighboring local-image access was denied by macOS |
 
 PR #10's documentation refresh and PR #12's contributor/contact changes are
 documentation changes; they do not add an app interaction.
@@ -64,8 +64,10 @@ final push and green main CI.
 ## Remaining checks and limits
 
 - The native Quick Look check exposed a macOS sandbox limit on neighboring local
-  images. An accurate image placeholder and documentation update are in progress;
-  their final native check remains pending. Rendered document content passed.
+  images. The accurate local-image placeholder and documentation are implemented;
+  their final native check remains pending. Remote and data-image handling remain
+  supported. Rendered document content passed; checkbox interaction is not
+  claimed from the visual state check.
 - Both architectures must be packaged, signed, notarized, and checked again after
   the final Quick Look fallback update.
 - Physical Intel Mac hardware testing remains unperformed; the x86_64 Rosetta
