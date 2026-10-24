@@ -65,9 +65,11 @@ jobs:
       - name: Check Quick Look Swift host and image helper
         run: |
           SWIFT_COMPILER="$(xcrun --find swiftc)"
-          "$SWIFT_COMPILER" src-tauri/quicklook/PreviewImages.swift tests/quicklookImages.swift -o "$RUNNER_TEMP/bioscratch-quicklook-images"
+          SWIFT_SDK="$(xcrun --sdk macosx --show-sdk-path)"
+          SWIFT_TARGET="$(uname -m)-apple-macosx11.0"
+          "$SWIFT_COMPILER" -sdk "$SWIFT_SDK" -target "$SWIFT_TARGET" src-tauri/quicklook/PreviewImages.swift tests/quicklookImages.swift -o "$RUNNER_TEMP/bioscratch-quicklook-images"
           "$RUNNER_TEMP/bioscratch-quicklook-images"
-          "$SWIFT_COMPILER" -typecheck src-tauri/quicklook/PreviewImages.swift src-tauri/quicklook/PreviewViewController.swift -framework Cocoa -framework Quartz -framework WebKit
+          "$SWIFT_COMPILER" -sdk "$SWIFT_SDK" -target "$SWIFT_TARGET" -typecheck src-tauri/quicklook/PreviewImages.swift src-tauri/quicklook/PreviewViewController.swift -framework Cocoa -framework Quartz -framework WebKit
       - name: Install Rust toolchain
         run: |
           rustup toolchain install stable --profile minimal
