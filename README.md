@@ -18,6 +18,10 @@ As `skill.md` files become a common way for researchers and engineers to represe
 
 **Opens almost anything** — `.md`, `.txt`, `.py`, `.r`, `.json`, `.yaml`, `.toml`, `.tex`, `.sql`, `.html`, `.ts`, `.go`, `.rs`, and more. Markdown-first, but works well for anything text-based.
 
+**Browse and search your folders** — Open any folder on your Mac (`⇧⌘O`) to get a file tree in the sidebar — no vault, nothing added to the folder. Double-click a folder to move into it; create, rename and move files and folders to the Trash right from the tree; jump to any file with Quick Open (`⌘P`); and go back and forward like a browser (`⌘[` / `⌘]`). Search finds text across the folder, including notes you haven't saved yet.
+
+**Tags that other tools understand** — Add tags from the tag bar above the editor. They're stored as standard front-matter `tags:` — the same format Obsidian, Hugo and Jekyll use — with `/` for subtags (`lab/assays`). Filter search results, or the file tree itself, by any combination of tags; a parent tag includes its subtags.
+
 **Export to HTML and PDF** — One-click export from the toolbar. **HTML export** produces a self-contained file with KaTeX math, syntax highlighting, and Mermaid diagrams bundled in. **PDF export** is rendered natively from the page you see — math, highlighted code, Mermaid diagrams, tables and local images included — with nothing extra to install.
 
 **Mermaid diagram support** — Write flowcharts, sequence diagrams, and ERDs in fenced code blocks. They render live in the editor and carry through into HTML exports.
@@ -53,6 +57,11 @@ Prefer to stay in VS Code? Install
 | Close tab | `⌘W` |
 | Go to tab 1–8 / last tab | `⌘1`–`⌘8` / `⌘9` |
 | Find | `⌘F` |
+| Open folder | `⌘⇧O` |
+| Quick open | `⌘P` |
+| Search folder | `⌘⇧F` |
+| Back / Forward | `⌘[` / `⌘]` |
+| Toggle sidebar | `⌘\` |
 | Bold | `⌘B` |
 | Italic | `⌘I` |
 | Inline code | `` ⌘` `` |

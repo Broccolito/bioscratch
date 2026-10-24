@@ -7,6 +7,7 @@ use tauri::{Emitter, Manager};
 use tauri_plugin_fs::FsExt;
 
 mod dev_bridge;
+mod workspace;
 mod unsaved;
 
 // Static storage so the pending file path is always accessible — even if
@@ -84,7 +85,8 @@ fn require_authorized_path(path: &str) -> Result<PathBuf, String> {
     let allowed = authorized_files()
         .lock()
         .map_err(|_| "File access lock failed")?
-        .contains(&normalized);
+        .contains(&normalized)
+        || workspace::is_under_authorized_root(&normalized);
     if allowed {
         Ok(normalized)
     } else {
@@ -122,126 +124,7 @@ async fn show_open_dialog(app: tauri::AppHandle) -> Result<Option<String>, Strin
     let path = app
         .dialog()
         .file()
-        .add_filter(
-            "Text files",
-            &[
-                "md",
-                "markdown",
-                "txt",
-                "text",
-                "csv",
-                "tsv",
-                "xml",
-                "json",
-                "json5",
-                "yaml",
-                "yml",
-                "toml",
-                "ini",
-                "env",
-                "cfg",
-                "conf",
-                "config",
-                "html",
-                "htm",
-                "css",
-                "scss",
-                "sass",
-                "less",
-                "js",
-                "jsx",
-                "ts",
-                "tsx",
-                "mjs",
-                "cjs",
-                "vue",
-                "svelte",
-                "astro",
-                "c",
-                "h",
-                "cpp",
-                "cc",
-                "cxx",
-                "hpp",
-                "hxx",
-                "cs",
-                "java",
-                "kt",
-                "kts",
-                "scala",
-                "swift",
-                "m",
-                "mm",
-                "zig",
-                "v",
-                "py",
-                "pyw",
-                "rb",
-                "rbw",
-                "lua",
-                "pl",
-                "pm",
-                "php",
-                "sh",
-                "bash",
-                "zsh",
-                "fish",
-                "ps1",
-                "psm1",
-                "bat",
-                "cmd",
-                "r",
-                "rmd",
-                "jl",
-                "f",
-                "f90",
-                "f95",
-                "for",
-                "rs",
-                "go",
-                "ex",
-                "exs",
-                "erl",
-                "hrl",
-                "hs",
-                "lhs",
-                "ml",
-                "mli",
-                "fs",
-                "fsx",
-                "fsi",
-                "clj",
-                "cljs",
-                "cljc",
-                "lisp",
-                "el",
-                "vim",
-                "dockerfile",
-                "makefile",
-                "cmake",
-                "gradle",
-                "properties",
-                "plist",
-                "tf",
-                "tfvars",
-                "hcl",
-                "nix",
-                "cabal",
-                "tex",
-                "rst",
-                "adoc",
-                "org",
-                "wiki",
-                "sql",
-                "graphql",
-                "gql",
-                "proto",
-                "thrift",
-                "log",
-                "diff",
-                "patch",
-            ],
-        )
+        .add_filter("Text files", workspace::TEXT_EXTENSIONS)
         .blocking_pick_file();
     match path {
         Some(p) => {
@@ -1280,6 +1163,7 @@ pub fn run() {
             let new_item     = MenuItem::with_id(app, "new",         "New Tab",        true, Some("CmdOrCtrl+T"))?;
             let open_item    = MenuItem::with_id(app, "open",        "Open…",          true, Some("CmdOrCtrl+O"))?;
             let open_recent  = MenuItem::with_id(app, "open-recent", "Open Recent…",   true, None::<&str>)?;
+            let open_folder  = MenuItem::with_id(app, "open-folder", "Open Folder…",   true, Some("Shift+CmdOrCtrl+O"))?;
             let sep_f1       = PredefinedMenuItem::separator(app)?;
             let save_item    = MenuItem::with_id(app, "save",        "Save",           true, Some("CmdOrCtrl+S"))?;
             let save_as_item = MenuItem::with_id(app, "save-as",     "Save As…",       true, Some("Shift+CmdOrCtrl+S"))?;
@@ -1287,7 +1171,7 @@ pub fn run() {
             let exp_html     = MenuItem::with_id(app, "export-html", "Export as HTML…",true, None::<&str>)?;
             let exp_pdf      = MenuItem::with_id(app, "export-pdf",  "Export as PDF…", true, None::<&str>)?;
             let file_menu = SubmenuBuilder::new(app, "File")
-                .items(&[&new_item, &open_item, &open_recent, &sep_f1, &save_item, &save_as_item, &sep_f2, &exp_html, &exp_pdf])
+                .items(&[&new_item, &open_item, &open_recent, &open_folder, &sep_f1, &save_item, &save_as_item, &sep_f2, &exp_html, &exp_pdf])
                 .build()?;
 
             // ── Edit menu (OS-provided) ────────────────────────────────────
@@ -1308,8 +1192,20 @@ pub fn run() {
             let font_larger  = MenuItem::with_id(app, "font-larger",  "Increase Font Size",  true, Some("CmdOrCtrl+="))?;
             let font_smaller = MenuItem::with_id(app, "font-smaller", "Decrease Font Size",  true, Some("CmdOrCtrl+-"))?;
             let font_reset   = MenuItem::with_id(app, "font-reset",   "Actual Size",         true, Some("CmdOrCtrl+0"))?;
+            let sep_v2         = PredefinedMenuItem::separator(app)?;
+            let toggle_sidebar = MenuItem::with_id(app, "toggle-sidebar", "Toggle Sidebar", true, Some("CmdOrCtrl+\\"))?;
             let view_menu = SubmenuBuilder::new(app, "View")
-                .items(&[&theme_item, &sep_v1, &font_larger, &font_smaller, &font_reset])
+                .items(&[&theme_item, &sep_v1, &font_larger, &font_smaller, &font_reset, &sep_v2, &toggle_sidebar])
+                .build()?;
+
+            // ── Go menu ───────────────────────────────────────────────────
+            let go_back       = MenuItem::with_id(app, "go-back",       "Back",              true, Some("CmdOrCtrl+["))?;
+            let go_forward    = MenuItem::with_id(app, "go-forward",    "Forward",           true, Some("CmdOrCtrl+]"))?;
+            let sep_g1        = PredefinedMenuItem::separator(app)?;
+            let quick_open    = MenuItem::with_id(app, "quick-open",    "Quick Open…",       true, Some("CmdOrCtrl+P"))?;
+            let search_folder = MenuItem::with_id(app, "search-folder", "Search…",           true, Some("Shift+CmdOrCtrl+F"))?;
+            let go_menu = SubmenuBuilder::new(app, "Go")
+                .items(&[&go_back, &go_forward, &sep_g1, &quick_open, &search_folder])
                 .build()?;
 
             // ── Window menu ───────────────────────────────────────────────
@@ -1331,7 +1227,7 @@ pub fn run() {
                 .build()?;
 
             let menu = MenuBuilder::new(app)
-                .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &window_menu, &help_menu])
+                .items(&[&app_menu, &file_menu, &edit_menu, &view_menu, &go_menu, &window_menu, &help_menu])
                 .build()?;
 
             app.set_menu(menu)?;
@@ -1428,6 +1324,18 @@ pub fn run() {
             download_and_install,
             quit_app,
             get_initial_file,
+            workspace::show_folder_dialog,
+            workspace::read_workspace_folders,
+            workspace::remove_workspace_folder,
+            workspace::list_dir,
+            workspace::list_workspace_files,
+            workspace::reveal_in_finder,
+            workspace::open_with_default_app,
+            workspace::search_workspace,
+            workspace::read_workspace_metadata,
+            workspace::create_untitled,
+            workspace::rename_path,
+            workspace::move_to_trash,
             unsaved::window_ready_to_quit,
             unsaved::cancel_quit,
             unsaved::close_window_confirmed,

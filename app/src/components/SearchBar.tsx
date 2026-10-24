@@ -8,17 +8,19 @@ import {
 
 interface SearchBarProps {
   view: EditorView | null;
+  /** Pre-filled query whose matches are already set in the search plugin. */
+  initialQuery?: string;
   onClose: () => void;
 }
 
-const SearchBar: React.FC<SearchBarProps> = ({ view, onClose }) => {
+const SearchBar: React.FC<SearchBarProps> = ({ view, initialQuery = "", onClose }) => {
   const inputRef = useRef<HTMLInputElement>(null);
   // Drive the input off React state so it accumulates keystrokes correctly.
   // Plugin state only controls decorations; reading it back for the controlled
   // value doesn't work because search transactions don't change the doc, so
   // dispatchTransaction never fires onChangeRef → React never re-renders →
   // the controlled input resets to "" after every keystroke.
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(initialQuery);
   // Bump this to force a re-render after navigation so the match counter updates.
   const [, setNavTick] = useState(0);
 

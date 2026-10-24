@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback, useMemo } from "react";
 import { EditorView } from "prosemirror-view";
 import { EditorState, TextSelection } from "prosemirror-state";
 import { schema } from "./editor/schema";
@@ -6,7 +6,7 @@ import { markdownToDoc } from "./editor/serialization/markdownImport";
 import { docToMarkdown } from "./editor/serialization/markdownExport";
 import { getDocStats } from "./lib/stats";
 import { exportToHtml, exportToPdf } from "./lib/export";
-import { getFileMode, getCodeLanguage, FileMode } from "./lib/fileMode";
+import { getFileMode, getCodeLanguage, FileMode, isOpenableTextFile } from "./lib/fileMode";
 import { autosaveKeyForDiscard, saveBeforeClose } from "./lib/closeFlow";
 import { useTheme } from "./hooks/useTheme";
 import {
@@ -16,6 +16,29 @@ import {
   parseUserThemeYaml,
 } from "./lib/themeLoader";
 import { useRecentFiles } from "./hooks/useRecentFiles";
+import { useWorkspace } from "./hooks/useWorkspace";
+import { useTagIndex } from "./hooks/useTagIndex";
+import { flattenTagTree, notesWithTags, tagTree } from "./lib/tagIndex";
+import { canEditDocTags, docTags, setDocTags } from "./editor/frontmatterTags";
+import {
+  ancestorsWithin,
+  basename,
+  containingRoot,
+  dirname,
+  isUnder,
+  listWorkspaceFiles,
+  occurrenceIndexAtLine,
+  remapPath,
+} from "./lib/workspace";
+import {
+  NavHistory,
+  emptyHistory,
+  visit,
+  goBack,
+  goForward,
+  forget,
+} from "./lib/navHistory";
+import { setSearch, searchPluginKey } from "./editor/plugins/search";
 import { useAutosave } from "./hooks/useAutosave";
 import { loadAutosave, deleteAutosave } from "./hooks/useAutosave";
 import { invoke } from "@tauri-apps/api/core";
@@ -32,6 +55,11 @@ import ThemeSelector from "./components/ThemeSelector";
 import UpdateDialog from "./components/UpdateDialog";
 import RecentFilesDialog from "./components/RecentFilesDialog";
 import CloseDocumentDialog from "./components/CloseDocumentDialog";
+import Sidebar, { SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH } from "./components/Sidebar";
+import NavBar from "./components/NavBar";
+import QuickSwitcher from "./components/QuickSwitcher";
+import TagBar from "./components/TagBar";
+import type { OpenOptions, RevealRequest, TreeFilter } from "./components/FileTree";
 
 import "./styles/app.css";
 
@@ -102,6 +130,31 @@ function makeEditorStateForContent(
   return EditorState.create({ doc, plugins, selection });
 }
 
+function readStoredNumber(key: string, fallback: number, min: number, max: number): number {
+  try {
+    const saved = localStorage.getItem(key);
+    const value = saved ? parseInt(saved, 10) : NaN;
+    return Number.isFinite(value) ? Math.max(min, Math.min(max, value)) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function readStoredFlag(key: string, fallback: boolean): boolean {
+  try {
+    const saved = localStorage.getItem(key);
+    return saved === null ? fallback : saved === "1";
+  } catch {
+    return fallback;
+  }
+}
+
+function storeValue(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {}
+}
+
 const App: React.FC = () => {
   const viewRef = useRef<EditorView | null>(null);
   // User theme state: filename → parsed vars
@@ -120,6 +173,62 @@ const App: React.FC = () => {
     removeRecentFile,
     refreshRecentFiles,
   } = useRecentFiles();
+  const { folders, activeRoot, loaded: workspaceLoaded, setActiveRoot, addFolder, removeFolder } = useWorkspace();
+  // Wait until persisted folders are re-granted, or the first scan is refused.
+  const tagIndex = useTagIndex(workspaceLoaded ? activeRoot : null);
+  const updateTagIndex = tagIndex.updateNote;
+  const { setLiveTags, dropLiveTags } = tagIndex;
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [filterTree, setFilterTree] = useState(false);
+  // Folder at the top of the Files tree (double-click a folder to open it);
+  // search and tag filtering cover this folder.
+  const [viewDir, setViewDir] = useState<string | null>(null);
+  useEffect(() => {
+    setViewDir((dir) => (dir && activeRoot && isUnder(dir, activeRoot) ? dir : activeRoot));
+  }, [activeRoot]);
+  const scopeDir = viewDir ?? activeRoot;
+
+  const tagMatches = useMemo(
+    () => (selectedTags.length > 0 ? notesWithTags(tagIndex.index, selectedTags, scopeDir) : []),
+    [tagIndex.index, selectedTags, scopeDir]
+  );
+
+  const treeFilter = useMemo<TreeFilter | null>(() => {
+    if (!activeRoot || !filterTree || selectedTags.length === 0) return null;
+    const dirs = new Set<string>();
+    for (const path of tagMatches) for (const dir of ancestorsWithin(path, activeRoot)) dirs.add(dir);
+    return { files: new Set(tagMatches), dirs };
+  }, [activeRoot, filterTree, selectedTags, tagMatches]);
+
+  // The tags offered when tagging a note: those used in the folder currently
+  // shown in the Files tree (navigating into a subfolder narrows them).
+  const folderTags = useMemo(() => {
+    const inScope = [...tagIndex.index.notes.keys()].filter((p) => !scopeDir || isUnder(p, scopeDir));
+    return flattenTagTree(tagTree(tagIndex.index, inScope));
+  }, [tagIndex.index, scopeDir]);
+
+  // ---- Sidebar / navigation UI state ----
+  const [sidebarVisible, setSidebarVisible] = useState(() => readStoredFlag("bioscratch-sidebar-visible", true));
+  const [sidebarWidth, setSidebarWidth] = useState(() =>
+    readStoredNumber("bioscratch-sidebar-width", 260, SIDEBAR_MIN_WIDTH, SIDEBAR_MAX_WIDTH)
+  );
+  const [reveal, setReveal] = useState<RevealRequest | null>(null);
+  const revealSeqRef = useRef(0);
+  const [searchFocusSeq, setSearchFocusSeq] = useState(0);
+  const [quickOpen, setQuickOpen] = useState(false);
+  const quickOpenRef = useRef(false);
+  useEffect(() => { quickOpenRef.current = quickOpen; }, [quickOpen]);
+  const [workspaceFiles, setWorkspaceFiles] = useState<{ root: string; files: string[]; truncated: boolean } | null>(null);
+  const [workspaceFilesLoading, setWorkspaceFilesLoading] = useState(false);
+  // Query pre-filled into the in-document search bar after a folder-search jump.
+  const [searchSeed, setSearchSeed] = useState({ query: "", key: 0 });
+  // Per-tab back/forward history; navTick re-renders the nav buttons.
+  const historyRef = useRef<Map<string, NavHistory>>(new Map());
+  const [, setNavTick] = useState(0);
+  const bumpNav = useCallback(() => setNavTick((t) => t + 1), []);
+
+  useEffect(() => { storeValue("bioscratch-sidebar-visible", sidebarVisible ? "1" : "0"); }, [sidebarVisible]);
+  useEffect(() => { storeValue("bioscratch-sidebar-width", String(sidebarWidth)); }, [sidebarWidth]);
 
   // Load user themes on mount
   useEffect(() => {
@@ -366,27 +475,6 @@ const App: React.FC = () => {
     });
   }, [activeTabId, filePath, dirty, content, fileMode, codeLanguage]);
 
-  // ---- Drag-and-drop file open ----
-  const TEXT_EXTENSIONS = new Set([
-    // Markdown / text / data
-    "md","markdown","txt","text","csv","tsv","xml","json","json5","yaml","yml","toml","ini","env","cfg","conf","config",
-    // Web
-    "html","htm","css","scss","sass","less","js","jsx","ts","tsx","mjs","cjs","vue","svelte","astro",
-    // Systems / compiled
-    "c","h","cpp","cc","cxx","hpp","hxx","cs","java","kt","kts","scala","swift","m","mm","zig","v",
-    // Scripting
-    "py","pyw","rb","rbw","lua","pl","pm","php","sh","bash","zsh","fish","ps1","psm1","bat","cmd",
-    // Scientific / data science
-    "r","rmd","jl","ipynb","m","mat","f","f90","f95","for",
-    // Systems / DevOps
-    "rs","go","ex","exs","erl","hrl","hs","lhs","ml","mli","fs","fsx","fsi","clj","cljs","cljc","lisp","el","vim","lua",
-    // Config / infra
-    "dockerfile","makefile","cmake","gradle","properties","plist","tf","tfvars","hcl","nix","cabal",
-    // Docs / markup
-    "tex","rst","adoc","org","wiki",
-    // Misc
-    "sql","graphql","gql","proto","thrift","avsc","log","diff","patch",
-  ]);
 
   // ---- Open multiple files atomically (drag-drop) ----
   // All file reads happen in parallel first; then ALL tab state is applied in a
@@ -483,7 +571,6 @@ const App: React.FC = () => {
   useEffect(() => { openDroppedFilesRef.current = openDroppedFiles; }, [openDroppedFiles]);
 
   useEffect(() => {
-    const TEXT_EXT = TEXT_EXTENSIONS;
     const unlistenEnter = listen("tauri://drag-enter", () => { if (!draggingTabIdRef.current) setIsDragging(true); });
     const unlistenOver  = listen("tauri://drag-over",  () => { if (!draggingTabIdRef.current) setIsDragging(true); });
     const unlistenLeave = listen("tauri://drag-leave", () => setIsDragging(false));
@@ -493,7 +580,7 @@ const App: React.FC = () => {
       // Deduplicate paths within this batch, then read all in parallel
       const uniquePaths = [...new Set(
         (event.payload?.paths ?? [])
-          .filter((p) => TEXT_EXT.has(p.split(".").pop()?.toLowerCase() ?? ""))
+          .filter(isOpenableTextFile)
       )];
       if (uniquePaths.length === 0) return;
 
@@ -602,7 +689,10 @@ const App: React.FC = () => {
   // ---- Close tab ----
   const closeTabImmediately = useCallback(
     (id: string) => {
+      const closedPath = tabsRef.current.find((t) => t.id === id)?.filePath;
+      if (closedPath) dropLiveTags((p) => p === closedPath);
       storedTabsRef.current.delete(id);
+      historyRef.current.delete(id);
 
       setTabs((prev) => {
         const remaining = prev.filter((t) => t.id !== id);
@@ -642,7 +732,7 @@ const App: React.FC = () => {
         return remaining;
       });
     },
-    [activeTabId, restoreTab]
+    [activeTabId, restoreTab, dropLiveTags]
   );
   const closeTabImmediatelyRef = useRef(closeTabImmediately);
   useEffect(() => {
@@ -759,6 +849,7 @@ const App: React.FC = () => {
       suppressWatchUntilRef.current = Date.now() + 2000;
       await invoke("write_file", { path: savePath, content: saveContent });
       lastDiskContentRef.current = saveContent;
+      if (fileModeRef.current === "markdown") updateTagIndex(savePath, saveContent);
       setFilePath(savePath);
       setDirty(false);
       setContent(saveContent);
@@ -773,7 +864,7 @@ const App: React.FC = () => {
       console.error("Failed to save:", e);
       return false;
     }
-  }, [filePath, activeTabId, addRecentFile, syncTabMeta]);
+  }, [filePath, activeTabId, addRecentFile, syncTabMeta, updateTagIndex]);
   // Keep ref current so handleCloseTab (declared before handleSave) can call it
   useEffect(() => { handleSaveRef.current = handleSave; }, [handleSave]);
   useEffect(() => { handleOpenRef.current = handleOpen; }, [handleOpen]);
@@ -891,6 +982,293 @@ const App: React.FC = () => {
     }
   }, [tabs, handleSelectTab, addRecentFile, removeRecentFile, doOpenFile]);
   useEffect(() => { openFileByPathRef.current = openFileByPath; }, [openFileByPath]);
+  const doOpenFileRef = useRef(doOpenFile);
+  useEffect(() => { doOpenFileRef.current = doOpenFile; }, [doOpenFile]);
+
+  // ---- In-tab navigation (sidebar, quick switcher, search, back/forward) ----
+  // Like a browser: a clean tab navigates in place and keeps a back/forward
+  // history; a dirty tab is never replaced, so the file opens in a new tab.
+  const showFileInActiveTab = useCallback((path: string, fileContent: string) => {
+    loadDocContentRef.current(fileContent, path, getFileMode(path), getCodeLanguage(path));
+    const scrollEl = document.querySelector(".editor-scroll-area") as HTMLElement | null;
+    if (scrollEl) scrollEl.scrollTop = 0;
+  }, []);
+
+  /** Open `path`, returning the file's text (for search jumps) or null. */
+  const navigateTo = useCallback(async (path: string, options: OpenOptions = {}): Promise<string | null> => {
+    const existing = tabsRef.current.find((t) => t.filePath === path);
+    if (existing) {
+      if (existing.id === activeTabIdRef.current) return contentRef.current;
+      const storedContent = storedTabsRef.current.get(existing.id)?.content ?? null;
+      handleSelectTabRef.current(existing.id);
+      return storedContent;
+    }
+
+    let fileContent: string;
+    try {
+      fileContent = await invoke<string>("read_file", { path });
+    } catch (e) {
+      console.error("Failed to open file:", e);
+      return null;
+    }
+    const mode = getFileMode(path);
+    const language = getCodeLanguage(path);
+    if (fileContent.length > 1_000_000) {
+      setPendingLargeFile({ path, content: fileContent, mode, language });
+      return null;
+    }
+    addRecentFile(path);
+
+    const currentId = activeTabIdRef.current;
+    let tabId: string;
+    if (!options.newTab && currentId && !dirtyRef.current) {
+      const from = filePathRef.current;
+      showFileInActiveTab(path, fileContent);
+      historyRef.current.set(currentId, visit(historyRef.current.get(currentId) ?? emptyHistory(), from, path));
+      bumpNav();
+      tabId = currentId;
+    } else {
+      tabId = doOpenFileRef.current(path, fileContent, mode, language);
+    }
+
+    if (mode === "markdown") {
+      const saved = await loadAutosave(path).catch(() => null);
+      if (saved && saved !== fileContent) {
+        setRecovery({ key: path, content: saved, filePath: path, tabId });
+      }
+    }
+    return fileContent;
+  }, [addRecentFile, showFileInActiveTab, bumpNav]);
+  const navigateToRef = useRef(navigateTo);
+  useEffect(() => { navigateToRef.current = navigateTo; }, [navigateTo]);
+
+  const openFromSidebar = useCallback((path: string, options?: OpenOptions) => {
+    void navigateToRef.current(path, options);
+  }, []);
+
+  /** Open a folder-search hit and highlight the clicked match in the editor. */
+  const openSearchMatch = useCallback(async (
+    path: string,
+    query: string,
+    line: number,
+    options?: OpenOptions
+  ) => {
+    const fileContent = await navigateToRef.current(path, options);
+    if (fileContent === null) return;
+    // Wait for React to commit (and show the editor) before scrolling to the
+    // match. setTimeout rather than rAF: rAF never fires in a hidden window.
+    setTimeout(() => {
+      const view = viewRef.current;
+      if (!view) return;
+      const found = setSearch(query, view.state, view.dispatch);
+      if (found.matches.length > 0) {
+        const index = Math.min(occurrenceIndexAtLine(fileContent, query, line), found.matches.length - 1);
+        const match = found.matches[index];
+        view.dispatch(
+          view.state.tr
+            .setMeta(searchPluginKey, { ...found, currentIndex: index })
+            .setSelection(TextSelection.create(view.state.doc, match.from))
+            .scrollIntoView()
+        );
+        setTimeout(() => {
+          view.dom.querySelector(".search-highlight-current")?.scrollIntoView({ block: "center" });
+        }, 0);
+      }
+      setSearchSeed((prev) => ({ query, key: prev.key + 1 }));
+      setSearchVisible(true);
+    }, 0);
+  }, []);
+
+  const navigateHistory = useCallback(async (direction: -1 | 1) => {
+    const id = activeTabIdRef.current;
+    if (!id || dirtyRef.current) return;
+    const history = historyRef.current.get(id) ?? emptyHistory();
+    const step = direction < 0
+      ? goBack(history, filePathRef.current)
+      : goForward(history, filePathRef.current);
+    if (!step) return;
+
+    // Never show one file in two tabs: jump to the tab that already has it.
+    const elsewhere = tabsRef.current.find((t) => t.filePath === step.target && t.id !== id);
+    if (elsewhere) {
+      historyRef.current.set(id, forget(history, step.target));
+      bumpNav();
+      handleSelectTabRef.current(elsewhere.id);
+      return;
+    }
+
+    try {
+      const fileContent = await invoke<string>("read_file", { path: step.target });
+      // The user may have switched tabs or started typing while we read.
+      if (activeTabIdRef.current !== id || dirtyRef.current) return;
+      showFileInActiveTab(step.target, fileContent);
+      historyRef.current.set(id, step.history);
+      addRecentFile(step.target);
+    } catch {
+      historyRef.current.set(id, forget(history, step.target));
+    }
+    bumpNav();
+  }, [addRecentFile, showFileInActiveTab, bumpNav]);
+
+  // ---- Sidebar actions ----
+  /** Show the sidebar, optionally putting the caret in its search box. */
+  const showSidebar = useCallback((focusSearch = false) => {
+    setSidebarVisible(true);
+    if (focusSearch) setSearchFocusSeq((n) => n + 1);
+  }, []);
+
+  const revealInSidebar = useCallback((path: string, isDir: boolean) => {
+    const owner = containingRoot(path, folders);
+    if (!owner) return;
+    if (owner !== activeRoot) setActiveRoot(owner);
+    setSidebarVisible(true);
+    // A folder opens as the top of the tree; a file is expanded to and shown.
+    if (isDir) setViewDir(path);
+    else setReveal({ path, isDir, seq: ++revealSeqRef.current });
+  }, [folders, activeRoot, setActiveRoot]);
+
+  const filterByTag = useCallback((tag: string) => {
+    setSelectedTags([tag]);
+    setViewDir(activeRoot);
+    showSidebar(true);
+  }, [activeRoot, showSidebar]);
+
+  // Open notes with unsaved changes, searched as they are now rather than as
+  // they are on disk. The active tab's text is `content`; background tabs keep
+  // theirs in storedTabsRef (refreshed whenever a tab is stashed).
+  const openDocs = useMemo(() => {
+    const docs = new Map<string, string>();
+    for (const tab of tabs) {
+      if (!tab.filePath) continue;
+      if (tab.id === activeTabId) {
+        if (dirty) docs.set(tab.filePath, content);
+      } else {
+        const stored = storedTabsRef.current.get(tab.id);
+        if (stored?.dirty) docs.set(tab.filePath, stored.content);
+      }
+    }
+    return docs;
+  }, [tabs, activeTabId, dirty, content]);
+
+  // Report the active note's current tags (saved or not) to the tag index, so
+  // a tag just added is offered in the next note straight away. `content`
+  // changes on every edit, load and tab switch.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!filePath || fileMode !== "markdown" || !view) return;
+    setLiveTags(filePath, docTags(view.state.doc));
+  }, [content, filePath, fileMode, setLiveTags]);
+
+  // Follow the active file in the tree.
+  useEffect(() => {
+    if (!filePath || !scopeDir || !isUnder(filePath, scopeDir)) return;
+    setReveal({ path: filePath, isDir: false, seq: ++revealSeqRef.current });
+  }, [filePath, scopeDir]);
+
+  const openQuickSwitcher = useCallback(() => {
+    setQuickOpen(true);
+    if (!activeRoot) return;
+    const root = activeRoot;
+    setWorkspaceFilesLoading(true);
+    listWorkspaceFiles(root)
+      .then((result) => {
+        setWorkspaceFiles({
+          root,
+          files: result.files.filter(isOpenableTextFile),
+          truncated: result.truncated,
+        });
+      })
+      .catch((e) => console.error("Failed to list folder files:", e))
+      .finally(() => setWorkspaceFilesLoading(false));
+  }, [activeRoot]);
+
+  // A file or folder was renamed in the Files tree: point every open tab,
+  // history entry and recent file at the new path, so the file poller sees a
+  // path change instead of a deleted file.
+  const refreshTagIndex = tagIndex.refresh;
+  const handlePathRenamed = useCallback((from: string, to: string) => {
+    const remap = (p: string) => remapPath(p, from, to);
+    suppressWatchUntilRef.current = Date.now() + 2000;
+    // Re-reported under the new path by the live-tags effect.
+    dropLiveTags((p) => remap(p) !== p);
+
+    const renamedTabPaths = tabsRef.current
+      .map((t) => t.filePath)
+      .filter((p): p is string => !!p && remap(p) !== p);
+    setTabs((prev) => prev.map((t) => (t.filePath ? { ...t, filePath: remap(t.filePath) } : t)));
+    for (const [id, stored] of storedTabsRef.current) {
+      if (stored.filePath) storedTabsRef.current.set(id, { ...stored, filePath: remap(stored.filePath) });
+    }
+    const current = filePathRef.current;
+    if (current && remap(current) !== current) {
+      filePathRef.current = remap(current);
+      setFilePath(remap(current));
+    }
+    for (const [id, h] of historyRef.current) {
+      historyRef.current.set(id, { back: h.back.map(remap), forward: h.forward.map(remap) });
+    }
+    for (const path of recentFiles) {
+      if (remap(path) === path) continue;
+      void removeRecentFile(path);
+      void addRecentFile(remap(path));
+    }
+    // Recovery copies are keyed by path; the next autosave writes the new key.
+    renamedTabPaths.forEach((p) => void deleteAutosave(p).catch(() => {}));
+    setViewDir((dir) => (dir ? remap(dir) : dir));
+    void refreshTagIndex();
+    bumpNav();
+  }, [recentFiles, addRecentFile, removeRecentFile, refreshTagIndex, bumpNav, dropLiveTags]);
+
+  // A file or folder went to the Trash: close its clean tabs (a tab with
+  // unsaved edits stays, showing the "deleted from disk" banner), and drop it
+  // from history and recent files.
+  const handlePathDeleted = useCallback((deleted: string) => {
+    const gone = (p: string) => p === deleted || p.startsWith(`${deleted}/`);
+    const toClose = tabsRef.current.filter((t) => {
+      if (!t.filePath || !gone(t.filePath)) return false;
+      const isDirty = t.id === activeTabIdRef.current
+        ? dirtyRef.current
+        : storedTabsRef.current.get(t.id)?.dirty ?? t.dirty;
+      return !isDirty;
+    });
+    // Closing the last tab hides the window; never do that as a side effect of
+    // deleting a file. Keep the active tab, which shows the "deleted" banner.
+    if (toClose.length === tabsRef.current.length) {
+      const keep = toClose.findIndex((t) => t.id === activeTabIdRef.current);
+      toClose.splice(keep === -1 ? 0 : keep, 1);
+    }
+    // Close background tabs first so the active tab's neighbor is still valid.
+    toClose
+      .sort((a, b) => Number(a.id === activeTabIdRef.current) - Number(b.id === activeTabIdRef.current))
+      .forEach((t) => closeTabImmediatelyRef.current(t.id));
+    for (const [id, h] of historyRef.current) {
+      historyRef.current.set(id, { back: h.back.filter((p) => !gone(p)), forward: h.forward.filter((p) => !gone(p)) });
+    }
+    recentFiles.filter(gone).forEach((p) => void removeRecentFile(p));
+    dropLiveTags(gone);
+    setViewDir((dir) => (dir && gone(dir) ? dirname(deleted) : dir));
+    void refreshTagIndex();
+    bumpNav();
+  }, [recentFiles, removeRecentFile, refreshTagIndex, bumpNav, dropLiveTags]);
+
+  const handleAddFolder = useCallback(async () => {
+    const root = await addFolder();
+    if (root) showSidebar();
+  }, [addFolder, showSidebar]);
+
+  // Shortcut and menu actions, read through a ref so listeners registered once
+  // always call the latest closures.
+  const workspaceActionsRef = useRef<Record<string, () => void>>({});
+  useEffect(() => {
+    workspaceActionsRef.current = {
+      "open-folder": () => void handleAddFolder(),
+      "toggle-sidebar": () => setSidebarVisible((v) => !v),
+      "go-back": () => void navigateHistory(-1),
+      "go-forward": () => void navigateHistory(1),
+      "quick-open": openQuickSwitcher,
+      "search-folder": () => showSidebar(true),
+    };
+  });
 
   // ---- Save As ----
   const handleSaveAs = useCallback(async () => {
@@ -907,6 +1285,7 @@ const App: React.FC = () => {
       suppressWatchUntilRef.current = Date.now() + 2000;
       await invoke("write_file", { path, content: saveContent });
       lastDiskContentRef.current = saveContent;
+      if (fileModeRef.current === "markdown") updateTagIndex(path, saveContent);
       setFilePath(path);
       setDirty(false);
       setContent(saveContent);
@@ -917,7 +1296,7 @@ const App: React.FC = () => {
     } catch (e) {
       console.error("Failed to save:", e);
     }
-  }, [activeTabId, addRecentFile, syncTabMeta]);
+  }, [activeTabId, addRecentFile, syncTabMeta, updateTagIndex]);
   useEffect(() => { handleSaveAsRef.current = handleSaveAs; }, [handleSaveAs]);
 
   // ---- Tab reorder ----
@@ -968,6 +1347,7 @@ const App: React.FC = () => {
         suppressWatchUntilRef.current = Date.now() + 2000;
         await invoke("write_file", { path: tabFilePath, content: tabContent });
         lastDiskContentRef.current = tabContent;
+        if (tabMode === "markdown") updateTagIndex(tabFilePath, tabContent);
       } catch (e) {
         console.error("Failed to save before detach:", e);
       }
@@ -982,7 +1362,7 @@ const App: React.FC = () => {
 
     setDraggingTabId(null);
     handleCloseTab(tabId, true);
-  }, [activeTabId, filePath, content, dirty, handleCloseTab]);
+  }, [activeTabId, filePath, content, dirty, handleCloseTab, updateTagIndex]);
 
   // ---- New window (Cmd+N) ----
   const handleNewWindow = useCallback(async () => {
@@ -1069,6 +1449,7 @@ const App: React.FC = () => {
         case "font-larger":  setFontScale(s => Math.min(200, s + 10)); break;
         case "font-smaller": setFontScale(s => Math.max(60, s - 10)); break;
         case "font-reset":   setFontScale(100); break;
+        default:             workspaceActionsRef.current[event.payload]?.(); break;
       }
     });
     return () => { promise.then((fn) => fn()); };
@@ -1136,8 +1517,13 @@ const App: React.FC = () => {
   // ---- Keyboard shortcuts ----
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (pendingClose) return;
+      if (pendingClose || quickOpenRef.current) return;
       const mod = e.metaKey || e.ctrlKey;
+      const key = e.key.toLowerCase();
+      const run = (action: string) => {
+        e.preventDefault();
+        workspaceActionsRef.current[action]?.();
+      };
       if (mod && !e.shiftKey && !e.altKey && /^[1-9]$/.test(e.key)) {
         // Like browsers: ⌘1–⌘8 jump to that tab, ⌘9 to the last one.
         e.preventDefault();
@@ -1145,6 +1531,18 @@ const App: React.FC = () => {
         const n = Number(e.key);
         const target = n === 9 ? currentTabs[currentTabs.length - 1] : currentTabs[n - 1];
         if (target) handleSelectTabRef.current(target.id);
+      } else if (mod && e.shiftKey && key === "o") {
+        run("open-folder");
+      } else if (mod && e.shiftKey && key === "f") {
+        run("search-folder");
+      } else if (mod && !e.shiftKey && key === "p") {
+        run("quick-open");
+      } else if (mod && e.key === "\\") {
+        run("toggle-sidebar");
+      } else if (mod && e.key === "[") {
+        run("go-back");
+      } else if (mod && e.key === "]") {
+        run("go-forward");
       } else if (mod && e.key === "s") {
         e.preventDefault();
         handleSave();
@@ -1216,8 +1614,42 @@ const App: React.FC = () => {
         onExportPdf={handleExportPdf}
         onToggleSearch={handleToggleSearch}
         onOpenThemeSelector={() => setThemePickerOpen(true)}
+        sidebarVisible={sidebarVisible}
+        onToggleSidebar={() => setSidebarVisible((v) => !v)}
       />
 
+      <div className="app-body">
+      {sidebarVisible && (
+        <Sidebar
+          folders={folders}
+          activeRoot={activeRoot}
+          activePath={filePath}
+          reveal={reveal}
+          searchFocusSeq={searchFocusSeq}
+          width={sidebarWidth}
+          onWidthChange={setSidebarWidth}
+          onSelectRoot={setActiveRoot}
+          onAddFolder={() => void handleAddFolder()}
+          onRemoveFolder={(root) => void removeFolder(root)}
+          onOpenFile={openFromSidebar}
+          onOpenMatch={(path, query, line, options) => void openSearchMatch(path, query, line, options)}
+          viewDir={scopeDir}
+          onViewDirChange={setViewDir}
+          tagIndex={tagIndex.index}
+          tagIndexLoading={tagIndex.loading}
+          selectedTags={selectedTags}
+          tagMatches={tagMatches}
+          filterTree={filterTree}
+          treeFilter={treeFilter}
+          onSelectedTagsChange={setSelectedTags}
+          onFilterTreeChange={setFilterTree}
+          onRenamed={handlePathRenamed}
+          onDeleted={handlePathDeleted}
+          openDocs={openDocs}
+          onRefreshTags={() => void tagIndex.refresh()}
+        />
+      )}
+      <div className="app-main">
       <TabBar
         tabs={tabs}
         activeId={activeTabId}
@@ -1231,6 +1663,40 @@ const App: React.FC = () => {
         onDragTabEnd={() => setDraggingTabId(null)}
       />
 
+      {tabs.length > 0 && (() => {
+        const history = historyRef.current.get(activeTabId);
+        const blockedReason = dirty ? "Save this file to navigate away" : null;
+        return (
+          <NavBar
+            filePath={filePath}
+            root={filePath ? containingRoot(filePath, folders) : null}
+            canGoBack={!dirty && (history?.back.length ?? 0) > 0}
+            canGoForward={!dirty && (history?.forward.length ?? 0) > 0}
+            blockedReason={blockedReason}
+            onBack={() => void navigateHistory(-1)}
+            onForward={() => void navigateHistory(1)}
+            onRevealFolder={(path) => revealInSidebar(path, true)}
+          />
+        );
+      })()}
+
+      {tabs.length > 0 && fileMode === "markdown" && viewRef.current && (() => {
+        const doc = viewRef.current.state.doc;
+        return (
+          <TagBar
+            tags={docTags(doc)}
+            editable={canEditDocTags(doc)}
+            folderTags={folderTags}
+            folderName={scopeDir ? basename(scopeDir) : "this folder"}
+            onChange={(next) => {
+              const view = viewRef.current;
+              if (view) setDocTags(view.state, view.dispatch, next);
+            }}
+            onSelectTag={filterByTag}
+          />
+        );
+      })()}
+
       {tabs.length === 0 && (
         <div className="welcome-screen">
           <div className="welcome-inner">
@@ -1239,7 +1705,8 @@ const App: React.FC = () => {
             <div className="welcome-hints">
               <span><kbd>⌘T</kbd> New document</span>
               <span><kbd>⌘O</kbd> Open file</span>
-              <span><kbd>⌘N</kbd> New window</span>
+              <span><kbd>⇧⌘O</kbd> Open folder</span>
+              <span><kbd>⌘P</kbd> Quick open</span>
             </div>
           </div>
         </div>
@@ -1266,8 +1733,13 @@ const App: React.FC = () => {
 
       {searchVisible && (
         <SearchBar
+          key={searchSeed.key}
           view={viewRef.current}
-          onClose={() => setSearchVisible(false)}
+          initialQuery={searchSeed.query}
+          onClose={() => {
+            setSearchVisible(false);
+            setSearchSeed((prev) => ({ query: "", key: prev.key + 1 }));
+          }}
         />
       )}
 
@@ -1288,6 +1760,24 @@ const App: React.FC = () => {
           dirty={dirty}
           wordCount={wordCount}
           charCount={charCount}
+        />
+      )}
+      </div>
+      </div>
+
+      {quickOpen && (
+        <QuickSwitcher
+          workspaceFiles={workspaceFiles && workspaceFiles.root === activeRoot ? workspaceFiles.files : []}
+          workspaceRoot={activeRoot}
+          folders={folders}
+          recentPaths={[
+            ...tabs.map((t) => t.filePath).filter((p): p is string => !!p && p !== filePath),
+            ...recentFiles.filter((p) => p !== filePath),
+          ]}
+          loading={workspaceFilesLoading && !(workspaceFiles && workspaceFiles.root === activeRoot)}
+          truncated={!!workspaceFiles && workspaceFiles.root === activeRoot && workspaceFiles.truncated}
+          onOpen={openFromSidebar}
+          onClose={() => setQuickOpen(false)}
         />
       )}
 
