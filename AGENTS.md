@@ -90,6 +90,8 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 
 **File mode** — `lib/fileMode.ts` detects file type from extension and sets one of three modes: `markdown`, `plaintext`, or `code`. Code mode maps ~97 extensions to highlight.js language IDs. In code/plaintext mode, `codeOnlyPlugin` replaces the ProseMirror schema with a plain textarea-like experience.
 
+**Unsaved changes on close/quit** — `src-tauri/src/unsaved.rs` intercepts window CloseRequested and app quit (a custom ⌘Q menu item replaces `PredefinedMenuItem::quit`; OS-initiated `ExitRequested` is caught too) and emits `close-requested` / `quit-requested`. `App.tsx` (`closeFlow`) then walks each dirty tab through `CloseDocumentDialog` and calls `close_window_confirmed` or `window_ready_to_quit`; the app exits once every window is ready, and Cancel calls `cancel_quit`.
+
 **Auto-update** — `check_for_updates` (in lib.rs) hits the GitHub releases API and compares SemVer. `download_and_install` curls the DMG to `~/Downloads/` and opens it. The `UpdateDialog` component in `components/` drives the UI for this flow.
 
 **HTML export** — Single self-contained `.html` file with KaTeX, highlight.js, and all CSS inlined. DOMPurify sanitizes content.
