@@ -10,7 +10,8 @@ import { isTagsOnly, renderFrontmatterBanner } from "../lib/frontmatter";
 import { renderMath } from "../lib/math";
 
 /** Quick Look has no Tauri bridge or permission to fetch arbitrary local files.
- * The native host supplies only the bounded, contained images it could read. */
+ * The native host supplies only bounded, contained images it could read;
+ * macOS may grant the selected note without granting its neighboring images. */
 export function previewImageResolver(images: Record<string, string>) {
   return async (src: string): Promise<string> => {
     if (/^(?:data:|https?:\/\/)/i.test(src)) return src;
@@ -40,6 +41,9 @@ export function createPreviewView(
       buildImageRenderPlugin({ current: filePath || null }, {
         readOnly: true,
         resolveSrc: previewImageResolver(images),
+        unavailableMessage: (src, alt) => /^(?:data:|https?:\/\/)/i.test(src)
+          ? `Image unavailable: ${alt || src}`
+          : `Local image unavailable in Quick Look: ${alt || src}. Open this note in Bioscratch to view it.`,
       }),
       buildHighlightPlugin(),
     ],

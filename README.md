@@ -30,6 +30,8 @@ As `skill.md` files become a common way for researchers and engineers to represe
 
 **Multi-tab, multi-window** — Open multiple files in tabs. **Drag a tab outside the tab bar** to detach it into its own window. Autosave runs every 30 seconds in the background, and crash recovery kicks in on next open if the autosave diverges from disk. Closing a window or quitting asks before discarding unsaved changes.
 
+**Finder Quick Look** — Press Space on a Markdown file to read it with rendered math, diagrams, tables and code. macOS may restrict access to referenced local images in Quick Look; open the note in Bioscratch to view those images.
+
 **Free and open source** — No account, no telemetry, no subscription. MIT licensed.
 
 ## Download

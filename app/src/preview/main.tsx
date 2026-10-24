@@ -1,9 +1,9 @@
 // Bioscratch Quick Look preview entry.
 //
 // This renders a Markdown file read-only using the same schema,
-// serialization, rendered widgets and CSS as the main editor, so
-// the macOS Quick Look (spacebar) preview is visually identical to opening the
-// file in Bioscratch — just non-editable.
+// serialization, rendered widgets and CSS as the main editor. Referenced local
+// images depend on the native host's sandbox access; unavailable assets show
+// a prompt to open the note in Bioscratch.
 //
 // The host (the Quick Look extension) injects the file contents as
 // `window.__QL_MARKDOWN__` and the file path as `window.__QL_FILEPATH__` before

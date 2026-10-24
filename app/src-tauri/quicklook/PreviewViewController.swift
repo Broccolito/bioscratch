@@ -5,8 +5,8 @@ import WebKit
 // Bioscratch Quick Look preview extension.
 //
 // Renders a Markdown file using Bioscratch's own read-only web preview
-// (dist-preview/preview.html) inside a WKWebView, so the spacebar Quick Look
-// looks identical to opening the file in the app — just not editable.
+// (dist-preview/preview.html) inside a WKWebView. Local image rendering depends
+// on sandbox access: selecting a note does not grant its neighboring files.
 @objc(PreviewViewController)
 class PreviewViewController: NSViewController, QLPreviewingController {
 

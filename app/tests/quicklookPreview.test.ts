@@ -74,6 +74,27 @@ it("uses only injected local images while preserving remote and data image URLs"
   expect(readFile).not.toHaveBeenCalled();
 });
 
+it("explains unavailable local assets without claiming the files do not exist", async () => {
+  const host = render("![Sample](qa-shiba.jpg)\n\nInline ![Diagram](images/diagram.png).\n");
+  await Promise.resolve();
+  await Promise.resolve();
+  const placeholders = Array.from(host.querySelectorAll(".image-placeholder"));
+  expect(placeholders).toHaveLength(2);
+  for (const placeholder of placeholders) {
+    expect(placeholder.textContent).toContain("Local image unavailable in Quick Look");
+    expect(placeholder.textContent).toContain("Open this note in Bioscratch to view it");
+    expect(placeholder.textContent).not.toContain("not found");
+  }
+  expect(readFile).not.toHaveBeenCalled();
+});
+
+it("does not describe failed remote images as a local sandbox limitation", async () => {
+  const host = render("![Remote](https://example.com/missing.png)\n");
+  await Promise.resolve();
+  host.querySelector("img")?.dispatchEvent(new Event("error"));
+  expect(host.querySelector(".image-placeholder")?.textContent).toBe("Image unavailable: Remote");
+});
+
 it("shows an empty diagram without instructions to edit the source", () => {
   const host = render("```mermaid\n\n```\n");
   expect(host.textContent).toContain("Empty Mermaid diagram");

@@ -66,7 +66,8 @@ function attachImage(
   alt: string,
   src: string,
   title: string | null,
-  resolveImage: (src: string) => Promise<string>
+  resolveImage: (src: string) => Promise<string>,
+  unavailableMessage?: string
 ) {
   const img = document.createElement("img");
   img.alt = alt;
@@ -80,10 +81,11 @@ function attachImage(
     container.appendChild(ph);
   };
 
-  img.onerror = () => showPlaceholder(`Image not found: ${alt || src}`);
+  const failureText = unavailableMessage ?? `Image not found: ${alt || src}`;
+  img.onerror = () => showPlaceholder(failureText);
   resolveImage(src)
     .then((r) => { img.src = r; })
-    .catch(() => showPlaceholder(`Image not found: ${alt || src}`));
+    .catch(() => showPlaceholder(failureText));
 
   container.appendChild(img);
 }
@@ -97,7 +99,8 @@ function createBlockWidget(
   isEditing: boolean,
   resolveImage: (src: string) => Promise<string>,
   view: EditorView,
-  readOnly: boolean
+  readOnly: boolean,
+  unavailableMessage?: string
 ): HTMLElement {
   const wrapper = document.createElement("div");
   wrapper.className = "image-view-wrapper" + (isEditing ? " editing" : "");
@@ -106,7 +109,7 @@ function createBlockWidget(
 
   const renderedEl = document.createElement("span");
   renderedEl.className = "image-rendered";
-  attachImage(renderedEl, alt, src, title, resolveImage);
+  attachImage(renderedEl, alt, src, title, resolveImage, unavailableMessage);
   wrapper.appendChild(renderedEl);
 
   // Click → move cursor into the source paragraph (reveals editable source line)
@@ -130,13 +133,14 @@ function createInlineWidget(
   paraPos: number,
   resolveImage: (src: string) => Promise<string>,
   view: EditorView,
-  readOnly: boolean
+  readOnly: boolean,
+  unavailableMessage?: string
 ): HTMLElement {
   const wrapper = document.createElement("span");
   wrapper.className = "image-inline-widget";
   wrapper.contentEditable = "false";
 
-  attachImage(wrapper, alt, src, title, resolveImage);
+  attachImage(wrapper, alt, src, title, resolveImage, unavailableMessage);
 
   // Click → move cursor into the paragraph (reveals all inline markdown text)
   if (!readOnly) wrapper.addEventListener("mousedown", (e) => {
@@ -218,7 +222,11 @@ function findInlineImages(paraNode: ProseMirrorNode, paraPos: number): InlineIma
 // and deletion all work exactly as for any other paragraph text.
 export function buildImageRenderPlugin(
   filePathRef: { current: string | null },
-  options: { readOnly?: boolean; resolveSrc?: (src: string) => Promise<string> } = {}
+  options: {
+    readOnly?: boolean;
+    resolveSrc?: (src: string) => Promise<string>;
+    unavailableMessage?: (src: string, alt: string) => string;
+  } = {}
 ): Plugin {
   const readOnly = options.readOnly ?? false;
   return new Plugin({
@@ -260,7 +268,7 @@ export function buildImageRenderPlugin(
             decos.push(
               Decoration.widget(
                 pos + node.nodeSize,
-                (view) => createBlockWidget(alt, src, title, pos, isEditing, resolveImage, view, readOnly),
+                (view) => createBlockWidget(alt, src, title, pos, isEditing, resolveImage, view, readOnly, options.unavailableMessage?.(src, alt)),
                 {
                   side: 1,
                   key: `img-block-${documentPath ?? ""}\x00${pos}-${alt}\x00${src}`,
@@ -286,7 +294,7 @@ export function buildImageRenderPlugin(
               decos.push(
                 Decoration.widget(
                   pmStart,
-                  (view) => createInlineWidget(alt, src, title, pos, resolveImage, view, readOnly),
+                  (view) => createInlineWidget(alt, src, title, pos, resolveImage, view, readOnly, options.unavailableMessage?.(src, alt)),
                   {
                     side: -1,
                     key: `img-inline-${documentPath ?? ""}\x00${pmStart}-${alt}\x00${src}`,
