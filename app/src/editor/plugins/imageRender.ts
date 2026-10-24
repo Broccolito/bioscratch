@@ -66,7 +66,7 @@ function attachImage(
   alt: string,
   src: string,
   title: string | null,
-  filePathRef: { current: string | null }
+  resolveImage: (src: string) => Promise<string>
 ) {
   const img = document.createElement("img");
   img.alt = alt;
@@ -81,7 +81,7 @@ function attachImage(
   };
 
   img.onerror = () => showPlaceholder(`Image not found: ${alt || src}`);
-  resolveSrc(src, filePathRef)
+  resolveImage(src)
     .then((r) => { img.src = r; })
     .catch(() => showPlaceholder(`Image not found: ${alt || src}`));
 
@@ -95,8 +95,9 @@ function createBlockWidget(
   title: string | null,
   paraPos: number,
   isEditing: boolean,
-  filePathRef: { current: string | null },
-  view: EditorView
+  resolveImage: (src: string) => Promise<string>,
+  view: EditorView,
+  readOnly: boolean
 ): HTMLElement {
   const wrapper = document.createElement("div");
   wrapper.className = "image-view-wrapper" + (isEditing ? " editing" : "");
@@ -105,11 +106,11 @@ function createBlockWidget(
 
   const renderedEl = document.createElement("span");
   renderedEl.className = "image-rendered";
-  attachImage(renderedEl, alt, src, title, filePathRef);
+  attachImage(renderedEl, alt, src, title, resolveImage);
   wrapper.appendChild(renderedEl);
 
   // Click → move cursor into the source paragraph (reveals editable source line)
-  wrapper.addEventListener("mousedown", (e) => {
+  if (!readOnly) wrapper.addEventListener("mousedown", (e) => {
     e.preventDefault();
     e.stopPropagation();
     const state = view.state;
@@ -127,17 +128,18 @@ function createInlineWidget(
   src: string,
   title: string | null,
   paraPos: number,
-  filePathRef: { current: string | null },
-  view: EditorView
+  resolveImage: (src: string) => Promise<string>,
+  view: EditorView,
+  readOnly: boolean
 ): HTMLElement {
   const wrapper = document.createElement("span");
   wrapper.className = "image-inline-widget";
   wrapper.contentEditable = "false";
 
-  attachImage(wrapper, alt, src, title, filePathRef);
+  attachImage(wrapper, alt, src, title, resolveImage);
 
   // Click → move cursor into the paragraph (reveals all inline markdown text)
-  wrapper.addEventListener("mousedown", (e) => {
+  if (!readOnly) wrapper.addEventListener("mousedown", (e) => {
     e.preventDefault();
     e.stopPropagation();
     const state = view.state;
@@ -215,8 +217,11 @@ function findInlineImages(paraNode: ProseMirrorNode, paraPos: number): InlineIma
 // In all cases the underlying paragraph text is unchanged, so Cmd+Z, copy,
 // and deletion all work exactly as for any other paragraph text.
 export function buildImageRenderPlugin(
-  filePathRef: { current: string | null }
+  filePathRef: { current: string | null },
+  options: { readOnly?: boolean; resolveSrc?: (src: string) => Promise<string> } = {}
 ): Plugin {
+  const readOnly = options.readOnly ?? false;
+  const resolveImage = options.resolveSrc ?? ((src: string) => resolveSrc(src, filePathRef));
   return new Plugin({
     props: {
       decorations(state) {
@@ -230,7 +235,7 @@ export function buildImageRenderPlugin(
           if (node.type !== schema.nodes.paragraph) return true;
 
           const text = node.textContent;
-          const isEditing = pos === cursorParaPos;
+          const isEditing = !readOnly && pos === cursorParaPos;
 
           // ── Block image ──────────────────────────────────────────────────
           const blockMatch = text.match(BLOCK_IMAGE_RE);
@@ -252,7 +257,7 @@ export function buildImageRenderPlugin(
             decos.push(
               Decoration.widget(
                 pos + node.nodeSize,
-                (view) => createBlockWidget(alt, src, title, pos, isEditing, filePathRef, view),
+                (view) => createBlockWidget(alt, src, title, pos, isEditing, resolveImage, view, readOnly),
                 {
                   side: 1,
                   key: `img-block-${pos}-${alt}\x00${src}`,
@@ -278,7 +283,7 @@ export function buildImageRenderPlugin(
               decos.push(
                 Decoration.widget(
                   pmStart,
-                  (view) => createInlineWidget(alt, src, title, pos, filePathRef, view),
+                  (view) => createInlineWidget(alt, src, title, pos, resolveImage, view, readOnly),
                   {
                     side: -1,
                     key: `img-inline-${pmStart}-${alt}\x00${src}`,

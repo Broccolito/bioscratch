@@ -45,6 +45,7 @@ class PreviewViewController: NSViewController, QLPreviewingController {
         let injected = """
         window.__QL_MARKDOWN__ = \(jsStringLiteral(markdown));
         window.__QL_FILEPATH__ = \(jsStringLiteral(url.path));
+        window.__QL_IMAGES__ = JSON.parse(\(jsStringLiteral(imageJSON(markdown: markdown, documentURL: url))));
         """
 
         let config = WKWebViewConfiguration()
@@ -79,5 +80,12 @@ class PreviewViewController: NSViewController, QLPreviewingController {
             return String(arr.dropFirst().dropLast())
         }
         return "\"\""
+    }
+
+    private func imageJSON(markdown: String, documentURL: URL) -> String {
+        let images = previewImageData(markdown: markdown, documentURL: documentURL)
+        guard let data = try? JSONSerialization.data(withJSONObject: images),
+              let json = String(data: data, encoding: .utf8) else { return "{}" }
+        return json
     }
 }

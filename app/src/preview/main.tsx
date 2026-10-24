@@ -1,7 +1,7 @@
 // Bioscratch Quick Look preview entry.
 //
-// This renders a Markdown file read-only using the EXACT same schema,
-// serialization, NodeViews, decoration plugins and CSS as the main editor, so
+// This renders a Markdown file read-only using the same schema,
+// serialization, rendered widgets and CSS as the main editor, so
 // the macOS Quick Look (spacebar) preview is visually identical to opening the
 // file in Bioscratch — just non-editable.
 //
@@ -10,22 +10,8 @@
 // this script runs. A `window.__renderPreview()` hook is also exposed so the
 // host can (re)render after injecting content asynchronously.
 
-import { EditorState } from "prosemirror-state";
-import { EditorView } from "prosemirror-view";
-import { schema } from "../editor/schema";
-import { markdownToDoc } from "../editor/serialization/markdownImport";
-import { buildImageRenderPlugin } from "../editor/plugins/imageRender";
-import { buildMermaidPlugin, isMermaidLanguage } from "../editor/plugins/mermaidPlugin";
-import { buildFrontmatterPlugin } from "../editor/plugins/frontmatterPlugin";
-import { buildHighlightPlugin } from "../editor/plugins/highlight";
-import {
-  MathInlineView,
-  MathBlockView,
-  MermaidBlockView,
-  FrontmatterView,
-  CodeBlockView,
-  TaskListItemView,
-} from "../components/EditorSurface";
+import type { EditorView } from "prosemirror-view";
+import { createPreviewView } from "./render";
 import { applyTheme, builtinThemeConfigs } from "../lib/themeLoader";
 
 import "../styles/editor.css";
@@ -36,6 +22,7 @@ import "katex/dist/katex.min.css";
 interface QLWindow extends Window {
   __QL_MARKDOWN__?: string;
   __QL_FILEPATH__?: string;
+  __QL_IMAGES__?: Record<string, string>;
   __renderPreview?: () => void;
 }
 
@@ -62,36 +49,7 @@ function render(): void {
   }
   root.innerHTML = "";
 
-  // imageRender resolves relative images through Tauri, which is unavailable in
-  // the Quick Look sandbox; a ref with the file path lets absolute/remote
-  // images still resolve where possible.
-  const filePathRef = { current: filePath || null };
-
-  const doc = markdownToDoc(markdown, schema);
-  const state = EditorState.create({
-    doc,
-    plugins: [
-      buildImageRenderPlugin(filePathRef),
-      buildMermaidPlugin(),
-      buildFrontmatterPlugin(),
-      buildHighlightPlugin(),
-    ],
-  });
-
-  currentView = new EditorView(root, {
-    state,
-    editable: () => false,
-    nodeViews: {
-      math_inline: (node, view, getPos) => new MathInlineView(node, view, getPos),
-      math_block: (node, view, getPos) => new MathBlockView(node, view, getPos),
-      code_block: (node, view, getPos) =>
-        isMermaidLanguage(node.attrs.language)
-          ? new MermaidBlockView(node, view, getPos)
-          : new CodeBlockView(node),
-      frontmatter: (node, view, getPos) => new FrontmatterView(node, view, getPos),
-      task_list_item: (node, view, getPos) => new TaskListItemView(node, view, getPos),
-    },
-  });
+  currentView = createPreviewView(root, markdown, filePath, w.__QL_IMAGES__);
 }
 
 (window as QLWindow).__renderPreview = render;

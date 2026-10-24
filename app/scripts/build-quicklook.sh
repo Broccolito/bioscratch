@@ -37,10 +37,10 @@ cp -R "$PREVIEW_DIST" "$APPEX/Contents/Resources/dist-preview"
 echo "==> Compiling Swift extension (universal arm64 + x86_64)"
 TMP="$OUT/obj"; mkdir -p "$TMP"
 for a in arm64 x86_64; do
-  swiftc "$QL_SRC/PreviewViewController.swift" \
+  swiftc "$QL_SRC/PreviewViewController.swift" "$QL_SRC/PreviewImages.swift" \
     -o "$TMP/ql-$a" \
     -target "${a}-apple-macos11.0" \
-    -framework Cocoa -framework Quartz -framework WebKit \
+    -framework Cocoa -framework Quartz -framework WebKit -framework UniformTypeIdentifiers \
     -Xlinker -e -Xlinker _NSExtensionMain \
     -O
 done
