@@ -1,0 +1,36 @@
+/* Shared syntax tokens use the active document palette in editors and exports.
+   A fixed light highlight.js palette makes strings unreadable in dark themes. */
+.hljs,
+[class*="hljs-"] {
+  color: var(--text-primary, #2b2620);
+}
+
+.hljs-doctag,
+.hljs-keyword,
+.hljs-type,
+.hljs-title,
+.hljs-built_in,
+.hljs-literal,
+.hljs-number,
+.hljs-name,
+.hljs-selector-tag,
+.hljs-section {
+  color: var(--accent, #4a6580);
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-code {
+  color: var(--text-secondary, #6e645a);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-section,
+.hljs-strong {
+  font-weight: 600;
+}
+
+.hljs-emphasis { font-style: italic; }
+.hljs-deletion { text-decoration: line-through; }
+.hljs-addition { text-decoration: underline; }

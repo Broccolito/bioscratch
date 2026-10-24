@@ -24,8 +24,8 @@ import { renderMathInline, renderMathBlock } from "../lib/math";
 import "../styles/editor.css";
 import "../styles/markdown.css";
 
-// Import highlight.js theme
-import "highlight.js/styles/github.css";
+// Syntax colors follow the active document theme.
+import "../../../../app/src/styles/syntax.css";
 
 // Import KaTeX styles
 import "katex/dist/katex.min.css";

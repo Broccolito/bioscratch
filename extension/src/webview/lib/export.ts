@@ -2,7 +2,7 @@ import DOMPurify from "dompurify";
 import { renderMath } from "./math";
 import { cloneStaticEditor } from "../../../../shared/staticExport";
 import katexCss from "katex/dist/katex.min.css?embedded";
-import highlightCss from "highlight.js/styles/github.css?embedded";
+import highlightCss from "../../../../app/src/styles/syntax.css?embedded";
 import { saveHtml } from "../bridge";
 
 function escapeHtml(value: string): string {

@@ -28,8 +28,8 @@ import { isTagsOnly, renderFrontmatterBanner } from "../lib/frontmatter";
 import "../styles/editor.css";
 import "../styles/markdown.css";
 
-// Import highlight.js theme
-import "highlight.js/styles/github.css";
+// Syntax colors follow the active document theme.
+import "../styles/syntax.css";
 
 // Import KaTeX styles
 import "katex/dist/katex.min.css";

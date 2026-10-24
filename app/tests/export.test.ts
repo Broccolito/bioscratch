@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import syntaxCss from "../src/styles/syntax.css?embedded";
 import {
   buildHtmlBody as appBody,
   buildHtmlDocument as appDocument,
@@ -35,6 +36,7 @@ describe.each(targets)("$name export", (target) => {
     expect(atob(fonts[0][1].split(",")[1]).slice(0, 4)).toBe("wOF2");
     expect(html).not.toMatch(/url\(["']?(?:https?:|fonts\/|\/assets\/)/);
     expect(html).not.toContain("cdn.jsdelivr.net");
+    expect(html).toContain(syntaxCss);
   });
 
   it("exports rendered diagrams, banners, current math and task state without editor controls", () => {

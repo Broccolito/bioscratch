@@ -30,7 +30,7 @@ import { applyTheme, builtinThemeConfigs } from "../lib/themeLoader";
 
 import "../styles/editor.css";
 import "../styles/markdown.css";
-import "highlight.js/styles/github.css";
+import "../styles/syntax.css";
 import "katex/dist/katex.min.css";
 
 interface QLWindow extends Window {
