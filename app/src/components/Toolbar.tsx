@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { EditorView } from "prosemirror-view";
 import { TextSelection } from "prosemirror-state";
 import { toggleMark, setBlockType, wrapIn } from "prosemirror-commands";
@@ -41,16 +42,45 @@ const Toolbar: React.FC<ToolbarProps> = ({
   const formattingEnabled = hasDocument && fileMode === "markdown";
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const exportListRef = useRef<HTMLDivElement>(null);
+  // The toolbar scrolls horizontally, so it clips anything that hangs below
+  // it. The menu is therefore rendered into the toolbar's positioned parent
+  // and placed under the button using layout offsets (not screen coordinates,
+  // which would be skewed by the font-size zoom).
+  const [exportMenuPos, setExportMenuPos] = useState<{ host: HTMLElement; left: number; top: number } | null>(null);
+
+  const toggleExportMenu = () => {
+    if (exportMenuOpen) {
+      setExportMenuOpen(false);
+      return;
+    }
+    const wrapper = exportMenuRef.current;
+    const toolbar = wrapper?.closest<HTMLElement>(".toolbar");
+    const host = wrapper?.offsetParent as HTMLElement | null;
+    if (!wrapper || !toolbar || !host) return;
+    setExportMenuPos({
+      host,
+      left: wrapper.offsetLeft - toolbar.scrollLeft,
+      top: toolbar.offsetTop + toolbar.offsetHeight + 3,
+    });
+    setExportMenuOpen(true);
+  };
 
   useEffect(() => {
     if (!exportMenuOpen) return;
     const handler = (e: MouseEvent) => {
-      if (!exportMenuRef.current?.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (!exportMenuRef.current?.contains(target) && !exportListRef.current?.contains(target)) {
         setExportMenuOpen(false);
       }
     };
+    const close = () => setExportMenuOpen(false);
     document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
+    window.addEventListener("resize", close);
+    return () => {
+      document.removeEventListener("mousedown", handler);
+      window.removeEventListener("resize", close);
+    };
   }, [exportMenuOpen]);
 
   const exec = useCallback(
@@ -193,7 +223,7 @@ const Toolbar: React.FC<ToolbarProps> = ({
       <div className="export-menu-wrapper" ref={exportMenuRef}>
         <button
           className={`toolbar-btn${exportMenuOpen ? " active" : ""}`}
-          onClick={() => setExportMenuOpen((v) => !v)}
+          onClick={toggleExportMenu}
           disabled={!fileOpsEnabled}
           title="Export document"
         >
@@ -202,8 +232,12 @@ const Toolbar: React.FC<ToolbarProps> = ({
             <path d="m6 9 6 6 6-6"/>
           </svg>
         </button>
-        {exportMenuOpen && (
-          <div className="export-menu">
+        {exportMenuOpen && exportMenuPos && createPortal(
+          <div
+            className="export-menu"
+            ref={exportListRef}
+            style={{ left: exportMenuPos.left, top: exportMenuPos.top }}
+          >
             <button
               className="export-menu-item"
               onClick={() => { onExportHtml(); setExportMenuOpen(false); }}
@@ -224,7 +258,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
               </svg>
               Export as PDF
             </button>
-          </div>
+          </div>,
+          exportMenuPos.host
         )}
       </div>
 
