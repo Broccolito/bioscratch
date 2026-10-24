@@ -1,7 +1,6 @@
 # Bioscratch 0.6.0 release QA
 
-Recorded October 23, 2026, on `codex/bioscratch-060`. This is a release-check
-snapshot; the remaining checks below must be updated before publication.
+Recorded October 23, 2026, for the integration merged into main.
 
 ## Automated checks
 
@@ -13,7 +12,8 @@ snapshot; the remaining checks below must be updated before publication.
 | Front-matter fixture assertions | 27 passed |
 | Quick Look Swift checks | Image-helper tests and native host/helper typecheck passed |
 | App and extension npm dependency audits | 0 reported advisories |
-| Apple Silicon and Intel packaging | Both architectures have passed notarization and staple validation; final packages must be rebuilt after the Quick Look image fallback |
+| Apple Silicon and Intel packaging | Final apps and DMGs are Developer ID signed, notarized, and stapled; DMG integrity checks and SHA256SUMS verification passed |
+| Main source CI | [All jobs passed](https://github.com/Broccolito/bioscratch/actions/runs/40044810032) for `e5829ed`, including the final app and extension changes |
 
 The review and regression fixes cover folder grants and symlink containment,
 per-window search cancellation, preservation of YAML tags and aliases, ownership
@@ -46,7 +46,7 @@ ID signed and notarized Apple Silicon app.
 | Search and navigation (PR #11) | Scoped/full-text search, fuzzy Command+P, Command+Enter, rendered match highlighting, and preserving a dirty background tab during an extension-changing rename |
 | Tags (PR #11) | Nested tags, AND filters, removal and aliases, read-only anchored YAML, live changes, and external-edit rescan |
 | Document local images | Alpha's relative image displayed on first open and when Alpha was reopened in the final installed ARM app |
-| Native Quick Look | Alpha's banner, math, table, Mermaid diagram, and code displayed without raw YAML or editor controls; task checkbox state looked correct; neighboring local-image access was denied by macOS |
+| Native Quick Look | Final preview displayed the banner, math, table, Mermaid diagram, and code without raw YAML or editor controls; task checkbox state looked correct; the final local-image restriction message was verified in Finder |
 
 PR #10's documentation refresh and PR #12's contributor/contact changes are
 documentation changes; they do not add an app interaction.
@@ -58,10 +58,11 @@ Local images were verified in the native PDF output.
 Local-image rendering now follows the active document path when switching notes,
 with two renderer regression tests covering relative asset resolution.
 
-The x86_64 binary also launched under Rosetta on Apple Silicon. A preliminary
+The final x86_64 binary also launched under Rosetta on Apple Silicon. Its
 interactive smoke check displayed the Alpha fixture's banner, math, table,
-Mermaid diagram, and code, then quit through the native menu; process exit was
-verified. Physical Intel Mac hardware has not been tested.
+Mermaid diagram, code, and relative local image. The Export dropdown and Escape
+dismissal worked, and a clean tab closed before native-menu quit; process exit
+was verified. Physical Intel Mac hardware has not been tested.
 
 ## PR integration
 
@@ -69,18 +70,17 @@ All six PRs, #7 through #12, have actually merged into main. PR #11's five
 conflicts were resolved to its reviewed tree, and the index was verified against
 that tree before merge commit `9640d12`. The candidate then merged main at
 `ba80d23` through `dc8ef72` without changing the candidate's tree. All original
-PR heads are included in its ancestry. The integration fixes still need their
-final push and green main CI.
+PR heads are included in its ancestry. The integration and corrective commits
+are pushed to main and source CI is green. The final QA-record update changes
+documentation only.
 
-## Remaining checks and limits
+## Platform limits
 
 - The native Quick Look check exposed a macOS sandbox limit on neighboring local
-  images. The accurate local-image placeholder and documentation are implemented;
-  their final native check remains pending. Remote and data-image handling remain
-  supported. Rendered document content passed; checkbox interaction is not
-  claimed from the visual state check.
-- Both architectures must be packaged, signed, notarized, and checked again after
-  the final Quick Look fallback update.
+  images. The accurate local-image message and documentation are implemented and
+  verified in Finder. Remote and data-image handling remain supported. Rendered
+  document content passed; checkbox interaction is not claimed from the visual
+  state check.
 - Physical Intel Mac hardware testing remains unperformed; the x86_64 Rosetta
   smoke check and Intel packaging/notarization results are recorded above.
 - Dock-initiated quit was not exercised: the computer-use surface could not
@@ -89,5 +89,3 @@ final push and green main CI.
   protocol restriction. Embedded export assets were checked statically; the
   native PDF output was visually inspected. No standalone HTML browser visual
   result is claimed.
-- The PR merges are complete. Pushing the remaining integration fixes and green
-  CI on the final main commit are pending.
