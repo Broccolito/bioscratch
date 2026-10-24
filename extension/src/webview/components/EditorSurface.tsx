@@ -265,7 +265,7 @@ mermaid.initialize({ startOnLoad: false, theme: "neutral", securityLevel: "stric
 // Two states driven by mermaidPlugin decorations:
 //   Inactive  → source section collapsed (height 0), only rendered diagram shown
 //   Active    → source section visible above, live-updating rendered diagram below
-class MermaidBlockView implements NodeView {
+export class MermaidBlockView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
   private preview: HTMLElement;
@@ -311,7 +311,7 @@ class MermaidBlockView implements NodeView {
   }
 
   update(node: ProseMirrorNode, outerDeco: readonly any[]) {
-    if (node.type !== this.node.type) return false;
+    if (node.type !== this.node.type || node.attrs.language !== "mermaid") return false;
 
     const contentChanged = node.textContent !== this.node.textContent;
     this.node = node;
@@ -364,7 +364,7 @@ class MermaidBlockView implements NodeView {
 }
 
 // ---- Code Block NodeView ----
-class CodeBlockView implements NodeView {
+export class CodeBlockView implements NodeView {
   dom: HTMLElement;
   contentDOM: HTMLElement;
   private langLabel: HTMLElement;
@@ -393,7 +393,8 @@ class CodeBlockView implements NodeView {
   }
 
   update(node: ProseMirrorNode) {
-    if (node.type !== this.node.type) return false;
+    // A restored tab may require Mermaid's specialized controls and preview.
+    if (node.type !== this.node.type || node.attrs.language === "mermaid") return false;
     this.node = node;
 
     const lang = node.attrs.language || "";
