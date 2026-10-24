@@ -11,6 +11,7 @@ snapshot; the remaining checks below must be updated before publication.
 | Rust backend tests | 21 passed; 1 ignored |
 | Release-script checks with stubbed Apple tools | 31 passed |
 | Front-matter fixture assertions | 27 passed |
+| Focused Quick Look checks | 4 JavaScript tests, Swift image-helper tests, and native host/helper typecheck passed |
 | App and extension npm dependency audits | 0 reported advisories |
 | Apple Silicon and Intel packaging | Both architectures passed notarization and staple validation; final Quick Look package check pending |
 
@@ -42,11 +43,18 @@ restore specialized Mermaid views after code/Markdown tab switches, preserve
 readable theme colors, and embed math fonts and rendered diagrams in exports.
 Local images were verified in the native PDF output.
 
+The x86_64 binary also launched under Rosetta on Apple Silicon. A preliminary
+interactive smoke check displayed the Alpha fixture's banner, math, table,
+Mermaid diagram, and code, then quit through the native menu. Physical Intel Mac
+hardware has not been tested.
+
 ## Remaining checks and limits
 
-- Final Quick Look read-only rendering and local-image fix is in progress.
-- Actual Intel app UI testing remains pending. Intel packaging/notarization is
-  recorded separately from interactive testing.
+- Final native Quick Look verification is pending after the passive-preview and
+  contained local-image fix. Its focused JavaScript and Swift checks passed.
+- The final full regression suite must be rerun after the Quick Look integration.
+- Physical Intel Mac hardware testing remains unperformed; the x86_64 Rosetta
+  smoke check and Intel packaging/notarization results are recorded above.
 - Dock-initiated quit was not exercised: the computer-use surface could not
   access the Dock. Rust `ExitRequested` tests cover that backend entry point.
 - Standalone HTML browser visual testing was blocked by the browser's local-file

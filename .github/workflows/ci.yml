@@ -46,7 +46,7 @@ jobs:
           node "$RUNNER_TEMP/bioscratch-frontmatter.cjs"
 
   rust:
-    name: macOS backend tests
+    name: macOS backend and Quick Look
     runs-on: macos-latest
     timeout-minutes: 45
     defaults:
@@ -62,6 +62,12 @@ jobs:
       - run: npm ci
       - run: npm audit --audit-level=low
       - run: npm run build
+      - name: Check Quick Look Swift host and image helper
+        run: |
+          SWIFT_COMPILER="$(xcrun --find swiftc)"
+          "$SWIFT_COMPILER" src-tauri/quicklook/PreviewImages.swift tests/quicklookImages.swift -o "$RUNNER_TEMP/bioscratch-quicklook-images"
+          "$RUNNER_TEMP/bioscratch-quicklook-images"
+          "$SWIFT_COMPILER" -typecheck src-tauri/quicklook/PreviewImages.swift src-tauri/quicklook/PreviewViewController.swift -framework Cocoa -framework Quartz -framework WebKit
       - name: Install Rust toolchain
         run: |
           rustup toolchain install stable --profile minimal
