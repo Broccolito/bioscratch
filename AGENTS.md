@@ -17,7 +17,19 @@ npm run tauri build    # Production build (artifacts in app/src-tauri/target/<ar
 npm run dev            # Vite frontend only (no Tauri shell)
 npm run build          # TypeScript check + Vite bundle
 npm run build:preview  # Build the read-only Quick Look preview bundle → dist-preview/
+npm test               # Vitest (jsdom), runs app/tests/*.test.ts(x)
+npx vitest run tests/inlineCode.test.ts   # Single test file
 ```
+
+Unit tests live in `app/tests/` (serialization round-trips, paste, tables, nested lists, close/recent-files flows). `app/scripts/test-frontmatter.mts` is a separate headless frontmatter round-trip check (run instructions in its header). `tests/fixtures/` (repo root) holds Markdown/code files for manual testing; image fixtures use `tests/fixtures/img/`, frontmatter fixtures use `tests/fixtures/frontmatter/`.
+
+## VS Code extension (`extension/`)
+
+A separate VS Code custom-editor port, published to the Marketplace as `WanjunGu.bioscratch`. `extension/src/extension.ts` + `editorProvider.ts` register the custom editor for `.md`; the editing surface runs in a webview (`extension/src/webview/`). VS Code owns the document, save and undo/redo; the webview writes back with minimal-diff edits.
+
+The webview has its **own copy** of the editor code (`extension/src/webview/editor/`, `components/`, `lib/`, `themes/`). It does not import from `app/src`, and the copies have diverged (e.g. the extension has no `frontmatterPlugin`/`history`). A fix to the editor in `app/` does not reach the extension unless you port it by hand.
+
+Commands run from `extension/`: `npm run typecheck`, `npm run build` (esbuild), `npm run watch`, `npm run package` (vsce → `.vsix`).
 
 ## macOS Quick Look extension
 
@@ -31,8 +43,6 @@ Pressing the spacebar on a `.md` file in Finder shows a Bioscratch-rendered prev
   2. The `WKWebView` must set `allowFileAccessFromFileURLs`/`allowUniversalAccessFromFileURLs`, or the ES-module preview bundle is CORS-blocked over `file://` and renders blank.
   3. Sign inside-out (appex first with its entitlements, then the app **without** `--deep`) so the appex keeps its entitlements.
   4. Must be Developer-ID signed (not ad-hoc) for the system to load it; the app must be in `/Applications` and registered with `lsregister`.
-
-There is no test runner. The `tests/fixtures/` directory contains Markdown files for manual testing: `basic.md`, `code.md`, `math.md`, `table.md`, `mixed.md`, `images.md`. Image fixtures use `tests/fixtures/img/` as their asset directory.
 
 ## Architecture
 
@@ -48,19 +58,19 @@ ProseMirror — WYSIWYG editing, schema, plugins, serialization
 
 ### Frontend (`app/src/`)
 
-- **`App.tsx`** — root orchestrator: tab state, file open/save, autosave polling, file-change polling, drag-drop coordination
+- **`App.tsx`** — root orchestrator: tab state, file open/save, autosave polling, file-change polling, drag-drop coordination. Dirty-tab/window close confirmation logic is in `lib/closeFlow.ts` (`CloseDocumentDialog.tsx` is its UI)
 - **`components/`** — `EditorSurface.tsx` (mounts the single shared `EditorView`, houses all NodeViews: `MathInlineView`, `MathBlockView`, `MermaidBlockView`; NodeViews live here, not in `schema.ts`), `SearchBar.tsx`, `StatusBar.tsx`, `RecoveryDialog.tsx` (autosave recovery modal), `LargeFileDialog.tsx`, `UpdateDialog.tsx` (auto-update UI)
 - **`editor/schema.ts`** — ProseMirror schema: all nodes (headings, lists, task lists, code blocks, tables, math, images) and marks
-- **`editor/plugins/`** — keymap, inputRules (Markdown shortcuts), history, search, dropImage, highlight, imageRender (inline image decoration), mermaidPlugin (cursor-active decoration for Mermaid blocks), codeOnlyPlugin (non-Markdown file editing mode), markdownPaste (intercepts plain-text pastes in markdown mode and parses them as Markdown)
+- **`editor/plugins/`** — keymap, inputRules (Markdown shortcuts), history, search, dropImage, highlight, imageRender (inline image decoration), mermaidPlugin (cursor-active decoration for Mermaid blocks), codeOnlyPlugin (non-Markdown file editing mode), markdownPaste (intercepts plain-text pastes in markdown mode and parses them as Markdown), frontmatterPlugin (YAML front-matter banner; see `docs/frontmatter-banner.md`), tableControls (hover add/remove row/column controls)
 - **`editor/serialization/`** — bidirectional Markdown ↔ ProseMirror doc via unified/remark ecosystem
 - **`hooks/`** — `useDocumentState` (filePath/dirty/content state + load/save logic), `useAutosave` (30s polling), `useRecentFiles` (recent file list via Tauri), `useTheme` (localStorage + CSS var application)
 - **`lib/`** — `themeLoader.ts` (YAML → CSS vars), `export.ts` (HTML export), `stats.ts` (word/char counts), `math.ts` (KaTeX helpers), `imagePaths.ts` (path resolution for local images)
 
 ### Rust backend (`app/src-tauri/src/lib.rs`)
 
-Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`read_recent_files`, `add_recent_file`, `remove_recent_file`; mutations broadcast to every window), `export_html`, `export_pdf_pandoc`, `open_url`, `open_new_window`, `get_app_data_dir`, `get_initial_file`, `list_user_themes`, `save_user_theme`, `delete_user_theme`, `check_for_updates`, `download_and_install`, `quit_app`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
+Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog`, `show_html_save_dialog`, `save_autosave`, `load_autosave`, `delete_autosave`, recent files (`read_recent_files`, `add_recent_file`, `remove_recent_file`; mutations broadcast to every window), `export_html`, `show_pdf_save_dialog`, `export_pdf_html`, `pdf_export_ready`, `export_pdf_pandoc`, `install_pdf_dependencies`, `open_url`, `open_new_window`, `get_app_data_dir`, `get_initial_file`, `list_user_themes`, `save_user_theme`, `delete_user_theme`, `check_for_updates`, `download_and_install`, `quit_app`. New windows are spawned from Rust (via `tauri::WebviewWindowBuilder`), not from JS — Tauri v2's JS window API has limitations that make this necessary.
 
-**Tauri security** — CSP is disabled (`"csp": null` in `tauri.conf.json`) to allow inline styles and KaTeX's dynamic rendering. Do not re-enable without auditing the entire rendering pipeline.
+**Tauri security** — A strict CSP is set in `tauri.conf.json` (`script-src 'self'`, `style-src 'self' 'unsafe-inline'`, images limited to `self`/`asset:`/`blob:`/`data:`/`https:`). Inline scripts and new remote origins will be blocked, so update the CSP deliberately when a feature needs them.
 
 **macOS Open With / file association** — `lib.rs` handles macOS `RunEvent::Opened` to capture files passed before the JS bridge is ready, storing them in a `Mutex<Option<String>>`. The frontend retrieves them via `get_initial_file()` on startup. An `extra-info.plist` in `app/src-tauri/` prevents `NSDocumentController` from intercepting file opens and triggering document restoration (which would break the app's own file handling).
 
@@ -102,7 +112,7 @@ Tauri commands: `read_file`, `write_file`, `show_open_dialog`, `show_save_dialog
 
 ## Version Management
 
-Version is declared in two places that must stay in sync: `app/package.json` (`"version"`) and `app/src-tauri/Cargo.toml` (`version = "..."`). The landing page at [broccolito.github.io/bioscratch](https://broccolito.github.io/bioscratch/) and its source in the `landing/` folder of this repo also hardcode the version in download links — update those on release too. The landing page is deployed to GitHub Pages from `landing/` by `.github/workflows/deploy-landing.yml`.
+Version is declared in three places that must stay in sync: `app/package.json` (`"version"`), `app/src-tauri/Cargo.toml` (`version = "..."`), and `extension/package.json`. Release notes go in `release-notes/v<version>.md`; `app/scripts/release-macos.sh` drives the macOS release build (signing/notarization credentials live in `notarization/`, gitignored). The landing page at [broccolito.github.io/bioscratch](https://broccolito.github.io/bioscratch/) and its source in the `landing/` folder of this repo also hardcode the version in download links — update those on release too. The landing page is deployed to GitHub Pages from `landing/` by `.github/workflows/deploy-landing.yml`.
 
 ## TypeScript Configuration
 
