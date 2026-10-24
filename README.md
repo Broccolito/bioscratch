@@ -41,7 +41,7 @@ macOS only for now. Both chips supported:
 | Build | Chip |
 |---|---|
 | `Bioscratch_*_aarch64.dmg` | Apple Silicon (M1 / M2 / M3 / M4) |
-| `Bioscratch_*_x86_64.dmg` | Intel |
+| `Bioscratch_*_x64.dmg` | Intel |
 
 → [Releases page](https://github.com/Broccolito/bioscratch/releases)
 
