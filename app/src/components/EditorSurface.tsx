@@ -664,7 +664,7 @@ interface EditorSurfaceProps {
   onChange: () => void;
   onSave: () => void;
   onSearch: () => void;
-  filePath: string | null;
+  filePathRef: { current: string | null };
   fileMode: FileMode;
 }
 
@@ -673,7 +673,7 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   onChange,
   onSave,
   onSearch,
-  filePath,
+  filePathRef,
   fileMode,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -685,12 +685,10 @@ const EditorSurface: React.FC<EditorSurfaceProps> = ({
   const onSaveRef = useRef(onSave);
   const onSearchRef = useRef(onSearch);
   const onChangeRef = useRef(onChange);
-  const filePathRef = useRef<string | null>(filePath);
   const fileModeRef = useRef<FileMode>(fileMode);
   useEffect(() => { onSaveRef.current = onSave; }, [onSave]);
   useEffect(() => { onSearchRef.current = onSearch; }, [onSearch]);
   useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
-  useEffect(() => { filePathRef.current = filePath; }, [filePath]);
   useEffect(() => { fileModeRef.current = fileMode; }, [fileMode]);
 
   // Rubber-band (spring) overscroll: when the user keeps scrolling past the top

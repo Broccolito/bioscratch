@@ -221,10 +221,13 @@ export function buildImageRenderPlugin(
   options: { readOnly?: boolean; resolveSrc?: (src: string) => Promise<string> } = {}
 ): Plugin {
   const readOnly = options.readOnly ?? false;
-  const resolveImage = options.resolveSrc ?? ((src: string) => resolveSrc(src, filePathRef));
   return new Plugin({
     props: {
       decorations(state) {
+        // Bind each decoration to its document, rather than whichever tab is
+        // active later when ProseMirror creates or reuses its widget DOM.
+        const documentPath = filePathRef.current;
+        const resolveImage = options.resolveSrc ?? ((src: string) => resolveSrc(src, { current: documentPath }));
         const decos: Decoration[] = [];
 
         const { $head } = state.selection;
@@ -260,7 +263,7 @@ export function buildImageRenderPlugin(
                 (view) => createBlockWidget(alt, src, title, pos, isEditing, resolveImage, view, readOnly),
                 {
                   side: 1,
-                  key: `img-block-${pos}-${alt}\x00${src}`,
+                  key: `img-block-${documentPath ?? ""}\x00${pos}-${alt}\x00${src}`,
                   stopEvent: () => true,
                 }
               )
@@ -286,7 +289,7 @@ export function buildImageRenderPlugin(
                   (view) => createInlineWidget(alt, src, title, pos, resolveImage, view, readOnly),
                   {
                     side: -1,
-                    key: `img-inline-${pmStart}-${alt}\x00${src}`,
+                    key: `img-inline-${documentPath ?? ""}\x00${pmStart}-${alt}\x00${src}`,
                     stopEvent: () => true,
                   }
                 )

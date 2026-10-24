@@ -370,6 +370,7 @@ const App: React.FC = () => {
             const mode = getFileMode(initialFile);
             const lang = getCodeLanguage(initialFile);
             const state = makeEditorStateForContent(fileContent, mode, lang, view.state.plugins);
+            filePathRef.current = initialFile;
             view.updateState(state);
             setFilePath(initialFile);
             setFileMode(mode);
@@ -421,8 +422,8 @@ const App: React.FC = () => {
       const actualMode = mode ?? fileModeRef.current;
       const actualLang = language ?? codeLanguageRef.current;
       const newState = makeEditorStateForContent(rawContent, actualMode, actualLang, view.state.plugins);
-      view.updateState(newState);
       filePathRef.current = path;
+      view.updateState(newState);
       fileModeRef.current = actualMode;
       codeLanguageRef.current = actualLang;
       contentRef.current = rawContent;
@@ -645,8 +646,8 @@ const App: React.FC = () => {
         const state =
           stored.editorState ??
           makeEditorStateForContent(stored.content, mode, lang, view.state.plugins);
-        view.updateState(state);
         filePathRef.current = stored.filePath;
+        view.updateState(state);
         contentRef.current = stored.content;
         dirtyRef.current = stored.dirty;
         fileModeRef.current = mode;
@@ -663,8 +664,8 @@ const App: React.FC = () => {
       } else {
         // Brand new tab — empty markdown document
         const emptyState = makeEmptyEditorState(view.state.plugins);
-        view.updateState(emptyState);
         filePathRef.current = null;
+        view.updateState(emptyState);
         contentRef.current = "";
         dirtyRef.current = false;
         fileModeRef.current = "markdown";
@@ -740,6 +741,7 @@ const App: React.FC = () => {
           setTimeout(async () => {
             setActiveTabId("");
             const view = viewRef.current;
+            filePathRef.current = null;
             if (view) {
               view.updateState(makeEmptyEditorState(view.state.plugins));
             }
@@ -925,6 +927,7 @@ const App: React.FC = () => {
       if (active) {
         lastDiskContentRef.current = snapshot.content;
         filePathRef.current = plan.filePath;
+        currentView?.updateState(currentView.state);
         contentRef.current = plan.content;
         dirtyRef.current = plan.dirty;
         setFilePath(plan.filePath);
@@ -1351,6 +1354,7 @@ const App: React.FC = () => {
       const nextMode = getFileMode(nextPath);
       const nextLanguage = getCodeLanguage(nextPath);
       const view = viewRef.current;
+      filePathRef.current = nextPath;
       if (view && (nextMode !== fileModeRef.current || nextLanguage !== codeLanguageRef.current)) {
         // Keep the exact current text and dirty flag when a new extension
         // changes its editor mode; loading from disk would lose unsaved edits.
@@ -1363,8 +1367,9 @@ const App: React.FC = () => {
         const stats = getDocStats(view.state.doc);
         setWordCount(stats.words);
         setCharCount(stats.chars);
+      } else if (view) {
+        view.updateState(view.state);
       }
-      filePathRef.current = nextPath;
       fileModeRef.current = nextMode;
       codeLanguageRef.current = nextLanguage;
       setFilePath(nextPath);
@@ -1933,7 +1938,7 @@ const App: React.FC = () => {
           onChange={handleChange}
           onSave={handleSave}
           onSearch={handleToggleSearch}
-          filePath={filePath}
+          filePathRef={filePathRef}
           fileMode={fileMode}
         />
       </div>
