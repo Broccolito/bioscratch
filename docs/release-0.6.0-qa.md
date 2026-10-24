@@ -20,6 +20,17 @@ per-window search cancellation, preservation of YAML tags and aliases, ownership
 of asynchronous saves, tab detaching, autosave recovery, coordinated quit,
 source-to-rendered search positions, and static export sanitization/assets.
 
+A registry advisory published during release CI affected the extension's
+development packaging route, `@vscode/vsce` → `@azure/identity` →
+`@azure/msal-node`; it is not bundled as app authentication code. The packaging
+dependencies now use Identity 4.13.0 and MSAL 3.8.10, with UUID 11.1.1 scoped to
+that MSAL version. Identity 4.13.2 and 4.14.0 require MSAL 5 or 6, which have no
+release outside [the affected range](https://github.com/advisories/GHSA-xcx6-jx8p-x3h5).
+The scoped UUID update also addresses [its advisory](https://github.com/advisories/GHSA-w5hq-g745-h8pq)
+while preserving MSAL's no-argument CommonJS `v4()` call. Both npm audits were
+rerun with zero reported advisories; MSAL/Identity loading, UUID generation,
+extension typechecking/building, and VSIX repackaging were checked after the fix.
+
 ## Actual native app checks
 
 These scenarios were exercised through computer use in an installed, Developer
