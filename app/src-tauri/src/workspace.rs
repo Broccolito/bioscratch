@@ -429,14 +429,30 @@ pub async fn rename_path(path: String, new_name: String) -> Result<String, Strin
     Ok(path_string(&to))
 }
 
-/// Move a file or folder to the macOS Trash (recoverable, like Finder).
+fn trash_context() -> trash::TrashContext {
+    #[cfg(target_os = "macos")]
+    {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        let mut context = trash::TrashContext::default();
+        // Finder's AppleScript method can block on an Automation permission
+        // prompt. NSFileManager moves items to Trash without that permission.
+        context.set_delete_method(DeleteMethod::NsFileManager);
+        context
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        trash::TrashContext::default()
+    }
+}
+
+/// Move a file or folder to the system Trash (recoverable).
 #[tauri::command]
 pub async fn move_to_trash(path: String) -> Result<(), String> {
     let entry = require_entry_under_root(&path)?;
     if contains_authorized_root(&entry) {
         return Err("Remove an opened folder from the sidebar instead".to_string());
     }
-    tauri::async_runtime::spawn_blocking(move || trash::delete(&entry).map_err(|e| e.to_string()))
+    tauri::async_runtime::spawn_blocking(move || trash_context().delete(&entry).map_err(|e| e.to_string()))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -649,6 +665,13 @@ pub async fn read_workspace_metadata(root: String) -> Result<MetadataIndex, Stri
 mod tests {
     use super::{extension_of, extract_frontmatter, preview_around, search_text, validate_name};
     use std::path::Path;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn trash_uses_native_file_manager_without_finder_automation() {
+        use trash::macos::{DeleteMethod, TrashContextExtMacos};
+        assert!(matches!(super::trash_context().delete_method(), DeleteMethod::NsFileManager));
+    }
 
     #[test]
     fn frontmatter_requires_leading_fence_and_closing_fence() {
