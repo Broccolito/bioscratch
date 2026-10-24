@@ -571,7 +571,9 @@ export class CodeBlockView implements NodeView {
   }
 
   update(node: ProseMirrorNode) {
-    if (node.type !== this.node.type) return false;
+    // The shared EditorView can reuse this code_block when restoring another
+    // tab. Mermaid requires its own controls and preview, so recreate its view.
+    if (node.type !== this.node.type || isMermaidLanguage(node.attrs.language)) return false;
     this.node = node;
 
     const lang = node.attrs.language || "";
